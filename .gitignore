@@ -1,0 +1,6 @@
+.env
+sui.log**
+*.key
+*.bpl
+**/build
+**/node_modules
