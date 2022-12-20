@@ -19,12 +19,14 @@ module cartridge::capsule {
     public fun create_<World: drop, Transfer: drop, T: store>(
         witness: World,
         contents: T,
+        attributes: vector<vector<u8>>,
         owner: address,
         ctx: &mut TxContext
     ) {
         let id = object::new(ctx);
 
         module_authority::bind<World>(&mut id);
+        let witness = metadata::batch_add_attributes(witness, &mut id, attributes, ctx);
         let witness = ownership::bind_owner(witness, &mut id, owner);
         ownership::bind_transfer_authority<World, Transfer>(witness, &mut id, ctx);
 

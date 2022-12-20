@@ -32,7 +32,7 @@ module metadata::metadata {
     const ENOT_ONE_TIME_WITNESS: u64 = 2;
     const ETYPE_METADATA_ALREADY_DEFINED: u64 = 3;
     const EINVALID_METADATA_CAP: u64 = 4;
-    const EIMPROPERLY_SERIALIZED_STRINGS: u64 = 5;
+    const EIMPROPERLY_SERIALIZED_BATCH_BYTES: u64 = 5;
 
     // Shared object
     struct ModuleMetadata<phantom G> has key {
@@ -58,7 +58,7 @@ module metadata::metadata {
         value: vector<u8>
     }
 
-    struct Key<phantom Value> has store, copy, drop { slot: String }
+    struct Key has store, copy, drop { slot: String }
 
     // ========= Create Metadata Objects =========
 
@@ -89,70 +89,83 @@ module metadata::metadata {
 
     // ========= Modify Attributes =========
 
-    public entry fun add_module_attribute<G: drop, Value: store + copy + drop>(
+    public entry fun add_module_attribute<G: drop>(
         cap: &MetadataCap<G>,
         module: &mut ModuleMetadata<G>,
         slot: String,
-        value: Value
+        bytes: vector<u8>
     ) {
         remove_module_attribute<G, Value>(cap, module, slot);
-        dynamic_field::add(&mut module.id, Key<Value> { slot }, value);
+        dynamic_field::add(&mut module.id, Key { slot }, bytes);
     }
 
-    public entry fun remove_module_attribute<G: drop, Value: store + copy + drop>(
-        _cap: &MetadataCap<G>,
-        module: &mut ModuleMetadata<G>,
-        slot: String
-    ) {
-        if (dynamic_field::exists_(&module.id, Key<Value> { slot})) {
-            dynamic_field::remove<Key, Value>(&mut module.id, Key<Value> { slot });
+    public entry fun remove_module_attribute<G: drop>(_cap: &MetadataCap<G>, module: &mut ModuleMetadata<G>, slot: String) {
+        if (dynamic_field::exists_(&module.id, Key { slot })) {
+            dynamic_field::remove<Key, vector<u8>>(&mut module.id, Key { slot });
         };
     }
 
-    public entry fun add_type_attribute<G: drop, T, Value: store + copy + drop>(
+    public entry fun add_type_attribute<G: drop, T>(
         cap: &MetadataCap<G>,
         type: &mut TypeMetadata<T>,
         slot: String,
-        value: Value
+        bytes: vector<u8>
     ) {
         remove_type_attribute<G, T, Value>(cap, type, slot);
-        dynamic_field::add(&mut type.id, Key<Value> { slot }, value);
+        dynamic_field::add(&mut type.id, Key { slot }, bytes);
     }
 
-    public entry fun remove_type_attribute<G: drop, T, Value: store + copy + drop>(
+    public entry fun remove_type_attribute<G: drop, T>(
         _cap: &MetadataCap<G>,
         type: &mut TypeMetadata<T>,
         slot: String
     ) {
         assert!(is_valid(cap, type), EINVALID_METADATA_CAP);
 
-        if (dynamic_field::exists_(&type.id, Key<Value> { slot })) {
-            dynamic_field::remove<Key, Value>(&mut type.id, Key<Value> { slot });
+        if (dynamic_field::exists_(&type.id, Key { slot })) {
+            dynamic_field::remove<Key, vector<u8>>(&mut type.id, Key { slot });
         };
     }
 
     // ========= Batch-Add Attributes =========
 
-    // Encoded as: [ key: String, value_type: String ]
-    // Unfortunately bcs does not support peeling strings, so
-    public entry fun add_module_attributes_string<G: drop>(
+    // Encoded as: [ key: String, value_type: vector<u8> ]
+    // Unfortunately bcs does not support peeling strings, so we're just working with raw types
+    public entry fun add_module_attributes<G: drop>(
         cap: &MetadataCap<G>,
         module: &mut ModuleMetadata<G>,
-        string_bytes: vector<vector<u8>>
+        attribute_pairs: vector<vector<u8>>
     ) {
-        let (i, length) = (0, vector::length(&string_bytes));
-        assert!(length % 2 == 0, EIMPROPERLY_SERIALIZED_STRINGS);
+        let (i, length) = (0, vector::length(&attribute_pairs));
+        assert!(length % 2 == 0, EIMPROPERLY_SERIALIZED_BATCH_BYTES);
 
         while (i < length) {
-            let slot = utf8(*vector::borrow(&string_bytes, i));
-            let value = utf8(*vector::borrow(&string_bytes, i + 1));
-            add_module_attribute(cap, module, slot, value);
+            let slot = utf8(*vector::borrow(&attribute_pairs, i));
+            let bytes = *vector::borrow(&attribute_pairs, i + 1);
+            add_module_attribute(cap, module, slot, bytes);
             i = i + 2;
         };
     }
 
-    public entry fun add_type_attributes_string() {
+    public entry fun add_type_attributes() {
 
+    }
+
+    // Requires module authority
+    // Only requires ownership authority of the metadata is already set
+    public fun batch_add_attributes<World: drop>(_witness: World, id: &mut UID, attribute_pairs: vector<vector<u8>>, ctx: &TxContext): World {
+        assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
+        assert!(ownership::is_valid_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
+
+        let (i, length) = (0, vector::length(&attribute_pairs));
+        assert!(length % 2 == 0, EIMPROPERLY_SERIALIZED_BATCH_BYTES);
+
+        while (i < length) {
+            let slot = utf8(*vector::borrow(&attribute_pairs, i));
+            let bytes = *vector::borrow(&attribute_pairs, i + 1);
+            dynamic_field::add(id, slot, bytes);
+            i = i + 2;
+        };
     }
 
     // ========= Make Metadata Immutable =========
@@ -177,32 +190,41 @@ module metadata::metadata {
 
     // ============== View Functions for Client apps ============== 
 
-    // In order to fetch values from a dynamic field, we must know their value-type. This sort of batch-query is not easy unless
-    // we assume all values returned are of the same type, such as String
-    // We're going to need a more general solution
-    public fun get_module_attributes(module: &ModuleMetadata, query_raw_keys: vector<vector<u8>>) {
-        let (i, length) = (0, vector::length(&query_raw_keys));
-        while (i < length) {
+    // Should we return the keys (query_slots) back along with the bytes?
+    public fun get_module_attributes(module: &ModuleMetadata, query_slots: vector<vector<u8>>): vector<vector<u8>> {
+        let (i, response) = (0, vector::empty<vector<u8>>());
+
+        while (i < vector::length(&query_slots)) {
+            let slot = utf8(*vector::borrow(&query_slots, i));
+
+            // We leave an empty vector of bytes if the slot does not have any value
+            if (dynamic_field::exists_(&module.id, Key { slot })) {
+                vector::push_back(&mut response, *dynamic_field::borrow<Key, vector<u8>>(&module.id, slot));
+            } else {
+                vector::push_back(&mut response, vector::empty<u8>());
+            };
             i = i + 1;
         };
+
+        response
     }
 
-    public fun get_module_attribute<G, Value: store + copy + drop>(module: &ModuleMetadata<G>, slot_raw: vector<u8>): Option<Value> {
-        let key = Key<Value> { slot: utf8(slot_raw) };
+    public fun get_module_attribute<G>(module: &ModuleMetadata<G>, slot_raw: vector<u8>): Option<vector<u8>> {
+        let key = Key { slot: utf8(slot_raw) };
         if (!dynamic_field::exists_(&module.id, key)) { 
             return option::none()
         };
         
-        option::some(*dynamic_field::borrow(&module.id, key))
+        option::some(*dynamic_field::borrow<Key, vector<u8>>(&module.id, key))
     }
 
-    public fun get_type_attribute<T, Value: store + copy + drop>(type: &TypeMetadata<T>, slot_raw: vector<u8>): Option<Value> {
-        let key = Key<Value> { slot: utf8(slot_raw) };
+    public fun get_type_attribute<T>(type: &TypeMetadata<T>, slot_raw: vector<u8>): Option<vector<u8>> {
+        let key = Key { slot: utf8(slot_raw) };
         if (!dynamic_field::exists_(&type.id, key)) { 
             return option::none() 
         };
 
-        option::some(*dynamic_field::borrow(&type.id, key))
+        option::some(*dynamic_field::borrow<Key, vector<u8>>(&type.id, key))
     }
 
     // This first checks id for module_addr + data = Data. That is, a record stored on UID that

@@ -15,18 +15,13 @@ module cartridge::outlaw_sky {
         id: UID
     }
 
-    struct Metadata has store, drop {
-        slot: String,
-        value: vector<u8>
-    }
-
-    public fun craft_outlaw(ctx: &mut TxContext, metadata_list: &mut vector<Metadata>) {
+    public fun craft_outlaw(ctx: &mut TxContext, attribute_stack: &mut vector<vector<vector<u8>>>) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
 
-        let metadata = vector::pop_back(metadata_list);
+        let attributes = vector::pop_back(attribute_stack);
 
-        capsule::create_<Outlaw_Sky, Royalty_Market, Outlaw>(Outlaw_Sky {}, outlaw, metadata, owner, ctx);
+        capsule::create_<Outlaw_Sky, Royalty_Market, Outlaw>(Outlaw_Sky {}, outlaw, attributes, owner, ctx);
     }
 
     public fun extend<T: store>(outlaw: &mut Outlaw): (&mut UID) {
