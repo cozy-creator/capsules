@@ -1,11 +1,11 @@
 [package]
-name = "Cartridge"
+name = "SuiMetadata"
 version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
-SuiUtils = { git = "https://github.com/0xnoots/sui-utils.git", subdir = "modules", rev = "master" }
+SuiUtils = { git = "https://github.com/0xnoots/sui-utils.git", subdir = "package", rev = "master" }
 
 [addresses]
-cartridge = "0x0"
+metadata =  "0x0"

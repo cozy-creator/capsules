@@ -33,40 +33,50 @@ module metadata::metadata {
     const ETYPE_METADATA_ALREADY_DEFINED: u64 = 3;
     const EINVALID_METADATA_CAP: u64 = 4;
     const EIMPROPERLY_SERIALIZED_BATCH_BYTES: u64 = 5;
+    const ENO_PACKAGE_PERMISSION: u64 = 6;
 
-    // Shared object
-    struct ModuleMetadata<phantom G> has key {
+    // shared singleton object
+    // Used prevent the same world (package) from being registered twice
+    struct WorldExists has key {
         id: UID
     }
 
     // Shared object
+    // A World is a collection of packages
+    struct WorldMetadata<phantom W> has key {
+        id: UID,
+        packages: vector<ID>,
+        schema_version: ID
+    }
+
+    // Shared object
+    // Defines a type generally, like for all 0x59::outlaw_sky::Outlaw. Even if objects have their own metadata, this acts
+    // as a fallback source for undefined metadata, so we don't have to duplicate metadata for every individual object unless
+    // it's actuall unique
     struct TypeMetadata<phantom T> has key {
         id: UID,
-        module_authority: String // edit-authority can be delegated to another module
+        module_authority: String, // edit-authority can be delegated to another module
+        schema_version: ID
     }
 
-    struct ObjectMetadata<phantom T> has store {
-    }
-
-    // Capability to create and edit metadata for the module that created GENESIS
-    struct MetadataCap<phantom GENESIS> has key, store { 
-        id: UID
-    }
-
-    struct MetadataStore has store, drop {
-        slot: String,
-        value: vector<u8>
-    }
+    // TO DO: figure out individual object metadata
+    struct ObjectMetadata<phantom T> has store { }
 
     struct Key has store, copy, drop { slot: String }
 
     // ========= Create Metadata Objects =========
 
-    public fun define_module<GENESIS: drop>(witness: &GENESIS, ctx: &mut TxContext): MetadataCap<GENESIS> {
-        assert!(is_one_time_witness(witness), ENOT_ONE_TIME_WITNESS);
+    public entry fun define_world(boss_cap: &BossCap, package_id: ID, world_exists: &mut WorldExists, schema_version: ID) {
+        assert!(boss_cap::is_valid(boss_cap, package_id), ENO_PACKAGE_PERMISSION);
 
-        transfer::share_object(ModuleMetadata<GENESIS> { id: object::new(ctx) });
-        MetadataCap<GENESIS> { }
+        // This ensures that we don't allow multiple WorldMetadata objects to exist for a package-id
+        dynamic_field::add(&mut world_exists.id, package_id, true);
+
+        transfer::share_object(WorldMetadata { 
+            id: object::new(ctx),
+            packages: vector[package_id],
+            schema_version,
+        });
     }
 
     public entry fun define_type<G: drop, T>(metadata_cap: &mut MetadataCap<G>, ctx: &mut TxContext) {
@@ -91,7 +101,7 @@ module metadata::metadata {
 
     public entry fun add_module_attribute<G: drop>(
         cap: &MetadataCap<G>,
-        module: &mut ModuleMetadata<G>,
+        module: &mut WorldMetadata<G>,
         slot: String,
         bytes: vector<u8>
     ) {
@@ -99,7 +109,7 @@ module metadata::metadata {
         dynamic_field::add(&mut module.id, Key { slot }, bytes);
     }
 
-    public entry fun remove_module_attribute<G: drop>(_cap: &MetadataCap<G>, module: &mut ModuleMetadata<G>, slot: String) {
+    public entry fun remove_module_attribute<G: drop>(_cap: &MetadataCap<G>, module: &mut WorldMetadata<G>, slot: String) {
         if (dynamic_field::exists_(&module.id, Key { slot })) {
             dynamic_field::remove<Key, vector<u8>>(&mut module.id, Key { slot });
         };
@@ -133,7 +143,7 @@ module metadata::metadata {
     // Unfortunately bcs does not support peeling strings, so we're just working with raw types
     public entry fun add_module_attributes<G: drop>(
         cap: &MetadataCap<G>,
-        module: &mut ModuleMetadata<G>,
+        module: &mut WorldMetadata<G>,
         attribute_pairs: vector<vector<u8>>
     ) {
         let (i, length) = (0, vector::length(&attribute_pairs));
@@ -178,7 +188,7 @@ module metadata::metadata {
     }
 
     // Not currently possible
-    public fun freeze_module<G: drop>(cap: &MetadataCap<G>, module: ModuleMetadata<G>) {
+    public fun freeze_module<G: drop>(cap: &MetadataCap<G>, module: WorldMetadata<G>) {
         transfer::freeze_object(module);
     }
 
@@ -191,7 +201,7 @@ module metadata::metadata {
     // ============== View Functions for Client apps ============== 
 
     // Should we return the keys (query_slots) back along with the bytes?
-    public fun get_module_attributes(module: &ModuleMetadata, query_slots: vector<vector<u8>>): vector<vector<u8>> {
+    public fun get_module_attributes(module: &WorldMetadata, query_slots: vector<vector<u8>>): vector<vector<u8>> {
         let (i, response) = (0, vector::empty<vector<u8>>());
 
         while (i < vector::length(&query_slots)) {
@@ -209,13 +219,33 @@ module metadata::metadata {
         response
     }
 
-    public fun get_module_attribute<G>(module: &ModuleMetadata<G>, slot_raw: vector<u8>): Option<vector<u8>> {
+    public fun get_module_attribute<G>(module: &WorldMetadata<G>, slot_raw: vector<u8>): Option<vector<u8>> {
         let key = Key { slot: utf8(slot_raw) };
         if (!dynamic_field::exists_(&module.id, key)) { 
             return option::none()
         };
         
         option::some(*dynamic_field::borrow<Key, vector<u8>>(&module.id, key))
+    }
+
+    // [ (slot), (value), ]
+    // 
+    public entry fun add_attributes<Value: store + copy + drop>(
+        schema: &MetadataSchema,
+        slots: vector<vector<u8>>,
+        bytes: vector<vector<u8>>
+    ) {
+        assert!(vector::length(&slots) == vector::length(&bytes), EKEY_VALUE_LENGTH_MISMATCH);
+
+        // bools, address, ascii, utf8 strings, u8, u16, u32, u64, u128, u256, url, array<> for all of them
+        if (utf8(b"0x2::string::String") == encode::type_name<Value>()) {
+            let i = 0;
+            while (i < vectr::length(&bytes)) {
+
+            }
+        } else if (u64) {
+
+        };
     }
 
     public fun get_type_attribute<T>(type: &TypeMetadata<T>, slot_raw: vector<u8>): Option<vector<u8>> {

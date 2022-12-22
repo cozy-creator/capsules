@@ -20,7 +20,7 @@
 - Quantity
 - Save Data
 - Inventory
-- Authority Passer
+- Authority Passer (authority object flow?)
 
 ### Default Behavior:
 
