@@ -1,10 +1,10 @@
-module cartridge::ownership {
+module capsule::ownership {
     use std::option::{Self, Option};
     use std::string::String;
     use sui::object::{Self, ID, UID};
     use sui::dynamic_field;
     use sui::tx_context::{Self, TxContext};
-    use cartridge::module_authority;
+    use capsule::module_authority;
     use sui_utils::encode;
 
     // error enums

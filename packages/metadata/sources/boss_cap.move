@@ -17,7 +17,7 @@ module metadata::boss_cap {
     // (1) the package could include multiple modules which call this once each, and (2) the module could re-use
     // the same one-time witness, since we do not consume it here. We do this so that the one-time-witness can
     // be used for things like creating a 0x2::coin::create_currency.
-    public fun register<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): BossCap {
+    public fun create<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): BossCap {
         assert!(is_one_time_witness(genesis), EBAD_WITNESS);
 
         let package_id = encode::package_id<GENESIS>();

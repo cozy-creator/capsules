@@ -1,9 +1,9 @@
-module cartridge::capsule {
+module capsule::capsule {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use cartridge::ownership::{Self};
-    use cartridge::module_authority;
+    use capsule::ownership::{Self};
+    use capsule::module_authority;
 
     const ENOT_OWNER: u64 = 0;
 
@@ -19,16 +19,17 @@ module cartridge::capsule {
     public fun create_<World: drop, Transfer: drop, T: store>(
         witness: World,
         contents: T,
-        attributes: vector<vector<u8>>,
         owner: address,
+        attributes: vector<vector<u8>>, // bytes for metadata
+        schema: &Schema,
         ctx: &mut TxContext
     ) {
         let id = object::new(ctx);
 
         module_authority::bind<World>(&mut id);
-        let witness = metadata::batch_add_attributes(witness, &mut id, attributes, ctx);
-        let witness = ownership::bind_owner(witness, &mut id, owner);
-        ownership::bind_transfer_authority<World, Transfer>(witness, &mut id, ctx);
+        let witness = metadata::batch_add_attributes(witness, &mut id, attributes, schema, ctx);
+        let witness = ownership::bind_transfer_authority<World, Transfer>(witness, &mut id, ctx);
+        ownership::bind_owner(witness, &mut id, owner);
 
         create(id, contents);
     }

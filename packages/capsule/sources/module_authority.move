@@ -1,4 +1,4 @@
-module cartridge::module_authority {
+module capsule::module_authority {
     use std::string::String;
     use std::option::{Self, Option};
     use sui::object::UID;

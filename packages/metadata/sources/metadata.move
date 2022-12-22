@@ -162,20 +162,28 @@ module metadata::metadata {
     }
 
     // Requires module authority
-    // Only requires ownership authority of the metadata is already set
-    public fun batch_add_attributes<World: drop>(_witness: World, id: &mut UID, attribute_pairs: vector<vector<u8>>, ctx: &TxContext): World {
+    // Requires ownership authority if there is an owner
+    public fun batch_add_attributes<World: drop>(
+        witness: World,
+        id: &mut UID,
+        attributes: vector<vector<u8>>,
+        schema: &Schema,
+        ctx: &TxContext
+    ): World {
         assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_valid_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
 
-        let (i, length) = (0, vector::length(&attribute_pairs));
+        let (i, length) = (0, vector::length(&attributes));
         assert!(length % 2 == 0, EIMPROPERLY_SERIALIZED_BATCH_BYTES);
 
         while (i < length) {
-            let slot = utf8(*vector::borrow(&attribute_pairs, i));
-            let bytes = *vector::borrow(&attribute_pairs, i + 1);
+            let slot = utf8(*vector::borrow(&attributes, i));
+            let bytes = *vector::borrow(&attributes, i + 1);
             dynamic_field::add(id, slot, bytes);
             i = i + 2;
         };
+
+        witness
     }
 
     // ========= Make Metadata Immutable =========
@@ -287,10 +295,41 @@ module metadata::metadata {
         for_object<G, Data>(id, type_name, metadata)
     }
 
+    // ========= World Certification System =========
+
+    // Should we allow certifications with object-ids, in addition to user addresses?
+    public entry fun add_cert(world: &mut WorldMetadata, ctx: &mut TxContext) {
+        let addr = tx_context::sender(ctx);
+
+        if (!dynamic_field::exists_(&world.id, addr)) {
+            dynamic_field::add(&mut world.id, addr, true);
+        };
+    }
+
+    public entry fun revoke_cert(world: &mut WorldMetadata, ctx: &mut TxContext) {
+        let addr = tx_context::sender(ctx);
+
+        if (dynamic_field::exists_(&world.id, addr)) {
+            dynamic_field::remove<address, bool>(&mut world.id, addr);
+        };
+    }
+
     // ========= Authority Checkers =========
 
     public fun is_valid<G: drop, T>(cap: &MetadataCap<G>, type: &TypeMetadata<T>): bool {
         let (module_addr, _) = encode::type_name_<G>();
         *type.module_authority == module_addr
+    }
+
+    public fun check_cert(world: &WorldMetadata, cert_addresses: vector<address>): bool {
+        let i = 0;
+        while (i < vector::length(&cert_addresses)) {
+            if (dynamic_field::exists_with_type<address, bool>(&world.id, *vector::borrow(&cert_addresses, i))) {
+                return true
+            };
+            i = i + 1;
+        };
+
+        false
     }
 }
