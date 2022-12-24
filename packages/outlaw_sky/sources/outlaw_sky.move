@@ -25,6 +25,10 @@ module outlaw_sky::outlaw_sky {
         capsule::create_<Outlaw_Sky, Royalty_Market, Outlaw>(Outlaw_Sky {}, outlaw, attributes, owner, ctx);
     }
 
+    public fun load_dispenser() {
+        
+    }
+
     public fun extend<T: store>(outlaw: &mut Outlaw): (&mut UID) {
         &mut outlaw.id
     }

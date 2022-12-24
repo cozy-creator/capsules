@@ -1,4 +1,4 @@
-module capsule::ownership {
+module ownership::ownership {
     use std::option::{Self, Option};
     use std::string::String;
     use sui::object::{Self, ID, UID};
@@ -14,11 +14,13 @@ module capsule::ownership {
     const ENO_TRANSFER_AUTHORITY: u64 = 3;
     const EMISMATCHED_HOT_POTATO: u64 = 4;
 
-    struct Key has store, copy, drop { slot: u8 }
+    struct Key has store, copy, drop { slot: u8 } // value is an Authority
 
     // Slots for Key
-    const OWNER: u8 = 1; // address
-    const TRANSFER: u8 = 0; // string referencing a witness type
+    const OWNER: u8 = 0; // Can open/destroy the Capsule, add/remove to access list. Address, ID, or witness-type string
+    const ACCESS: u8 = 1; // VecMap[]
+    const TRANSFER: u8 = 2; // Can edit Owner field. Address, ID, or witness-type string
+    const CREATOR: u8 = 3; // Creator consent is needed to edit Metadata, Data, and Inventory. ID of a creator-object
 
     // Used to borrow and return ownership. capsule_id ensures you cannot mismatch HotPotato's
     // and capsules, and obj_addr is the address of the original authority object
@@ -35,7 +37,7 @@ module capsule::ownership {
         assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
         assert!(!dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_ALREADY_SET);
 
-        dynamic_field::add(id, Key { slot: OWNER}, addr);
+        dynamic_field::add(id, Key { slot: OWNER }, addr);
 
         witness
     }

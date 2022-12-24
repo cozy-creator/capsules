@@ -3,7 +3,9 @@ module capsule::capsule {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use capsule::ownership::{Self};
-    use capsule::module_authority;
+    use capsule::witness_authority;
+    use metadata::schema::Schema;
+    use metadata::metadata;
 
     const ENOT_OWNER: u64 = 0;
 
@@ -16,8 +18,8 @@ module capsule::capsule {
         transfer::share_object(Capsule { id, contents });
     }
 
-    public fun create_<World: drop, Transfer: drop, T: store>(
-        witness: World,
+    public fun create_<Witness: drop, Transfer: drop, T: store>(
+        witness: Witness,
         contents: T,
         owner: address,
         attributes: vector<vector<u8>>, // bytes for metadata
@@ -26,9 +28,9 @@ module capsule::capsule {
     ) {
         let id = object::new(ctx);
 
-        module_authority::bind<World>(&mut id);
+        witness_authority::bind<Witness>(&mut id);
         let witness = metadata::batch_add_attributes(witness, &mut id, attributes, schema, ctx);
-        let witness = ownership::bind_transfer_authority<World, Transfer>(witness, &mut id, ctx);
+        let witness = ownership::bind_transfer_authority<Witness, Transfer>(witness, &mut id, ctx);
         ownership::bind_owner(witness, &mut id, owner);
 
         create(id, contents);

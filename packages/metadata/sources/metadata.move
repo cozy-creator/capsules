@@ -24,8 +24,7 @@ module metadata::metadata {
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::types::is_one_time_witness;
-    use utils::encode;
-    use noot::noot::Link;
+    use sui_utils::encode;
 
     const ENOT_OWNER: u64 = 0;
     const EMISMATCHED_MODULES: u64 = 1;
@@ -34,84 +33,60 @@ module metadata::metadata {
     const EINVALID_METADATA_CAP: u64 = 4;
     const EIMPROPERLY_SERIALIZED_BATCH_BYTES: u64 = 5;
     const ENO_PACKAGE_PERMISSION: u64 = 6;
-
-    // shared singleton object
-    // Used prevent the same world (package) from being registered twice
-    struct WorldExists has key {
-        id: UID
-    }
+    const EPACKAGE_ALREADY_REGISTERED: u64 = 7;
+    const ENOT_CANNONICAL_BOSS_CAP: u64 = 8;
 
     // Shared object
-    // A World is a collection of packages
-    struct WorldMetadata<phantom W> has key {
-        id: UID,
-        packages: vector<ID>,
-        schema_version: ID
-    }
-
-    // Shared object
-    // Defines a type generally, like for all 0x59::outlaw_sky::Outlaw. Even if objects have their own metadata, this acts
-    // as a fallback source for undefined metadata, so we don't have to duplicate metadata for every individual object unless
-    // it's actuall unique
+    // Defines a type generally, like for all 0x59::outlaw_sky::Outlaw. Even if objects have their own metadata,
+    // this acts as a fallback source for undefined metadata keys, so we don't have to duplicate metadata for
+    // every individual object unless it's specific to that object
     struct TypeMetadata<phantom T> has key {
         id: UID,
-        module_authority: String, // edit-authority can be delegated to another module
-        schema_version: ID
+        // <SchemaVersion { }> : ID
+        // <Key { String }> : <T: store> <- T must conform to schema_version
     }
 
-    // TO DO: figure out individual object metadata
-    struct ObjectMetadata<phantom T> has store { }
-
     struct Key has store, copy, drop { slot: String }
+    struct SchemaVersion has store, copy, drop { }
 
     // ========= Create Metadata Objects =========
 
-    public entry fun define_world(boss_cap: &BossCap, package_id: ID, world_exists: &mut WorldExists, schema_version: ID) {
+    public entry fun define_type<T>(boss_cap: &BossCap, schema: &Schema, ctx: &mut TxContext) {
+        let package_id = encode::package_id<T>();
         assert!(boss_cap::is_valid(boss_cap, package_id), ENO_PACKAGE_PERMISSION);
+        assert!(boss_cap::define_type<T>(boss_cap), ETYPE_METADATA_ALREADY_DEFINED);
 
-        // This ensures that we don't allow multiple WorldMetadata objects to exist for a package-id
-        dynamic_field::add(&mut world_exists.id, package_id, true);
+        let id = object::new(ctx);
+        dynamic_field::add(&mut id, SchemaVersion { }, object::id(schema));
 
-        transfer::share_object(WorldMetadata { 
-            id: object::new(ctx),
-            packages: vector[package_id],
-            schema_version,
-        });
+        transfer::share_object(TypeMetadata<T> { id });
     }
 
-    public entry fun define_type<G: drop, T>(metadata_cap: &mut MetadataCap<G>, ctx: &mut TxContext) {
-        let (module_addr, _) = encode::type_name_<T>();
-        define_type_(metadata_cap, *string::bytes(&module_addr), ctx);
-    }
+    // ========= Entry Functions For Modifying Attributes =========
 
-    public entry fun define_type_<G: drop, T>(metadata_cap: &mut MetadataCap<G>, module_auth_raw: vector<u8>, ctx: &mut TxContext) {
-        assert!(encode::is_same_module<G, T>(), EMISMATCHED_MODULES);
-        assert!(dynamic_field::exists_(&metadata_cap.id, encode::type_name<T>()), ETYPE_METADATA_ALREADY_DEFINED);
-
-        // This prevents the same typename from being defined twice
-        dynamic_field::add(&metadata_cap.id, encode::type_name<T>(), true);
-
-        transfer::share_object(TypeMetadata<T> {
-            id: object::new(ctx),
-            module_authority: string::utf8(module_auth_raw)
-        });
+    public entry fun set_world_attribute() {
+        
     }
 
     // ========= Modify Attributes =========
 
-    public entry fun add_module_attribute<G: drop>(
+    public entry fun add_world_attribute<G: drop>(
         cap: &MetadataCap<G>,
-        module: &mut WorldMetadata<G>,
+        world: &mut WorldMetadata<G>,
         slot: String,
         bytes: vector<u8>
     ) {
-        remove_module_attribute<G, Value>(cap, module, slot);
-        dynamic_field::add(&mut module.id, Key { slot }, bytes);
+        remove_world_attribute<G, Value>(cap, world, slot);
+        dynamic_field::add(&mut world.id, Key { slot }, bytes);
     }
 
-    public entry fun remove_module_attribute<G: drop>(_cap: &MetadataCap<G>, module: &mut WorldMetadata<G>, slot: String) {
-        if (dynamic_field::exists_(&module.id, Key { slot })) {
-            dynamic_field::remove<Key, vector<u8>>(&mut module.id, Key { slot });
+    public entry fun remove_world_attribute<G: drop>(
+        _cap: &MetadataCap<G>,
+        world: &mut WorldMetadata<G>,
+        slot: String
+    ) {
+        if (dynamic_field::exists_(&world.id, Key { slot })) {
+            dynamic_field::remove<Key, vector<u8>>(&mut world.id, Key { slot });
         };
     }
 
@@ -134,16 +109,16 @@ module metadata::metadata {
 
         if (dynamic_field::exists_(&type.id, Key { slot })) {
             dynamic_field::remove<Key, vector<u8>>(&mut type.id, Key { slot });
-        };
+        };dule_attribute
     }
 
     // ========= Batch-Add Attributes =========
 
     // Encoded as: [ key: String, value_type: vector<u8> ]
     // Unfortunately bcs does not support peeling strings, so we're just working with raw types
-    public entry fun add_module_attributes<G: drop>(
+    public entry fun add_world_attributes<G: drop>(
         cap: &MetadataCap<G>,
-        module: &mut WorldMetadata<G>,
+        world: &mut WorldMetadata<G>,
         attribute_pairs: vector<vector<u8>>
     ) {
         let (i, length) = (0, vector::length(&attribute_pairs));
@@ -152,7 +127,7 @@ module metadata::metadata {
         while (i < length) {
             let slot = utf8(*vector::borrow(&attribute_pairs, i));
             let bytes = *vector::borrow(&attribute_pairs, i + 1);
-            add_module_attribute(cap, module, slot, bytes);
+            add_world_attribute(cap, world, slot, bytes);
             i = i + 2;
         };
     }
@@ -196,8 +171,8 @@ module metadata::metadata {
     }
 
     // Not currently possible
-    public fun freeze_module<G: drop>(cap: &MetadataCap<G>, module: WorldMetadata<G>) {
-        transfer::freeze_object(module);
+    public fun freeze_world_metadata<G: drop>(cap: &MetadataCap<G>, world: WorldMetadata<G>) {
+        transfer::freeze_object(world);
     }
 
     // Not currently possible
@@ -209,15 +184,15 @@ module metadata::metadata {
     // ============== View Functions for Client apps ============== 
 
     // Should we return the keys (query_slots) back along with the bytes?
-    public fun get_module_attributes(module: &WorldMetadata, query_slots: vector<vector<u8>>): vector<vector<u8>> {
+    public fun get_world_attributes(world: &WorldMetadata, query_slots: vector<vector<u8>>): vector<vector<u8>> {
         let (i, response) = (0, vector::empty<vector<u8>>());
 
         while (i < vector::length(&query_slots)) {
             let slot = utf8(*vector::borrow(&query_slots, i));
 
             // We leave an empty vector of bytes if the slot does not have any value
-            if (dynamic_field::exists_(&module.id, Key { slot })) {
-                vector::push_back(&mut response, *dynamic_field::borrow<Key, vector<u8>>(&module.id, slot));
+            if (dynamic_field::exists_(&world.id, Key { slot })) {
+                vector::push_back(&mut response, *dynamic_field::borrow<Key, vector<u8>>(&world.id, slot));
             } else {
                 vector::push_back(&mut response, vector::empty<u8>());
             };
@@ -227,13 +202,13 @@ module metadata::metadata {
         response
     }
 
-    public fun get_module_attribute<G>(module: &WorldMetadata<G>, slot_raw: vector<u8>): Option<vector<u8>> {
+    public fun get_world_attribute<G>(world: &WorldMetadata<G>, slot_raw: vector<u8>): Option<vector<u8>> {
         let key = Key { slot: utf8(slot_raw) };
-        if (!dynamic_field::exists_(&module.id, key)) { 
+        if (!dynamic_field::exists_(&world.id, key)) { 
             return option::none()
         };
         
-        option::some(*dynamic_field::borrow<Key, vector<u8>>(&module.id, key))
+        option::some(*dynamic_field::borrow<Key, vector<u8>>(&world.id, key))
     }
 
     // [ (slot), (value), ]
@@ -331,5 +306,11 @@ module metadata::metadata {
         };
 
         false
+    }
+
+    // ========= Init =========
+    
+    fun init(ctx: &mut TxContext) {
+        transfer::share_object(PackageRegistry { id: object::new(ctx) });
     }
 }
