@@ -6,8 +6,10 @@ module ownership::ownership {
     use sui::tx_context::{Self, TxContext};
     use capsule::module_authority;
     use sui_utils::encode;
+    use sui_utils::df_set;
 
     // error enums
+    const ECREATOR_ALREADY_SET: u64 = 0;
     const ENO_MODULE_AUTHORITY: u64 = 0;
     const ENOT_OWNER: u64 = 1;
     const EOWNER_ALREADY_SET: u64 = 2;
@@ -17,10 +19,10 @@ module ownership::ownership {
     struct Key has store, copy, drop { slot: u8 } // value is an Authority
 
     // Slots for Key
-    const OWNER: u8 = 0; // Can open/destroy the Capsule, add/remove to access list. Address, ID, or witness-type string
-    const ACCESS: u8 = 1; // VecMap[]
-    const TRANSFER: u8 = 2; // Can edit Owner field. Address, ID, or witness-type string
-    const CREATOR: u8 = 3; // Creator consent is needed to edit Metadata, Data, and Inventory. ID of a creator-object
+    const OWNER: u8 = 0; // Can open the Capsule, add/remove to delegates. Address for a pubkey / object-id, or witness-type string
+    const TRANSFER: u8 = 1; // Can edit Owner field, which wipes delegates. Address for a pubkey / object-id, or witness-type string
+    const CREATOR: u8 = 2; // Creator consent is needed to edit Metadata, Data, and Inventory. Address for pubkey / object-id
+    const CREATOR_WITNESS: u8 = 3; // Same as above, but a witness-type string
 
     // Used to borrow and return ownership. capsule_id ensures you cannot mismatch HotPotato's
     // and capsules, and obj_addr is the address of the original authority object
@@ -29,11 +31,99 @@ module ownership::ownership {
         original_addr: Option<address> 
     }
 
+    // ======= Creator Authority =======
+    // If creator authority is left blank, then anyone can claim it
+
+    public fun bind_creator(id: &mut UID, addr: address) {
+        assert!(!dynamic_field::exists_(id, Key { slot: CREATOR }), ECREATOR_ALREADY_SET);
+
+        dynamic_field::add(id, Key { slot: CREATOR }, addr);
+    }
+
+    public fun bind_creator_witness(id: &mut UID, addr: address) {
+        assert!(!dynamic_field::exists_(id, Key { slot: CREATOR }), ECREATOR_ALREADY_SET);
+
+        dynamic_field::add(id, Key { slot: CREATOR }, addr);
+    }
+
+    // Change with signer authority
+    public fun change_creator(id: &mut UID, new_addr: address, ctx: &TxContext) {
+        assert!(is_valid_creator(id, tx_context::sender(ctx)), ECREATOR_ALREADY_SET);
+
+        df_set::set(id, Key { slot: CREATOR }, new_addr);
+    }
+
+    // Change with authority object
+    public fun change_creator_<T: key>(id: &mut UID, new_addr: address, obj: &T) {
+        assert!(is_valid_creator(id, object::id_address(obj)), ECREATOR_ALREADY_SET);
+
+        df_set::set(id, Key { slot: CREATOR }, new_addr);
+    }
+
+    // ======= Transfer Authority =======
+
     // ======= Ownership Authority =======
+    // Binding requires (1) creator consent, and (2) that an owner does not already exist
+
+        ownership::bind_creator_(&mut creator.id, id_bytes);
+        ownership::bind_transfer_witness<Self>(&mut creator.id, id_bytes);
+        ownership::bind_owner_(&mut creator.id, id_bytes, &creator_cap);
+
+    // Wish I didn't have to multiply this interface with 6 functions, but these were needed to support
+    // all the possible auth-types (3; signer, object, witness) and value-types (2; address or string)
+    public fun bind_owner(id: &mut UID, owner: address, ctx: &TxContext) {
+        assert!(is_valid_creator(id, tx_context::sender(ctx)), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal(id, owner);
+    }
+
+    public fun bind_owner_<T: key>(id: &mut UID, owner: address, obj: &T) {
+        assert!(is_valid_creator(id, object::id_address(obj)), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal(id, owner);
+    }
+
+    public fun bind_owner__<Creator: drop>(id: &mut UID, owner: address, _creator: Creator) {
+        assert!(is_valid_creator__<Creator>(id), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal(id, owner);
+    }
+
+    public fun bind_owner_witness<Witness: drop>(id: &mut UID, ctx: &TxContext) {
+        assert!(is_valid_creator(id, tx_context::sender(ctx)), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal_<Witness>(id);
+    }
+
+    public fun bind_owner_witness_<T: key, Witness: drop>(id: &mut UID, obj: &T) {
+        assert!(is_valid_creator(id, object::id_address(obj)), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal_<Witness>(id);
+    }
+
+    public fun bind_owner__<Creator: drop, Witness: drop>(id: &mut UID, _creator: Creator) {
+        assert!(is_valid_creator__<Creator>(id), ENO_CREATOR_AUTHORITY);
+
+        bind_owner_internal_<Witness>(id);
+    }
+
+    fun bind_owner_internal(id: &mut UID, owner: address) {
+        let key = Key { slot: OWNER };
+        assert!(!dynamic_field::exists_(id, key), EOWNER_ALREADY_SET);
+
+        dynamic_field::add(id, key, owner);
+    }
+
+    fun bind_owner_internal_<Witness: drop>(id: &mut UID, owner: String) {
+        let key = Key { slot: OWNER };
+        assert!(!dynamic_field::exists_(id, key), EOWNER_ALREADY_SET);
+
+        dynamic_field::add(id, key, type_name::encode<Witness>());
+    }
 
     // Bind ownership to an arbitrary address
     // Requires module authority. Only works if no owner is currently set
-    public fun bind_owner<World: drop>(witness: World, id: &mut UID, addr: address): World {
+    public fun bind_owner<World: drop>(id: &mut UID, addr: address): World {
         assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
         assert!(!dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_ALREADY_SET);
 
@@ -171,4 +261,15 @@ module ownership::ownership {
 
         witness
     }
+
+    // Bytes could be an address, an object ID, or a utf8 witness string. We abort if none of these match
+    fun set_internal<Key: store + copy + drop>(id: &mut UID, key: Key, bytes: vector<u8>) {
+        
+    }
+
+    // ========== Authority Checker Functions =========
+
+    public fun is_valid_creator(): bool {}
+
+    public fun is_valid_creator__<Witness: drop>(): bool {}
 }

@@ -50,9 +50,11 @@ module metadata::creator {
         };
         dynamic_field::add(&mut registry.id, package, object::id(&creator));
 
-        ownership::bind_creator_(&mut creator.id, object::id(&creator_cap));
-        ownership::bind_transfer_witness<Self>(&mut creator.id);
-        ownership::bind_owner_(&mut creator.id, object::id(&creator_cap));
+        let id_bytes = object::id_bytes(&creator_cap);
+
+        ownership::bind_creator_(&mut creator.id, id_bytes);
+        ownership::bind_transfer_witness<Self>(&mut creator.id, id_bytes);
+        ownership::bind_owner_(&mut creator.id, id_bytes, &creator_cap);
 
         transfer::share_object(creator);
         creator_cap
