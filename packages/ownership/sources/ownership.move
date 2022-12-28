@@ -7,6 +7,7 @@ module ownership::ownership {
     use capsule::module_authority;
     use sui_utils::encode;
     use sui_utils::df_set;
+    use metadata::metadata::Creator;
 
     // error enums
     const ECREATOR_ALREADY_SET: u64 = 0;
@@ -15,261 +16,201 @@ module ownership::ownership {
     const EOWNER_ALREADY_SET: u64 = 2;
     const ENO_TRANSFER_AUTHORITY: u64 = 3;
     const EMISMATCHED_HOT_POTATO: u64 = 4;
+    const EUID_AND_OBJECT_MISMATCH: u64 = 5;
+    const EINCORRECT_PACKAGE_CREATOR: u64 = 6;
+    const EOWNER_MUST_EXIST: u64 = 7;
 
-    struct Key has store, copy, drop { slot: u8 } // value is an Authority
+    struct Key has store, copy, drop { slot: u8 } // = address
 
     // Slots for Key
-    const OWNER: u8 = 0; // Can open the Capsule, add/remove to delegates. Address for a pubkey / object-id, or witness-type string
-    const TRANSFER: u8 = 1; // Can edit Owner field, which wipes delegates. Address for a pubkey / object-id, or witness-type string
-    const CREATOR: u8 = 2; // Creator consent is needed to edit Metadata, Data, and Inventory. Address for pubkey / object-id
-    const CREATOR_WITNESS: u8 = 3; // Same as above, but a witness-type string
-
-    // Used to borrow and return ownership. capsule_id ensures you cannot mismatch HotPotato's
-    // and capsules, and obj_addr is the address of the original authority object
-    struct HotPotato { 
-        capsule_id: ID, 
-        original_addr: Option<address> 
-    }
+    const OWNER: u8 = 0; // Can open the Capsule, add/remove to delegates.
+    const TRANSFER: u8 = 1; // Can edit Owner field, which wipes delegates.
+    const CREATOR: u8 = 2; // Creator consent needed to edit Metadata, Data, and Inventory. Creator ID as an address
 
     // ======= Creator Authority =======
-    // If creator authority is left blank, then anyone can claim it
+    // The ID-address of a creator object
 
-    public fun bind_creator(id: &mut UID, addr: address) {
+    // You must present the UID _as well as_ the object itself in order for us to verify (1)
+    // what package the object came from, and (2) that you are the creator of that package.
+    // This prevents arbitrary people from claiming the creator-rights of arbitrary objects.
+    // That is to say, even if uid has no 'creator' field set, there is still implicitly a creator
+    // in existence that hasn't claimed their creator-status yet
+    public fun claim_creator<Object: key>(uid: &mut UID, obj: &Object, creator: &Creator) {
         assert!(!dynamic_field::exists_(id, Key { slot: CREATOR }), ECREATOR_ALREADY_SET);
+        assert!(object::uid_to_inner(uid) == object::id_address(obj), EUID_AND_OBJECT_MISMATCH);
 
-        dynamic_field::add(id, Key { slot: CREATOR }, addr);
+        let package_id = encode::package_id<Object>();
+        assert!(creator::has_package(creator, package_id), EINCORRECT_PACKAGE_CREATOR);
+
+        dynamic_field::add(id, Key { slot: CREATOR }, object::id_address(creator));
     }
 
-    public fun bind_creator_witness(id: &mut UID, addr: address) {
-        assert!(!dynamic_field::exists_(id, Key { slot: CREATOR }), ECREATOR_ALREADY_SET);
+    // Claims and then nullifies creator authority. The owner now has full control
+    public fun eject_creator(uid: &mut UID, obj: &Object, creator: &Creator, auth: &TxAuthority) {
+        if (!dynamic_field::exists_(id, Key { slot: CREATOR })) {
+            claim_creator(uid, obj, creator);
+        };
 
-        dynamic_field::add(id, Key { slot: CREATOR }, addr);
+        eject_creator_(uid, auth);
     }
 
-    // Change with signer authority
-    public fun change_creator(id: &mut UID, new_addr: address, ctx: &TxContext) {
-        assert!(is_valid_creator(id, tx_context::sender(ctx)), ECREATOR_ALREADY_SET);
+    // If the creator is set to @0x0, then we treat every call as valid by the creator.
+    // Requires approval from the creator and owner. Owner must exist.
+    public fun eject_creator_(uid: &mut UID, auth: &TxAuthority) {
+        assert!(dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_MUST_EXIST);
+        assert!(is_authorized_by_creator(uid, auth), ENO_CREATOR_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        df_set::set(id, Key { slot: CREATOR }, new_addr);
+        df_set::set(uid, Key { slot: CREATOR }, @0x0);
     }
 
-    // Change with authority object
-    public fun change_creator_<T: key>(id: &mut UID, new_addr: address, obj: &T) {
-        assert!(is_valid_creator(id, object::id_address(obj)), ECREATOR_ALREADY_SET);
+    // If you want to give creator rights to a different package, claim it first yourself and then
+    // transfer creator status to whatever other creator object you like
+    public fun transfer_creator(uid: &mut UID, old: &Creator, new: &Creator, auth: &TxAuthority) {
+        assert!(is_authorized_by_creator(uid, old, auth), ENO_CREATOR_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        df_set::set(id, Key { slot: CREATOR }, new_addr);
+        df_set::set(uid, Key { slot: CREATOR }, object::id_address(new));
     }
 
     // ======= Transfer Authority =======
 
-    // ======= Ownership Authority =======
-    // Binding requires (1) creator consent, and (2) that an owner does not already exist
+    // Requires owner and creator authority.
+    public fun bind_transfer_authority(uid: &mut UID, addr: address, creator: &Creator, auth: &TxAuthority) {
+        assert!(is_authorized_by_creator(uid, creator, auth), ENO_CREATOR_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        ownership::bind_creator_(&mut creator.id, id_bytes);
-        ownership::bind_transfer_witness<Self>(&mut creator.id, id_bytes);
-        ownership::bind_owner_(&mut creator.id, id_bytes, &creator_cap);
-
-    // Wish I didn't have to multiply this interface with 6 functions, but these were needed to support
-    // all the possible auth-types (3; signer, object, witness) and value-types (2; address or string)
-    public fun bind_owner(id: &mut UID, owner: address, ctx: &TxContext) {
-        assert!(is_valid_creator(id, tx_context::sender(ctx)), ENO_CREATOR_AUTHORITY);
-
-        bind_owner_internal(id, owner);
+        df_set::set(uid, Key { slot: TRANSFER }, addr);
     }
 
-    public fun bind_owner_<T: key>(id: &mut UID, owner: address, obj: &T) {
-        assert!(is_valid_creator(id, object::id_address(obj)), ENO_CREATOR_AUTHORITY);
-
-        bind_owner_internal(id, owner);
+    // Convenience function
+    public fun bind_transfer_authority_to_type<T>(uid: &mut UID, creator: &Creator, auth: &TxAuthority) {
+        bind_transfer_authority(uid, tx_authority::type_into_address<T>(), creator, auth);
     }
 
-    public fun bind_owner__<Creator: drop>(id: &mut UID, owner: address, _creator: Creator) {
-        assert!(is_valid_creator__<Creator>(id), ENO_CREATOR_AUTHORITY);
-
-        bind_owner_internal(id, owner);
+    // Convenience function
+    public fun bind_transfer_authority_to_object<Object: key>(
+        uid: &mut UID,
+        obj: &Object,
+        creator: &Creator,
+        auth: &TxAuthority
+    ) {
+        bind_transfer_authority(uid, object::id_address(obj), creator, auth);
     }
 
-    public fun bind_owner_witness<Witness: drop>(id: &mut UID, ctx: &TxContext) {
-        assert!(is_valid_creator(id, tx_context::sender(ctx)), ENO_CREATOR_AUTHORITY);
+    // Requires owner and creator authority.
+    // This makes ownership non-transferrable until another transfer authority is bound.
+    public fun unbind_transfer_authority(uid: &mut UID, creator: &Creator, auth: &TxAuthority) {
+        assert!(is_authorized_by_creator(uid, creator, auth), ENO_CREATOR_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        bind_owner_internal_<Witness>(id);
-    }
-
-    public fun bind_owner_witness_<T: key, Witness: drop>(id: &mut UID, obj: &T) {
-        assert!(is_valid_creator(id, object::id_address(obj)), ENO_CREATOR_AUTHORITY);
-
-        bind_owner_internal_<Witness>(id);
-    }
-
-    public fun bind_owner__<Creator: drop, Witness: drop>(id: &mut UID, _creator: Creator) {
-        assert!(is_valid_creator__<Creator>(id), ENO_CREATOR_AUTHORITY);
-
-        bind_owner_internal_<Witness>(id);
-    }
-
-    fun bind_owner_internal(id: &mut UID, owner: address) {
-        let key = Key { slot: OWNER };
-        assert!(!dynamic_field::exists_(id, key), EOWNER_ALREADY_SET);
-
-        dynamic_field::add(id, key, owner);
-    }
-
-    fun bind_owner_internal_<Witness: drop>(id: &mut UID, owner: String) {
-        let key = Key { slot: OWNER };
-        assert!(!dynamic_field::exists_(id, key), EOWNER_ALREADY_SET);
-
-        dynamic_field::add(id, key, type_name::encode<Witness>());
-    }
-
-    // Bind ownership to an arbitrary address
-    // Requires module authority. Only works if no owner is currently set
-    public fun bind_owner<World: drop>(id: &mut UID, addr: address): World {
-        assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
-        assert!(!dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_ALREADY_SET);
-
-        dynamic_field::add(id, Key { slot: OWNER }, addr);
-
-        witness
-    }
-
-    // Bind ownership to an arbitrary authority object
-    public fun bind_owner_<World: drop, Object: key>(witness: World, id: &mut UID, auth: &Object): World {
-        bind_owner(witness, id, object::id_address(auth))
-    }
-
-    // Takes a capsule id, and if the authority object is valid, it changes the owner to be the
-    // sender of this transaction. Returns a hot potato to make sure the ownership is set back to
-    // the original authority object by calling `return_ownership()`
-    public fun borrow_ownership<Object: key>(id: &mut UID, auth: &Object, ctx: &TxContext): HotPotato {
-        assert!(is_valid_owner_(id, auth), ENOT_OWNER);
-
-        let key = Key { slot: OWNER };
-
-        let original_addr = if (dynamic_field::exists_(id, key)) {
-            option::some(dynamic_field::remove<Key, address>(id, key))
-        } else { 
-            option::none()
-        };
-
-        dynamic_field::add(id, key, tx_context::sender(ctx));
-
-        HotPotato { 
-            capsule_id: object::uid_to_inner(id),
-            original_addr
-        }
-    }
-
-    public fun return_ownership(id: &mut UID, hot_potato: HotPotato) {
-        let HotPotato { capsule_id, original_addr } = hot_potato;
-
-        assert!(object::uid_to_inner(id) == capsule_id, EMISMATCHED_HOT_POTATO);
-
-        if (option::is_some(&original_addr)) {
-            let addr = option::destroy_some(original_addr);
-            *dynamic_field::borrow_mut<Key, address>(id, Key { slot: OWNER }) = addr;
-        } else {
-            dynamic_field::remove<Key, address>(id, Key { slot: OWNER});
-        };
-    }
-
-    public fun into_owner_address(id: &UID): Option<address> {
-        if (dynamic_field::exists_(id, Key { slot: OWNER })) {
-            option::some(*dynamic_field::borrow(id, Key { slot: OWNER}))
-        } else {
-            option::none()
-        }
-    }
-
-    public fun is_valid_owner(id: &UID, addr: address): bool {
-        if (!dynamic_field::exists_(id, Key { slot: OWNER})) { 
-            return true 
-        };
-
-        addr == *dynamic_field::borrow<Key, address>(id, Key { slot: OWNER })
-    }
-
-    public fun is_valid_owner_<Object: key>(id: &UID, auth: &Object): bool {
-        let addr = object::id_address(auth);
-        is_valid_owner(id, addr)
-    }
-
-    // ======= Transfer Authority =======
-
-    // Requires module authority.
-    // Requires owner authority if a transfer authority is already set
-    public fun bind_transfer_authority<World: drop, Transfer: drop>(
-        witness: World,
-        id: &mut UID,
-        ctx: &TxContext
-    ): World {
-        let witness = unbind_transfer_authority(witness, id, ctx);
-        let transfer_witness = encode::type_name<Transfer>();
-
-        dynamic_field::add(id, Key { slot: TRANSFER }, transfer_witness);
-
-        witness
-    }
-
-    // Requires both module and owner authority
-    public fun unbind_transfer_authority<World: drop>(
-        witness: World,
-        id: &mut UID,
-        ctx: &TxContext
-    ): World {
-        assert!(module_authority::is_valid<World>(id), ENO_MODULE_AUTHORITY);
-
-        if (dynamic_field::exists_with_type<Key, String>(id, Key { slot: TRANSFER })) {
-            assert!(is_valid_owner(id, tx_context::sender(ctx)), ENOT_OWNER);
-
-            dynamic_field::remove<Key, String>(id, Key { slot: TRANSFER });
-        };
-
-        witness
-    }
-
-    public fun into_transfer_type(id: &UID): Option<String> {
         let key = Key { slot: TRANSFER };
-
-        if (dynamic_field::exists_with_type<Key, String>(id, key)) {
-            option::some(*dynamic_field::borrow<Key, String>(id, key))
-        }
-        else {
-           option::none()
-        }
+        if (dynamic_field::exists_(uid, key)) {
+            dynamic_field::remove<Key, address>(uid, key);
+        };
     }
 
-    // If there is no transfer module set, then transfers are not allowed
-    public fun is_valid_transfer_authority<Transfer: drop>(id: &UID): bool {
-        let key = Key { slot: TRANSFER };
+    // ========== Transfer Function =========
 
-        if (!dynamic_field::exists_with_type<Key, String>(id, key)) {
-            false 
-        } else {
-            encode::type_name<Transfer>() == *dynamic_field::borrow<Key, String>(id, key)
-        }
-    }
-
-    // Requires transfer authority.
-    // Does NOT require ownership authority or module authority; meaning the delegated transfer module
-    // can transfer arbitrarily, without the owner being the sender of the transaction. This is useful for
-    // marketplace sales, reclaimers, and collateral-repossession
-    public fun transfer<Transfer: drop>(witness: Transfer, id: &mut UID, new_owner: address): Transfer {
-        assert!(is_valid_transfer_authority<Transfer>(id), ENO_TRANSFER_AUTHORITY);
+    // Requires transfer authority. Does NOT require ownership or creator authority.
+    // This means the specified transfer authority can change ownership arbitrarily, without the current
+    // owner being the sender of the transaction.
+    // This is useful for marketplaces, reclaimers, and collateral-repossession
+    public fun transfer(id: &mut UID, new_owner: address, auth: &TxAuthority) {
+        assert!(is_authorized_by_transfer_authority(uid, auth), ENO_TRANSFER_AUTHORITY);
 
         let owner = dynamic_field::borrow_mut<Key, address>(id, Key { slot: OWNER });
         *owner = new_owner;
-
-        witness
     }
 
-    // Bytes could be an address, an object ID, or a utf8 witness string. We abort if none of these match
-    fun set_internal<Key: store + copy + drop>(id: &mut UID, key: Key, bytes: vector<u8>) {
-        
+    // ======= Ownership Authority =======
+    // Binding requires (1) creator consent, and (2) that an owner does not already exist
+    // In order to receive creator consent, the claim_creator function must be called first
+
+    public fun bind_owner(uid: &mut UID, creator: &Creator, owner: address, auth: &TxAuthority) {
+        assert!(is_authorized_by_creator(uid, creator, auth), ENO_CREATOR_AUTHORITY);
+        assert!(!dynamic_field::exists_(id, Key { slot: OWNER }), EOWNER_ALREADY_SET);
+
+        dynamic_field::add(id, Key { slot: OWNER }, owner);        
     }
 
-    // ========== Authority Checker Functions =========
+    // Convenience function
+    public fun bind_owner_to_type<T>(&uid: &mut UID, auth: &TxAuthority) {
+        bind_owner(uid, tx_authority::type_into_address<T>(), auth);
+    }
 
-    public fun is_valid_creator(): bool {}
+    // Convenience function
+    public fun bind_owner_to_object<Object: key>(&uid: &mut UID, obj: &Object, auth: TxAuthority) {
+        bind_owner(uid, object::id_address(obj), auth);
+    }
 
-    public fun is_valid_creator__<Witness: drop>(): bool {}
+    // ========== Validity Checker Functions =========
+
+    // If no Creator field is set, this defaults to false
+    public fun is_authorized_by_creator(uid: &UID, creator: &Creator, auth: &TxAuthority): bool {
+        let key = Key { slot: CREATOR };
+        if (!dynamic_field::exists_<Key, address>(uid, key)) { return false };
+
+        let creator_addr = dynamic_field::borrow<Key, address>(uid, key);
+        if (creator_addr != object::id_address(creator)) { return false };
+
+        let creator_addr = creator::owner(creator);
+        if (creator_addr == @0x0) { 
+            // @0x0 is the null-creator address, which we always approve
+            return true
+        }; 
+        tx_authority::is_valid_address(creator_addr, auth)
+    }
+
+    // If no transfer field is set, this defaults to false
+    public fun is_authorized_by_transfer_authority(uid: &UID, auth: &TxAuthority): bool {
+        let key = Key { slot: TRANSFER };
+        if (dynamic_field::exists_<Key, address>(uid, key)) {
+            let transfer_addr = dynamic_field::borrow<Key, address>(uid, key);
+            tx_authority::is_valid_address(transfer_addr, auth)
+        } else {
+            return false
+        }
+    }
+
+    // If no owner field is set, this defaults to true
+    public fun is_authorized_by_owner(uid: &UID, auth: &TxAuthority): bool {
+        let key = Key { slot: OWNER };
+        if (dynamic_field::exists_<Key, address>(uid, key)) {
+            let owner_addr = dynamic_field::borrow<Key, address>(uid, key);
+            tx_authority::is_valid_address(creator_addr, auth)
+        } else {
+            return true
+        }
+    }
+
+    // ========== Getter Functions =========
+
+    public fun owner(uid: &UID): Option<address> {
+        let key = Key { slot: OWNER };
+        if (dynamic_field::exists_(uid, key)) {
+            option::some(*dynamic_field::borrow<Key, address>(uid, key))
+        } else {
+            option::none()
+        }
+    }
+
+    public fun transfer_authority(uid: &UID): Option<address> {
+        let key = Key { slot: TRANSFER };
+        if (dynamic_field::exists_(uid, key)) {
+            option::some(*dynamic_field::borrow<Key, address>(uid, Key { slot: TRANSFER }))
+        } else {
+            option::none()
+        }
+    }
+
+    public fun creator(uid: &UID): Option<ID> {
+        let key = Key { slot: CREATOR };
+        if (dynamic_field::exists_(uid, key)) {
+            let id = object::id_from_address(dynamic_field::borrow<Key, address>(uid, key))
+            option::some(id)
+        } else {
+            option::none()
+        }
+    }
 }

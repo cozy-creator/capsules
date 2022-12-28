@@ -17,6 +17,22 @@ module outlaw_sky::outlaw_sky {
         id: UID
     }
 
+    // Requires the 'creator' shared object
+    public entry fun create(creator: &Creator, ctx: &mut Txcontext) {
+        let outlaw = Outlaw { id: object::new(ctx) };
+        let owner = tx_context::sender(ctx);
+        let auth = tx_authority::add_type(&Outlaw_Sky {}, &tx_authority::begin(ctx));
+
+        ownership::bind_creator(&mut outlaw.id, &outlaw, creator);
+        ownership::bind_transfer_authority_to_type<Royalty_Market>(&mut outlaw.id, creator, &auth);
+        metadata::add_attributes(&mut outlaw.id, attributes, creator, auth);
+        ownership::bind_owner(&mut outlaw.id, owner, &auth);
+
+        transfer::share_object(outlaw);
+    }
+
+    (uid: &mut UID, owner: address, auth: &TxAuthority)
+
     public fun craft_outlaw(attribute_stack: &mut vector<vector<vector<u8>>>, schema: &Schema, ctx: &mut TxContext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
@@ -29,12 +45,13 @@ module outlaw_sky::outlaw_sky {
         
     }
 
+    // Public extend
     public fun extend<T: store>(outlaw: &mut Outlaw): (&mut UID) {
         &mut outlaw.id
     }
 
     fun init(genesis: OUTLAW_SKY, ctx: &mut TxContext) {
-        let boss_cap = boss_cap::create(&genesis, ctx);
-        transfer::transfer(boss_cap, tx_context::sender(ctx));
+        let (receipt, genesis) = publisher_receipt::claim(genesis, ctx);
+        transfer::transfer(receipt, tx_context::sender(ctx));
     }
 }

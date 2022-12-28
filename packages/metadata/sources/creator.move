@@ -19,6 +19,7 @@ module metadata::creator {
     struct Creator has key {
         id: UID,
         packages: vector<ID>,
+        creator: vector<address>,
         // <ownership::Key { OWNER }> : ID <- ID of a CreatorCap with ownership rights
         // <Delegate { address/ID/String }> : bool
         // <metadata::SchemaVersion { }> : ID
@@ -93,7 +94,7 @@ module metadata::creator {
     // Helper function
     fun add_package_internal(creator: &mut Creator, package_id: ID, registry: &mut Registry) {
         // It shouldn't be possible to have overlapping package-ids, but we check just in case
-        if (!vector::contains(&creator.packages, &package_id)) {
+        if (!has_package(creator, package_id)) {
             vector::push_back(&mut creator.packages, package_id);
         };
 
@@ -101,8 +102,24 @@ module metadata::creator {
     }
 
     public fun extend(creator: &mut Creator, cap: &CreatorCap): &mut ID {
-        assert!(ownership::is_valid_(&creator.id, cap), ENO_OWNERSHIP_AUTHORITY);
+        let auth = tx_authority::add_object(cap, tx_authority::begin_());
+        assert!(ownership::is_authorized_by_owner(&creator.id, auth), ENO_OWNERSHIP_AUTHORITY);
 
         &mut creator.id
+    }
+
+    public fun owner(creator: &Creator): address {
+        ownership::owner(&creator.id)
+    }
+
+    // ========== Validity Checker ========== 
+
+    public fun has_package(creator: &Creator, package_id: ID): bool {
+        vector::contains(&creator.packages, &package_id)
+    }
+
+    // Create the registry on deploy
+    fun init(ctx: &mut TxContext) {
+        transfer::share_object(Registry { id: object::new(ctx) });
     }
 }

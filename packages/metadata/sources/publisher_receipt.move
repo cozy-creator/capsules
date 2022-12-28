@@ -19,7 +19,7 @@ module metadata::publisher_receipt {
         package: ID
     }
 
-    public fun create<GENESIS: drop>(genesis: GENESIS, ctx: &mut TxContext): (PublisherReceipt, GENESIS) {
+    public fun claim<GENESIS: drop>(genesis: GENESIS, ctx: &mut TxContext): (PublisherReceipt, GENESIS) {
         assert!(is_one_time_witness(&genesis), EBAD_WITNESS);
 
         let publisher = PublisherReceipt {
