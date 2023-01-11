@@ -1,5 +1,4 @@
 module capsule::royalty_market {
 
-    // witness
-    struct Royalty_Market has drop {}
+    struct Witness has drop {}
 }

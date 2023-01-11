@@ -5,7 +5,7 @@
 // the same one-time witness, since we do not drop it here. We do this so that the one-time-witness can
 // be used for things like creating a 0x2::coin::create_currency.
 
-module metadata::publisher_receipt {
+module metadata::publish_receipt {
     use sui::object::{Self, ID, UID};
     use sui::types::is_one_time_witness;
     use sui_utils::encode;
@@ -14,15 +14,15 @@ module metadata::publisher_receipt {
     const EBAD_WITNESS: u64 = 0;
 
     // This proves that you published the corresponding package
-    struct PublisherReceipt has key, store {
+    struct PublishReceipt has key, store {
         id: UID,
         package: ID
     }
 
-    public fun claim<GENESIS: drop>(genesis: GENESIS, ctx: &mut TxContext): (PublisherReceipt, GENESIS) {
+    public fun claim<GENESIS: drop>(genesis: GENESIS, ctx: &mut TxContext): (PublishReceipt, GENESIS) {
         assert!(is_one_time_witness(&genesis), EBAD_WITNESS);
 
-        let publisher = PublisherReceipt {
+        let publisher = PublishReceipt {
             id: object::new(ctx),
             package: encode::package_id<GENESIS>()
         };
@@ -30,11 +30,11 @@ module metadata::publisher_receipt {
         (publisher, genesis)
     }
 
-    public fun into_package_id(publisher: &PublisherReceipt): ID {
+    public fun into_package_id(publisher: &PublishReceipt): ID {
         *publisher.package
     }
 
-    public fun is_valid(publisher: &PublisherReceipt, id: ID): bool {
+    public fun is_valid(publisher: &PublishReceipt, id: ID): bool {
         *package.publisher == id
     }
 }

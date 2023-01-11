@@ -4,7 +4,7 @@ module metadata::creator {
     use sui_utils::df_set;
     use ownership::ownership;
     use transfer_systems::self::Self;
-    use metadata::publisher_receipt;
+    use metadata::publish_receipt;
 
     // error constants
     const EPACKAGE_ALREADY_REGISTERED: u64 = 0;
@@ -19,11 +19,12 @@ module metadata::creator {
     struct Creator has key {
         id: UID,
         packages: vector<ID>,
-        creator: vector<address>,
-        // <ownership::Key { OWNER }> : ID <- ID of a CreatorCap with ownership rights
-        // <Delegate { address/ID/String }> : bool
+        authorities: vector<address>,
+        // <ownership::Key { OWNER }> : address <- ID of a CreatorCap with ownership rights
+        // <ownership::Key { TRANSFER }> : address <- hashed witness type of Self-transfer module
+        // <ownership::Key { CREATOR_ID }> : @0x0
         // <metadata::SchemaVersion { }> : ID
-        // <metadata::Key { String }> : <T: store> <- T must conform to schema_version
+        // <metadata::Key { slot: ascii::String }> : <T: store> <- T must conform to schema_version
     }
 
     // Authority object, grants edit access to the corresponding creator object. Store safely in a multi-sig wallet
@@ -32,12 +33,12 @@ module metadata::creator {
     }
 
     // Create a new Creator object with a new publisher-receipt
-    public entry fun create(publisher: &PublisherReceipt, registry: &mut Registry, ctx: &mut TxContext) {
+    public entry fun create(publisher: &PublishReceipt, registry: &mut Registry, ctx: &mut TxContext) {
         let creator_cap = create_(publisher, registry, ctx);
         transfer::transfer(creator_cap, tx_context::sender(ctx));
     }
     
-    public fun create_(publisher: &PublisherReceipt, registry: &mut Registry, ctx: &mut TxContext): CreatorCap {
+    public fun create_(publisher: &PublishReceipt, registry: &mut Registry, ctx: &mut TxContext): CreatorCap {
         let package = publisher::package(publisher);
         assert!(!dynamic_field::exists_(&registry.id, package), EPACKAGE_ALREADY_REGISTERED);
 
@@ -62,7 +63,7 @@ module metadata::creator {
     }
 
     // Add to an existing Creator object with a new publisher-receipt
-    public entry fun add_package(cap: &CreatorCap, creator: &mut Creator, publisher: &PublisherReceipt, registry: &mut Registry) {
+    public entry fun add_package(cap: &CreatorCap, creator: &mut Creator, publisher: &PublishReceipt, registry: &mut Registry) {
         let package = publisher::package(publisher);
         assert!(!dynamic_field::exists_(&registry.id, package), EPACKAGE_ALREADY_REGISTERED);
         assert!(ownership::is_valid_(&creator.id, cap), ENO_OWNERSHIP_AUTHORITY);
@@ -110,6 +111,41 @@ module metadata::creator {
 
     public fun owner(creator: &Creator): address {
         ownership::owner(&creator.id)
+    }
+    
+    public fun authorities(creator: &Creator): vector<address> {
+        *&creator.authorities
+    }
+
+        // ========= World Certification System =========
+
+    // Should we allow certifications with object-ids, in addition to user addresses?
+    public entry fun add_cert(world: &mut WorldMetadata, ctx: &mut TxContext) {
+        let addr = tx_context::sender(ctx);
+
+        if (!dynamic_field::exists_(&world.id, addr)) {
+            dynamic_field::add(&mut world.id, addr, true);
+        };
+    }
+
+    public entry fun revoke_cert(world: &mut WorldMetadata, ctx: &mut TxContext) {
+        let addr = tx_context::sender(ctx);
+
+        if (dynamic_field::exists_(&world.id, addr)) {
+            dynamic_field::remove<address, bool>(&mut world.id, addr);
+        };
+    }
+
+    public fun check_cert(world: &WorldMetadata, cert_addresses: vector<address>): bool {
+        let i = 0;
+        while (i < vector::length(&cert_addresses)) {
+            if (dynamic_field::exists_with_type<address, bool>(&world.id, *vector::borrow(&cert_addresses, i))) {
+                return true
+            };
+            i = i + 1;
+        };
+
+        false
     }
 
     // ========== Validity Checker ========== 

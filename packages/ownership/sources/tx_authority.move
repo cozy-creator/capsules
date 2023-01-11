@@ -1,27 +1,17 @@
-// TO DO: create a validator for witness types as strings or TypeNames?
-// TO DO: once Sui adds the ability for multiple signers per transaction, this will have to be refactored
-// TO DO: we might be able to add addresses directly using signatures? I.e., submit some bytes + signature
-// from some pubkey, so we treat that as a validation and then add that pubkey to our list of addresses
-
-// Consummable authority? Peel off authority after being checked. similar to a witness perhaps?
-// Perhaps layered authority? As in pass auth from func1 -> func2 -> func3, but func1's authority only
-// goes down to func2, not func3
-
-// In the future we could allow submission of signatures, which we verify on-chain to add more addresses
-
-// Capability pattern: type, id-number stored in cap, id-number stored in field
-
 // TxAuthority uses the convention that modules can sign for themselves using a struct named `Witness`,
-// i.e., 0x899::my_module::Witness
+// i.e., 0x899::my_module::Witness. Modules should always define a Witness struct, and carefully guard
+// its access, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
+    use std::ascii::{Self, String};
     use std::hash;
     use std::type_name;
     use std::vector;
     use sui::bcs;
     use sui::tx_context::{Self, TxContext};
-    use sui::object;
-    use sui_utils::vector::slice_vector;
+    use sui::object::{Self, ID};
+    use sui_utils::vector::slice;
+    use sui_utils::encode;
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
@@ -91,14 +81,14 @@ module ownership::tx_authority {
     // ========= Convert Types to Addresses =========
 
     public fun type_into_address<T>(): address {
-        let typename = type_name::get<T>();
+        let typename = type_name::into_string(type_name::get<T>());
         type_string_into_address(typename)
     }
 
     public fun type_string_into_address(type: String): address {
         let typename_bytes = bcs::to_bytes(&type);
         let hashed_typename = hash::sha3_256(typename_bytes);
-        let truncated = slice_vector(&hashed_typename, 0, 20);
+        let truncated = slice(&hashed_typename, 0, 20);
         bcs::peel_address(&mut bcs::new(truncated))
     }
 
@@ -120,7 +110,7 @@ module ownership::tx_authority {
 
     public fun witness_string_(type: String): String {
         let (module_addr, _) = encode::decompose_type_name(type);
-        encode::append_struct_name(module_addr, ascii::string(WITNESS_STRUCT))
+        encode::append_struct_name_(module_addr, ascii::string(WITNESS_STRUCT))
     }
 
     // ========= Internal Functions =========

@@ -14,18 +14,29 @@ module outlaw_sky::outlaw_sky {
     struct Outlaw_Sky has drop {}
 
     struct Outlaw has key, store {
-        id: UID
+        id: UID,
+        // <metadata> -> image
+        // name -> owner can change arbitrarily using a custom-API (creator: witness)
+        // level -> owner consent not needed (creator: object-ID, object-Type, shared-admin-list + address)
+        // 
     }
 
     // Requires the 'creator' shared object
-    public entry fun create(creator: &Creator, ctx: &mut Txcontext) {
+    public entry fun create(creator: &Creator, schema: &Schema, data: vector<vector<u8>>, ctx: &mut Txcontext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
         let auth = tx_authority::add_type(&Outlaw_Sky {}, &tx_authority::begin(ctx));
 
+        ownership::initialize(&mut outlaw.id, &outlaw, Outlaw_Sky {});
+        metadata::define(&mut outlaw.id, schema, data, &auth); // who gets to edit it though?
+        ownership::bind_transfer_authority_to_type<Royalty_Market>(&mut outlaw.id, &auth);
+
+        // This doesn't need auth, because there is no metadata-editor or owner yet
+        permissions::set_metadata_editor(&mut outlaw.id, &auth);
+
         ownership::bind_creator(&mut outlaw.id, &outlaw, creator);
-        ownership::bind_transfer_authority_to_type<Royalty_Market>(&mut outlaw.id, creator, &auth);
-        metadata::add_attributes(&mut outlaw.id, attributes, creator, auth);
+        ownership::bind_transfer_authority_to_type<Royalty_Market>(&mut outlaw.id, &auth);
+        metadata::define(&mut outlaw.id, schema, data, &auth);
         ownership::bind_owner(&mut outlaw.id, owner, &auth);
 
         transfer::share_object(outlaw);
@@ -46,12 +57,14 @@ module outlaw_sky::outlaw_sky {
     }
 
     // Public extend
-    public fun extend<T: store>(outlaw: &mut Outlaw): (&mut UID) {
+    public fun extend<T: store>(outlaw: &mut Outlaw, ctx: &TxContext): (&mut UID) {
+        assert!(ownership::is_valid(outlaw, ctx), ENOT_OWNER);
+
         &mut outlaw.id
     }
 
     fun init(genesis: OUTLAW_SKY, ctx: &mut TxContext) {
-        let (receipt, genesis) = publisher_receipt::claim(genesis, ctx);
+        let (receipt, genesis) = publish_receipt::claim(genesis, ctx);
         transfer::transfer(receipt, tx_context::sender(ctx));
     }
 }

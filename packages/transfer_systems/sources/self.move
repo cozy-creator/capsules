@@ -13,7 +13,7 @@ module transfer_system::self {
     struct Self has drop {} 
 
     // Transfer using address as authority
-    public fun transfer(id: &mut UID, new_owner: String, ctx: &mut TxContext) {
+    public fun transfer(id: &mut UID, new_owner: address, ctx: &mut TxContext) {
         assert!(ownership::is_valid(id, tx_context::sender(ctx)), ENO_OWNERSHIP_AUTHORITY);
 
         ownership::transfer(Self {}, id, new_owner);
