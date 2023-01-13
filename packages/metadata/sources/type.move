@@ -13,20 +13,24 @@
 // authorize yourself to metadata
 
 module metadata::type {
-    use std::ascii::{Self, String};
+    use std::ascii::{String};
+    use std::option;
     use sui::object::{Self, UID};
-    use sui::types;
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
-    use sui::types::is_one_time_witness;
-    use ownership::tx_authority;
-    use metadata::schema::Schema;
+    use sui::transfer;
     use sui_utils::encode;
+    use ownership::ownership;
+    use ownership::tx_authority;
+    use metadata::metadata;
+    use metadata::schema::Schema;
     use metadata::publish_receipt::{Self, PublishReceipt};
 
     // error enums
     const EINVALID_PUBLISH_RECEIPT: u64 = 0;
     const ETYPE_ALREADY_DEFINED: u64 = 1;
+    const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 2;
+    const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 3;
 
     // Singleton, root-level owned object
     struct Type<phantom T> has key {
@@ -46,7 +50,7 @@ module metadata::type {
         data: vector<vector<u8>>,
         ctx: &mut TxContext
     ) {
-        let type = define(publisher, schema, data, ctx);
+        let type = define_<T>(publisher, schema, data, ctx);
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
@@ -65,8 +69,10 @@ module metadata::type {
         dynamic_field::add(uid, key, true); 
 
         let type = Type { id: object::new(ctx) };
-        ownership::initialize_simple(&mut type.id, type, &tx_authority::begin_with_type(&Witness { }));
-        metadata::define(&mut type.id, schema, data);
+        let auth = tx_authority::begin_with_type(&Witness { });
+        let proof = ownership::setup(&type);
+        ownership::initialize_without_module_authority(&mut type.id, proof, &auth);
+        metadata::define(&mut type.id, schema, data, &tx_authority::empty());
 
         type
     }
@@ -77,15 +83,15 @@ module metadata::type {
     // need to deploy their own custom module (scripts aren't supported either).
 
     public entry fun update<T>(type: &mut Type<T>, keys: vector<vector<u8>>, data: vector<vector<u8>>, schema: &Schema) {
-        metadata::update(&mut type.id, keys, data, schema, tx_authority::begin_empty());
+        metadata::update(&mut type.id, keys, data, schema, &tx_authority::empty());
     }
 
     public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<vector<u8>>, schema: &Schema) {
-        metadata::remove_optional(&mut type.id, keys, schema, tx_authority::begin_empty());
+        metadata::remove_optional(&mut type.id, keys, schema, &tx_authority::empty());
     }
 
     public entry fun remove_all<T>(type: &mut Type<T>, schema: &Schema) {
-        metadata::remove_all(&mut type.id, schema, tx_authority::begin_empty());
+        metadata::remove_all(&mut type.id, schema, &tx_authority::empty());
     }
 
     public entry fun migrate<T>(
@@ -95,13 +101,31 @@ module metadata::type {
         keys: vector<vector<u8>>,
         data: vector<vector<u8>>
     ) {
-        metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, tx_authority::begin_empty());
+        metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+    }
+
+    // ======== View Functions =====
+
+    // Type serves as a very
+    public fun view_with_default<T>(
+        uid: &UID,
+        fallback_type: &Type<T>,
+        keys: vector<vector<u8>>,
+        schema: &Schema,
+        fallback_schema: &Schema,
+    ): vector<vector<u8>> {
+        let type = option::destroy_some(ownership::type(uid));
+        let binding_type = option::destroy_some(encode::binding_type<Type<T>>());
+        assert!(type == binding_type, ETYPE_METADATA_IS_INVALID_FALLBACK);
+        assert!(encode::type_name<T>() == type, EINCORRECT_TYPE_SPECIFIED_FOR_UID);
+
+        metadata::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }
 
     // ======== For Owners =====
 
     // Makes the metadata immutable. This cannot be undone
-    public entry fun freeze<T>(type: Type<T>) {
+    public entry fun freeze_<T>(type: Type<T>) {
         transfer::freeze_object(type);
     }
 

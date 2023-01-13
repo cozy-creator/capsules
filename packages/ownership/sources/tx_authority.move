@@ -10,9 +10,11 @@ module ownership::tx_authority {
     use sui::bcs;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
-    use sui_utils::vector::slice;
+    use sui_utils::vector2;
     use sui_utils::encode;
 
+    // This is a special struct-name used to assert ownership of a module at runtime
+    // Each module should declare their own 0x123::my_module::Witness struct
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
     struct TxAuthority has drop {
@@ -27,7 +29,7 @@ module ownership::tx_authority {
     }
 
     // Begins with a capability-id
-    public fun begin_with_id<T: key>(_cap: &T): TxAuthority {
+    public fun begin_with_id<T: key>(cap: &T): TxAuthority {
         TxAuthority { addresses: vector[object::id_address(cap)] }
     }
 
@@ -36,7 +38,7 @@ module ownership::tx_authority {
         TxAuthority { addresses: vector[type_into_address<T>()] }
     }
 
-    public fun begin_empty(): TxAuthority {
+    public fun empty(): TxAuthority {
         TxAuthority { addresses: vector::empty<address>() }
     }
 
@@ -64,6 +66,11 @@ module ownership::tx_authority {
 
     public fun is_signed_by_module<T>(auth: &TxAuthority): bool {
         is_signed_by(witness_addr<T>(), auth)
+    }
+
+    // type can be any type belonging to the module, such as 0x599::my_module::StructName
+    public fun is_signed_by_module_(type: String, auth: &TxAuthority): bool {
+        is_signed_by(witness_addr_(type), auth)
     }
 
     public fun is_signed_by_object<T: key>(id: ID, auth: &TxAuthority): bool {
@@ -102,7 +109,7 @@ module ownership::tx_authority {
     public fun type_string_into_address(type: String): address {
         let typename_bytes = bcs::to_bytes(&type);
         let hashed_typename = hash::sha3_256(typename_bytes);
-        let truncated = slice(&hashed_typename, 0, 20);
+        let truncated = vector2::slice(&hashed_typename, 0, 20);
         bcs::peel_address(&mut bcs::new(truncated))
     }
 
@@ -149,7 +156,7 @@ module ownership::tx_authority_test {
         let ctx = test_scenario::ctx(&mut scenario);
         {
             let auth = tx_authority::create(ctx);
-            tx_authority::add_type(&Witness {}, &auth);
+            tx_authority::add_capability_type(&Witness {}, &auth);
         };
         test_scenario::end(scenario);
     }

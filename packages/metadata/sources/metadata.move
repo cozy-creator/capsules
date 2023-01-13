@@ -17,10 +17,11 @@ module metadata::metadata {
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use metadata::schema::{Self, Schema};
-    use metadata::type::Type;
+    use sui_utils::ascii2;
     use sui_utils::bcs2;
     use sui_utils::dynamic_field2;
-    use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::ownership;
+    use ownership::tx_authority::TxAuthority;
 
     // Error enums
     const EINCORRECT_DATA_LENGTH: u64 = 0;
@@ -32,7 +33,7 @@ module metadata::metadata {
     const ENO_MODULE_AUTHORITY: u64 = 6;
     const ENO_OWNER_AUTHORITY: u64 = 7;
     const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 8;
-    const EMISSING_VALUES_FOR_MIGRATION: u64 = 9;
+    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 9;
     const EKEY_IS_NOT_OPTIONAL: u64 = 10;
     const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 11;
     const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 12;
@@ -86,7 +87,7 @@ module metadata::metadata {
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             let value = *vector::borrow(&data, i);
 
-            set_field(uid, Key { slot: key }, option::destroy_some(type), option::destroy_some(optional), value);
+            set_field(uid, Key { slot: key }, option::destroy_some(type_maybe), option::destroy_some(optional_maybe), value);
             i = i + 1;
         };
     }
@@ -101,7 +102,7 @@ module metadata::metadata {
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
 
-            drop_field(uid, Key { slot: key }, option::destroy_some(type));
+            drop_field(uid, Key { slot: key }, option::destroy_some(type_maybe));
             i = i + 1;
         };
     }
@@ -111,16 +112,16 @@ module metadata::metadata {
     public fun remove_all(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
         assert_valid_ownership_and_schema(uid, schema, auth);
 
-        let (i, items) = (0, schema::items(schema));
+        let (i, items) = (0, schema::into_items(schema));
         while (i < vector::length(&items)) {
-            let item = *vector::borrow(&items, i);
+            let item = vector::borrow(&items, i);
             let (key, type, _) = schema::item(item);
 
             drop_field(uid, Key { slot: key }, type);
             i = i + 1;
         };
 
-        dynamic_field2::drop(uid, SchemaID { });
+        dynamic_field2::drop<SchemaID, ID>(uid, SchemaID { });
     }
 
     // Moves from old-schema -> new-schema. Keys and data correspond to each other, in that
@@ -135,49 +136,47 @@ module metadata::metadata {
         data: vector<vector<u8>>,
         auth: &TxAuthority
     ) {
-        assert_valid_ownership_and_schema(uid, schema, auth);
-        assert!(vector::length(&keys_raw) == vector::length(data), EINCORRECT_DATA_LENGTH);
+        assert_valid_ownership_and_schema(uid, old_schema, auth);
+        assert!(vector::length(&keys_raw) == vector::length(&data), EINCORRECT_DATA_LENGTH);
 
         let keys = ascii2::bytes_to_strings(keys_raw);
 
         // To save space, drop all of the old_schema's fields which no longer exist in the new schema
         let items = schema::difference(old_schema, new_schema);
         let i = 0;
-        while (i < vector::length(items)) {
-            let (key, type, _) = item(vector::borrow(&items, i));
-            drop_field(uid, key, type);
+        while (i < vector::length(&items)) {
+            let (key, type, _) = schema::item(vector::borrow(&items, i));
+            drop_field(uid, Key { slot: key }, type);
         };
 
         // Iterate through the new schema, making sure that all fields are defined
-        let (old, new) = (schema::into_items(old_schema), schema::into_items(new_schema));
+        let new = schema::into_items(new_schema);
         let i = 0;
         while (i < vector::length(&new)) {
-            let (key, type, optional) = schema::item(vector::borrow(new, i));
-            let (old_type_maybe, _) = find_type_for_key(old_schema, key);
+            let (key, type, optional) = schema::item(vector::borrow(&new, i));
+            let (old_type_maybe, _) = schema::find_type_for_key(old_schema, key);
 
-            let (exists_, j) = vector::index_of(&keys, key);
+            let (exists_, j) = vector::index_of(&keys, &key);
             if (exists_) {
                 // the new-type and old-types may be different, so we have to drop the old-value first
-                if (option::is_some(old_type_maybe)) {
-                    drop_field(uid, key, *option::borrow(old_type_maybe));
+                if (option::is_some(&old_type_maybe)) {
+                    drop_field(uid, Key { slot: key }, option::destroy_some(old_type_maybe));
                 };
-                set_field(uid, key, type, optional, *vector::borrow(data, j));
+                set_field(uid, Key { slot: key }, type, optional, *vector::borrow(&data, j));
             } else {
                 // We're not changing the values stored here, so we make sure any old stored values are
                 // compatible with the new schema
-                let old_bytes = get_bcs_bytes(uid, key, type);
-                if (!optional && old_bytes == vector[0u8]) abort EMISSING_VALUES_FOR_MIGRATION;
+                let old_bytes = get_bcs_bytes(uid, Key { slot: key }, type);
+                if (!optional && old_bytes == vector[0u8]) abort EMISSING_VALUES_NEEDED_FOR_MIGRATION;
 
                 if (option::is_some(&old_type_maybe)) {
                     let old_type = option::destroy_some(old_type_maybe);
                     if (old_type != type && old_bytes != vector[0u8]) {
                         if (optional) {
                             // Delete the old inconsistent field because its optional
-                            drop_field(uid, key, *option::borrow(old_type_maybe));
+                            drop_field(uid, Key { slot: key }, old_type);
                         }
-                        else {
-                            abort EMISSING_VALUES_FOR_MIGRATION;
-                        };
+                        else { abort EMISSING_VALUES_NEEDED_FOR_MIGRATION };
                     };
                 };
             };
@@ -212,7 +211,7 @@ module metadata::metadata {
         response
     }
 
-    fun view_key(uid: &UID, slot: String, schema: &Schema): vector<u8> {
+    fun view_key(uid: &UID, slot: ascii::String, schema: &Schema): vector<u8> {
         let (type_maybe, _) = schema::find_type_for_key(schema, slot);
         if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
             let type = option::destroy_some(type_maybe);
@@ -221,12 +220,12 @@ module metadata::metadata {
             bytes
         } else {
             vector[0u8] // option::is_none
-        };
+        }
     }
 
     // This is the same as calling view_ with all the keys of its own schema
     public fun view_all(uid: &UID, schema: &Schema): vector<vector<u8>> {
-        let (items, i, keys) = (schema::into_items(schema_), 0, vector::empty<ascii::String>());
+        let (items, i, keys) = (schema::into_items(schema), 0, vector::empty<ascii::String>());
 
         while (i < vector::length(&items)) {
             let (key, _, _) = schema::item(vector::borrow(&items, i));
@@ -257,27 +256,12 @@ module metadata::metadata {
         view_(uid, keys, object_schema)
     }
 
-    // Type serves as a very
-    public fun view_with_default<T>(
-        uid: &UID,
-        fallback_type: &Type<T>,
-        keys: vector<vector<u8>>,
-        schema: &Schema,
-        fallback_schema: &Schema,
-    ): vector<vector<u8>> {
-        let type = option::destroy_some(ownership::type(uid));
-        assert!(type == encode::binding_type<Type<T>>(), ETYPE_METADATA_IS_INVALID_FALLBACK);
-        assert!(encode::type_name<T>() == ownership::type(uid), EINCORRECT_TYPE_SPECIFIED_FOR_UID);
-
-        view_with_default_(uid, type::extend(&fallback_type), ascii2::bytes_to_strings(keys), schema, fallback_schema)
-    }
-
     // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
     // really only need to have the same types for overlapping keys
-    public fun view_with_default_<T>(
+    public fun view_with_default(
         uid: &UID,
         fallback: &UID,
-        keys: vector<String>,
+        keys: vector<vector<u8>>,
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<vector<u8>> {
@@ -285,11 +269,13 @@ module metadata::metadata {
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
         assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
 
+        let keys = ascii2::bytes_to_strings(keys);
+
         let (i, response) = (0, vector::empty<vector<u8>>());
         while (i < vector::length(&keys)) {
             let slot = *vector::borrow(&keys, i);
             let res = view_key(uid, slot, schema);
-            if (res != 0u8) {
+            if (res != vector[0u8]) {
                 vector::push_back(&mut response, view_key(uid, slot, schema));
             } else {
                 vector::push_back(&mut response, view_key(fallback, slot, fallback_schema));
@@ -332,7 +318,7 @@ module metadata::metadata {
         // To deserialize, all schema-optional items should be prepended with an option byte, otherwise an abort
         // will occur here.
         if (optional) {
-            if (is_some(value)) {
+            if (is_some(bytes)) {
                 vector::remove(&mut bytes, 0); // remove the optional-byte
             } else { return }; // nothing to add
         };
@@ -547,6 +533,6 @@ module metadata::metadata {
     public fun assert_valid_ownership_and_schema(uid: &UID, schema: &Schema, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(schema_id(uid) == object::id(old_schema), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema_id(uid) == object::id(schema), EINCORRECT_SCHEMA_SUPPLIED);
     }
 }

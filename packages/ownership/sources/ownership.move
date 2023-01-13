@@ -1,19 +1,23 @@
 module ownership::ownership {
+    use std::ascii::String;
     use std::option::{Self, Option};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::dynamic_field;
     use sui_utils::dynamic_field2;
+    use sui_utils::encode;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // error enums
     const ENO_MODULE_AUTHORITY: u64 = 0;
     const ENO_OWNER_AUTHORITY: u64 = 1;
     const ENO_TRANSFER_AUTHORITY: u64 = 2;
-    const EUID_DOES_NOT_BELONG_TO_OBJECT: u64 = 3;
+    const EUID_DOES_NOT_BELONG_TO_PROOF_OBJECT: u64 = 3;
     const EOBJECT_NOT_INITIALIZED: u64 = 4;
-    const EOWNERSHIP_ALREADY_INITIALIZED: u64 = 5;
+    const EOBJECT_ALREADY_INITIALIZED: u64 = 5;
     const ETRANSFER_ALREADY_EXISTS: u64 = 6;
     const EOWNER_ALREADY_EXISTS: u64 = 7;
+    const EOWNER_ALREADY_INITIALIZED: u64 = 8;
+    const ETHIS_ASSET_CANNOT_BE_OWNED: u64 = 9;
 
     // Dynamic field keys
     struct Module has store, copy, drop { } // address
@@ -23,142 +27,112 @@ module ownership::ownership {
     // initialized
     struct Type has store, copy, drop { } // ascii::string
 
+    // Has in the setup -> initialize handoff process
+    // It's pretty stupid that we even need to do this, but unfortunately
+    // `initialize(&mut object.id, &object)` gives the error `Invalid borrow of variable, it is still
+    // being mutably borrowed by another reference`. Hence why we have to break the type verification
+    // setup into two function calls
+    struct ProofOfType has drop {
+        id: ID,
+        type: String
+    }
+
     // ======= Module Authority =======
 
+    public fun setup<T: key>(obj: &T): ProofOfType {
+        ProofOfType {
+            id: object::id(obj),
+            type: encode::type_name<T>()
+        }
+    }
+
     // Convenience function
-    public fun initialize<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
-        let module_authority = tx_authority::witness_addr<T>();
-        initialize_(uid, obj, module_authority, auth);
+    public fun initialize(uid: &mut UID, proof: ProofOfType, auth: &TxAuthority) {
+        let module_authority = tx_authority::witness_addr_(proof.type);
+        initialize_(uid, proof, option::some(module_authority), auth);
     }
 
     // In this case, ownership of UID reverts to Sui root-level ownership
-    public fun initialize_simple<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
-        initialize_(uid, obj, option::none(), auth);
+    public fun initialize_without_module_authority(uid: &mut UID, proof: ProofOfType, auth: &TxAuthority) {
+        initialize_(uid, proof, option::none(), auth);
     }
 
-    // Ownership over a UID can only ever be initialized once, and it can only be done by
-    // if the module that created it signed the TxAuthority
-    public fun initialize_<T: key>(
+    // If module-authority is not set here, it can never be set, meaning owner and tranfser authority
+    // can never be set either. The ability to obtain a mutable reference to UID is proof-of-ownership
+    public fun initialize_(
         uid: &mut UID,
-        obj: &T,
+        proof: ProofOfType,
         module_authority: Option<address>,
-        transfer_authority: Option<address>,
-        owner: Option<address>,
         auth: &TxAuthority
     ) {
-        assert!(object::uid_to_inner(uid) == object::id(obj), EUID_DOES_NOT_BELONG_TO_OBJECT);
-        assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
-        assert!(!is_initialized(uid), EOWNERSHIP_ALREADY_INITIALIZED);
+        assert!(object::uid_to_inner(uid) == proof.id, EUID_DOES_NOT_BELONG_TO_PROOF_OBJECT);
+        assert!(tx_authority::is_signed_by_module_(proof.type, auth), ENO_MODULE_AUTHORITY);
+        assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
 
-        dynamic_field::add(uid, Type { }, encode::type_name<T>());
+        dynamic_field::add(uid, Type { }, proof.type);
 
         if (option::is_some(&module_authority)) {
             dynamic_field::add(uid, Module { }, option::destroy_some(module_authority));
         };
-
-        if (option::is_some(&transfer_authority)) {
-            dynamic_field::add(uid, Transfer { }, option::destroy_some(transfer_authority));
-        };
-
-        if (option::is_some(&owner)) {
-            dynamic_field::add(uid, Owner { }, option::destroy_some(owner));
-        };
     }
 
-    // Requires module and owner permission
-    public fun migrate_module(uid: &mut UID, new_module_authority: address, auth: &TxAuthority) {
+    // Only requires module authority
+    public fun migrate_module_authority(uid: &mut UID, new_module_authority: address, auth: &TxAuthority) {
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        dynamic_field2::set(uid, Module { }, new_module_authority)
+        dynamic_field2::set(uid, Module { }, new_module_authority);
     }
 
-    // Requires owner and transfer authority
-    // Transfer authority is set to @0x1. All module permissions now default to true
-    // This removes all power any module had on this object. Cannot be undone.
-    public fun eject_module(uid: &mut UID, auth: &TxAuthority) {
-        migrate_module(uid, @0x1, auth)
+    // Only requires module authority
+    // Module authority is removed, and all module permissions now default to true.
+    // After it is ejected, module authority can never be added again.
+    public fun eject_module_authority(uid: &mut UID, auth: &TxAuthority) {
+        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+
+        dynamic_field2::drop<Module, address>(uid, Module { });
     }
 
     // ======= Transfer Authority =======
 
     // Convenience function
-    public fun bind_transfer_to_type<T>(uid: &mut UID, auth: &TxAuthority) {
-        let addr = tx_authority::type_into_address<T>();
-        bind_transfer(uid, addr, auth);
+    public fun initialize_owner_and_transfer_authority<Transfer>(uid: &mut UID, owner: address, auth: &TxAuthority) {
+        let transfer = tx_authority::type_into_address<Transfer>();
+        initialize_owner_and_transfer_authority_(uid, option::some(owner), option::some(transfer), auth);
     }
 
-    // Convenience function
-    public fun bind_transfer_to_object<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
-        let addr = object::id_address(obj);
-        bind_transfer(uid, addr, auth);
-    }
-
-    // Requires owner and creator authority.
-    public fun bind_transfer(uid: &mut UID, addr: address, auth: &TxAuthority) {
-        assert!(!dynamic_field::exists_(uid, Transfer { }), ETRANSFER_ALREADY_EXISTS);
+    // The owner and transfer authority can only ever be initialized once
+    // Module authority must exist and approve this
+    public fun initialize_owner_and_transfer_authority_(
+        uid: &mut UID,
+        owner: Option<address>,
+        transfer_authority: Option<address>,
+        auth: &TxAuthority
+    ) {
+        let (owner_maybe, transfer_maybe) = (owner(uid), transfer_authority(uid));
+        assert!(option::is_none(&owner_maybe) && option::is_none(&transfer_maybe), EOWNER_ALREADY_INITIALIZED);
+        assert!(option::is_some(&module_authority(uid)), ETHIS_ASSET_CANNOT_BE_OWNED);
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        dynamic_field::add(uid, Transfer { }, addr);
+        if (option::is_some(&owner)) {
+            let addr = option::destroy_some(owner);
+            dynamic_field2::set(uid, Owner { }, addr);
+        };
+
+        if (option::is_some(&transfer_authority)) {
+            let addr = option::destroy_some(transfer_authority);
+            dynamic_field2::set(uid, Transfer { }, addr);
+        };
     }
 
     // Requires owner and transfer authority
-    public fun unbind_transfer(uid: &mut UID, auth: &TxAuthority) {
-        assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-
-        if (dynamic_field::exists_(uid, Transfer { })) {
-            dynamic_field::remove<Transfer, address>(uid, Transfer { });
-        }
-    }
-
-    // Requires owner and transfer authority
-    public fun migrate_transfer(uid: &mut UID, new_addr: address, auth: &TxAuthority) {
+    public fun migrate_transfer_authority(uid: &mut UID, new_addr: address, auth: &TxAuthority) {
         assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
         dynamic_field2::set(uid, Transfer { }, new_addr);
     }
-
-    // Requires owner and transfer authority
-    // Transfer authority is set to @0x0. This means ownership can never be changed again
-    public fun immutable_owner(uid: &mut UID, auth: &TxAuthority) {
-        migrate_transfer(uid, @0x0, auth)
-    }
-
-    // ======= Owner Authority =======
-
-    // Convenience function
-    public fun bind_owner_to_type<T>(uid: &mut UID, auth: &TxAuthority) {
-        let owner = tx_authority::type_into_address<T>();
-        bind_owner(uid, owner, auth);
-    }
-
-    // Convenience function
-    public fun bind_owner_to_object<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
-        let owner = object::id_address(obj);
-        bind_owner(uid, owner, auth);
-    }
-
-    // Requires permission from module
-    public fun bind_owner(uid: &mut UID, owner: address, auth: &TxAuthority) {
-        assert!(!dynamic_field::exists_(uid, Owner { }), EOWNER_ALREADY_EXISTS);
-        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-
-        dynamic_field::add(uid, Owner { }, owner);        
-    }
-
-    // Requires permission from transfer
-    public fun unbind_owner(uid: &mut UID, auth: &TxAuthority) {
-        assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
-
-        if (dynamic_field::exists_(uid, Owner { })) {
-            dynamic_field::remove<Owner, address>(uid, Owner { });
-        }       
-    }
-
-    // ========== Transfer Function =========
 
     // Requires transfer authority. Does NOT require ownership or creator authority.
     // This means the specified transfer authority can change ownership arbitrarily, without the current
@@ -167,7 +141,23 @@ module ownership::ownership {
     public fun transfer(uid: &mut UID, new_owner: address, auth: &TxAuthority) {
         assert!(is_authorized_by_transfer(uid, auth), ENO_TRANSFER_AUTHORITY);
 
-        *dynamic_field::borrow_mut<Owner, address>(uid, Owner { }) = new_owner;
+        dynamic_field2::set(uid, Owner { }, new_owner);
+    }
+
+    // Requires transfer authority
+    public fun eject_owner(uid: &mut UID, auth: &TxAuthority) {
+        assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
+
+        dynamic_field2::drop<Owner, address>(uid, Owner { });      
+    }
+
+    // Requires owner and transfer authority
+    // This ejects the transfer authority, and it can never be set again
+    public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
+        assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
+        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+
+        dynamic_field2::drop<Transfer, address>(uid, Transfer { });
     }
 
     // ======= Authority Checkers =======
@@ -186,10 +176,10 @@ module ownership::ownership {
         }
     }
 
-    /// Defaults to `true` if not set.
+    /// Defaults to `false` if not set.
     public fun is_authorized_by_transfer(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
-        else if (!dynamic_field::exists_(uid, Transfer { })) true
+        else if (!dynamic_field::exists_(uid, Transfer { })) false
         else {
             let addr = *dynamic_field::borrow<Transfer, address>(uid, Transfer { });
             tx_authority::is_signed_by(addr, auth)

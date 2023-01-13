@@ -43,7 +43,7 @@ module metadata::schema {
 
     // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
     public fun difference(schema1: &Schema, schema2: &Schema): vector<Item> {
-        let (items1, items2) = (into_items(schema1), into_items(schema2));
+        let items1 = into_items(schema1);
         let (i, items) = (0, vector::empty<Item>());
         while (i < vector::length(&items1)) {
             let item = vector::borrow(&items1, i);

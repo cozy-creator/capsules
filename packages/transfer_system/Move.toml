@@ -1,12 +1,12 @@
 [package]
-name = "Capsule"
-version = "0.1.1"
+name = "TransferSystem"
+version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 SuiUtils = { git = "https://github.com/0xcapsules/sui-utils.git", subdir = "package", rev = "master" }
-SuiMetadata = { local = "../metadata" }
+Ownership = { local = "../ownership" }
 
 [addresses]
-capsule = "0x0"
+transfer_system = "0x0"

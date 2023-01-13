@@ -6,8 +6,8 @@
 // be used for things like creating a 0x2::coin::create_currency.
 
 module metadata::publish_receipt {
-    use std::ascii::String;
     use sui::object::{Self, ID, UID};
+    use sui::tx_context::TxContext;
     use sui::types::is_one_time_witness;
     use sui_utils::encode;
 
@@ -34,11 +34,11 @@ module metadata::publish_receipt {
     }
 
     public fun into_package_id(publisher: &PublishReceipt): ID {
-        *publisher.package
+        *&publisher.package
     }
 
-    public fun is_valid(publisher: &PublishReceipt, id: ID): bool {
-        *package.publisher == id
+    public fun did_publish(publisher: &PublishReceipt, id: ID): bool {
+        publisher.package == id
     }
 
     public fun extend(publisher: &mut PublishReceipt): &mut UID {
