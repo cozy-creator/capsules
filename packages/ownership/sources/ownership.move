@@ -2,7 +2,7 @@ module ownership::ownership {
     use std::option::{Self, Option};
     use sui::object::{Self, UID};
     use sui::dynamic_field;
-    use sui_utils::df_set;
+    use sui_utils::dynamic_field2;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // error enums
@@ -11,7 +11,7 @@ module ownership::ownership {
     const ENO_TRANSFER_AUTHORITY: u64 = 2;
     const EUID_DOES_NOT_BELONG_TO_OBJECT: u64 = 3;
     const EOBJECT_NOT_INITIALIZED: u64 = 4;
-    const EMODULE_ALREADY_EXISTS: u64 = 5;
+    const EOWNERSHIP_ALREADY_INITIALIZED: u64 = 5;
     const ETRANSFER_ALREADY_EXISTS: u64 = 6;
     const EOWNER_ALREADY_EXISTS: u64 = 7;
 
@@ -19,6 +19,9 @@ module ownership::ownership {
     struct Module has store, copy, drop { } // address
     struct Transfer has store, copy, drop { } // address
     struct Owner has store, copy, drop { } // address
+    // The type-name the UID is nested inside of. This signifies that ownership for this UID was
+    // initialized
+    struct Type has store, copy, drop { } // ascii::string
 
     // ======= Module Authority =======
 
@@ -28,12 +31,38 @@ module ownership::ownership {
         initialize_(uid, obj, module_authority, auth);
     }
 
-    public fun initialize_<T: key>(uid: &mut UID, obj: &T, module_authority: address, auth: &TxAuthority) {
+    // In this case, ownership of UID reverts to Sui root-level ownership
+    public fun initialize_simple<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
+        initialize_(uid, obj, option::none(), auth);
+    }
+
+    // Ownership over a UID can only ever be initialized once, and it can only be done by
+    // if the module that created it signed the TxAuthority
+    public fun initialize_<T: key>(
+        uid: &mut UID,
+        obj: &T,
+        module_authority: Option<address>,
+        transfer_authority: Option<address>,
+        owner: Option<address>,
+        auth: &TxAuthority
+    ) {
         assert!(object::uid_to_inner(uid) == object::id(obj), EUID_DOES_NOT_BELONG_TO_OBJECT);
         assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
-        assert!(!dynamic_field::exists_(uid, Module { }), EMODULE_ALREADY_EXISTS);
+        assert!(!is_initialized(uid), EOWNERSHIP_ALREADY_INITIALIZED);
 
-        dynamic_field::add(uid, Module { }, module_authority);
+        dynamic_field::add(uid, Type { }, encode::type_name<T>());
+
+        if (option::is_some(&module_authority)) {
+            dynamic_field::add(uid, Module { }, option::destroy_some(module_authority));
+        };
+
+        if (option::is_some(&transfer_authority)) {
+            dynamic_field::add(uid, Transfer { }, option::destroy_some(transfer_authority));
+        };
+
+        if (option::is_some(&owner)) {
+            dynamic_field::add(uid, Owner { }, option::destroy_some(owner));
+        };
     }
 
     // Requires module and owner permission
@@ -41,7 +70,7 @@ module ownership::ownership {
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        df_set::set(uid, Module { }, new_module_authority)
+        dynamic_field2::set(uid, Module { }, new_module_authority)
     }
 
     // Requires owner and transfer authority
@@ -89,7 +118,7 @@ module ownership::ownership {
         assert!(is_authorized_by_transfer(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        df_set::set(uid, Transfer { }, new_addr);
+        dynamic_field2::set(uid, Transfer { }, new_addr);
     }
 
     // Requires owner and transfer authority
@@ -143,22 +172,24 @@ module ownership::ownership {
 
     // ======= Authority Checkers =======
 
-    /// Defaults to `false` if not set.
-    /// @0x1 is the 'always yes' address, and resolves to true
+    public fun is_initialized(uid: &UID): bool {
+        dynamic_field::exists_(uid, Type { })
+    }
+
+    /// Defaults to `true` if not set.
     public fun is_authorized_by_module(uid: &UID, auth: &TxAuthority): bool {
-        if (!dynamic_field::exists_(uid, Module { })) false
+        if (!is_initialized(uid)) false
+        else if (!dynamic_field::exists_(uid, Module { })) true
         else {
             let addr = *dynamic_field::borrow<Module, address>(uid, Module { });
-            if (addr == @0x1) true
-            else {
-                tx_authority::is_signed_by(addr, auth)
-            }
+            tx_authority::is_signed_by(addr, auth)
         }
     }
 
-    /// Defaults to `false` if not set.
+    /// Defaults to `true` if not set.
     public fun is_authorized_by_transfer(uid: &UID, auth: &TxAuthority): bool {
-        if (!dynamic_field::exists_(uid, Transfer { })) false
+        if (!is_initialized(uid)) false
+        else if (!dynamic_field::exists_(uid, Transfer { })) true
         else {
             let addr = *dynamic_field::borrow<Transfer, address>(uid, Transfer { });
             tx_authority::is_signed_by(addr, auth)
@@ -167,7 +198,8 @@ module ownership::ownership {
 
     /// Defaults to `true` if not set.
     public fun is_authorized_by_owner(uid: &UID, auth: &TxAuthority): bool {
-        if (!dynamic_field::exists_(uid, Owner { })) true
+        if (!is_initialized(uid)) false
+        else if (!dynamic_field::exists_(uid, Owner { })) true
         else {
             let addr = *dynamic_field::borrow<Owner, address>(uid, Owner { });
             tx_authority::is_signed_by(addr, auth)
@@ -175,6 +207,14 @@ module ownership::ownership {
     }
 
     // ========== Getter Functions =========
+
+    public fun type(uid: &UID): Option<String> {
+        if (dynamic_field::exists_(uid, Type { })) {
+            option::some(*dynamic_field::borrow<Type, String>(uid, Type { }))
+        } else {
+            option::none()
+        }
+    }
 
     public fun owner(uid: &UID): Option<address> {
         if (dynamic_field::exists_(uid, Owner { })) {
@@ -184,7 +224,7 @@ module ownership::ownership {
         }
     }
 
-    public fun get_transfer(uid: &UID): Option<address> {
+    public fun transfer_authority(uid: &UID): Option<address> {
         if (dynamic_field::exists_(uid, Transfer { })) {
             option::some(*dynamic_field::borrow<Transfer, address>(uid, Transfer { }))
         } else {
@@ -192,7 +232,7 @@ module ownership::ownership {
         }
     }
 
-    public fun get_module(uid: &UID): Option<address> {
+    public fun module_authority(uid: &UID): Option<address> {
         if (dynamic_field::exists_(uid, Module { })) {
             let addr = *dynamic_field::borrow<Module, address>(uid, Module { });
             option::some(addr)

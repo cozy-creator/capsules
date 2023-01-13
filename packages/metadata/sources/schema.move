@@ -12,7 +12,6 @@ module metadata::schema {
     // Immutable root-level object
     struct Schema has key {
         id: UID,
-        name: ascii::String,
         schema: vector<Item>
     }
 
@@ -42,9 +41,25 @@ module metadata::schema {
         });
     }
 
-    // Checks to see if two schemas are compatible, in the sense that any overlapping fields map to the same type
+    // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
+    public fun difference(schema1: &Schema, schema2: &Schema): vector<Item> {
+        let (items1, items2) = (into_items(schema1), into_items(schema2));
+        let (i, items) = (0, vector::empty<Item>());
+        while (i < vector::length(&items1)) {
+            let item = vector::borrow(&items1, i);
+            let (key, _, _) = item(item);
+            if (!has_key(schema2, key)) {
+                vector::push_back(&mut items, *item)
+            };
+            i = i + 1;
+        };
+
+        items
+    }
+
+    // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
     public fun is_compatible(schema1_: &Schema, schema2_: &Schema): bool {
-        let schema1 = get(schema1_);
+        let schema1 = into_items(schema1_);
         let i = 0;
         while (i < vector::length(&schema1)) {
             let (key, type1, _) = item(vector::borrow(&schema1, i));
@@ -55,12 +70,13 @@ module metadata::schema {
             };
             i = i + 1;
         };
+
         true
     }
 
     // ========= Accessor Functions =========
 
-    public fun get(schema_: &Schema): vector<Item> {
+    public fun into_items(schema_: &Schema): vector<Item> {
         *&schema_.schema
     }
 
@@ -69,7 +85,21 @@ module metadata::schema {
         (key, type, optional)
     }
 
-    // ============ Helper Function ============ 
+    public fun length(schema_: &Schema): u64 {
+        vector::length(&schema_.schema)
+    }
+
+    // ============ Helper Function ============
+
+    public fun has_key(schema: &Schema, key: ascii::String): bool {
+        let (items, i) = (into_items(schema), 0);
+        while (i < vector::length(&items)) {
+            if (key == *&vector::borrow(&items, i).key) return true;
+            i = i + 1;
+        };
+
+        false
+    }
 
     // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
     public fun find_type_for_key(schema_: &Schema, key: ascii::String): (Option<ascii::String>, Option<bool>) {

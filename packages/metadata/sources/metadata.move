@@ -1,29 +1,26 @@
-// Currently, this stores metadata as raw-bytes. For example, a ascii::String will simply be stored as bytes, rather than
-// a type. Should we change this, and store the actual objects instead? It might be more useful for on-chain programs trying to
-// read values, or for explorers examining dynamic fields.
-//
-// Additionally we are storing each schema as a root-level immutable object. Inside of each object we are merely storing the ID
-// of that object, rather than the object itself. Perhaps we should store the schema itself inside the object?
-//
-// What BCS could use: objectID, peel_u16, peel_u32, peel_u256, peel_ascii_string, peel_utf8_string, and vector versions of
-// all of these
+// Sui's On-Chain Metadata program
+
+// On-chain metadata is store in its serialized state, not its raw bytes.
+// Schemas are stored as root-level objects, rather than being stored inside the objects themselves, in order to save space.
 //
 // Future to do:
-// - add authority-checking to see who can add or modify metadata
-// - migrate schema for an object (compatible upgrades?)
-// - edit individual metadata for a key (including add / remove if optional)
 // - have a better url type
+// - Upgrade BCS: objectID, peel_u16, peel_u32, peel_u256, peel_ascii_string, peel_utf8_string, and vector versions of
+// all of these
 
 module metadata::metadata {
     use std::ascii;
     use std::string;
     use std::option;
     use std::vector;
-    use sui::bcs::{Self, BCS};
+    use sui::bcs::{Self};
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use metadata::schema::{Self, Schema};
-    use sui_utils::vector::slice_mut;
+    use metadata::type::Type;
+    use sui_utils::bcs2;
+    use sui_utils::dynamic_field2;
+    use ownership::tx_authority::{Self, TxAuthority};
 
     // Error enums
     const EINCORRECT_DATA_LENGTH: u64 = 0;
@@ -31,6 +28,14 @@ module metadata::metadata {
     const EUNRECOGNIZED_TYPE: u64 = 2;
     const EINCORRECT_SCHEMA_SUPPLIED: u64 = 3;
     const EINCOMPATIBLE_READER_SCHEMA: u64 = 4;
+    const EINCOMPATIBLE_MIGRATION_SCHEMA: u64 = 5;
+    const ENO_MODULE_AUTHORITY: u64 = 6;
+    const ENO_OWNER_AUTHORITY: u64 = 7;
+    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 8;
+    const EMISSING_VALUES_FOR_MIGRATION: u64 = 9;
+    const EKEY_IS_NOT_OPTIONAL: u64 = 10;
+    const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 11;
+    const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 12;
 
     /// Address length in Sui is 20 bytes.
     const SUI_ADDRESS_LENGTH: u64 = 20;
@@ -41,116 +46,262 @@ module metadata::metadata {
     // Schema = vector<ascii::String> = [slot_name, slot_type, optional]
     // for example: "age", "u8", "0", where 0 = required, 1 = optional
     // That is, Schema is a vector with 3 items per item in the schema
-    public fun define(id: &mut UID, schema_: &Schema, data: vector<vector<u8>>) {
-        let schema = schema::get(schema_);
-        assert!(vector::length(&schema) == vector::length(&data), EINCORRECT_DATA_LENGTH);
+    public fun define(uid: &mut UID, schema: &Schema, data: vector<vector<u8>>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
+        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+
+        let items = schema::into_items(schema);
+        assert!(vector::length(&items) == vector::length(&data), EINCORRECT_DATA_LENGTH);
 
         let i = 0;
-        while (i < vector::length(&schema)) {
-            let item = vector::borrow(&schema, i);
+        while (i < vector::length(&items)) {
+            let item = vector::borrow(&items, i);
             let (key, type, optional) = schema::item(item);
             let value = *vector::borrow(&data, i);
 
-            // All optional items must be prepended with an option byte, otherwise an abort will occur
-            if (optional) {
-                if (is_some(value)) {
-                    vector::remove(&mut value, 0); // remove the optional-byte
-                } else {
-                    i = i + 1;
-                    continue
-                }
-            };
-
-            add_field(id, Key { slot: key }, type, value);
+            set_field(uid, Key { slot: key }, type, optional, value);
             i = i + 1;
         };
 
-        dynamic_field::add(id, SchemaID { }, object::id(schema_));
+        dynamic_field::add(uid, SchemaID { }, object::id(schema));
     }
 
-    public fun remove_optional() {
+    // Overwrites existing values
+    // Keys are strict, in the sense that if you specify keys that do not exist on the schema, this
+    // will abort rather than silently ignoring them.
+    public fun update(
+        uid: &mut UID,
+        keys: vector<vector<u8>>,
+        data: vector<vector<u8>>,
+        schema: &Schema,
+        auth: &TxAuthority
+    ) {
+        assert_valid_ownership_and_schema(uid, schema, auth);
+        assert!(vector::length(&keys) == vector::length(&data), EINCORRECT_DATA_LENGTH);
 
+        let i = 0;
+        while (i < vector::length(&keys)) {
+            let key = ascii::string(*vector::borrow(&keys, i));
+            let (type_maybe, optional_maybe) = schema::find_type_for_key(schema, key);
+            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
+            let value = *vector::borrow(&data, i);
+
+            set_field(uid, Key { slot: key }, option::destroy_some(type), option::destroy_some(optional), value);
+            i = i + 1;
+        };
     }
 
-    // Works if the updated value is already defined or undefined (optional)
-    public fun update() {
+    public fun remove_optional(uid: &mut UID, keys: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
+        assert_valid_ownership_and_schema(uid, schema, auth);
 
+        let i = 0;
+        while (i < vector::length(&keys)) {
+            let key = ascii::string(*vector::borrow(&keys, i));
+            let (type_maybe, optional_maybe) = schema::find_type_for_key(schema, key);
+            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
+            if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
+
+            drop_field(uid, Key { slot: key }, option::destroy_some(type));
+            i = i + 1;
+        };
+    }
+    
+    // Wipes all metadata, including the schema. This allows you to start from scratch again using a new
+    // schema and new data using define().
+    public fun remove_all(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
+        assert_valid_ownership_and_schema(uid, schema, auth);
+
+        let (i, items) = (0, schema::items(schema));
+        while (i < vector::length(&items)) {
+            let item = *vector::borrow(&items, i);
+            let (key, type, _) = schema::item(item);
+
+            drop_field(uid, Key { slot: key }, type);
+            i = i + 1;
+        };
+
+        dynamic_field2::drop(uid, SchemaID { });
+    }
+
+    // Moves from old-schema -> new-schema. Keys and data correspond to each other, in that
+    // key[i] corresponds to data[i]. You must supply data for (1) any new fields, (2) any fields
+    // that were optional but are now mandatory and are missing on this object, and (3) any fields whose
+    // types are changing (i.e., going from ascii-string to utf8-string in the new schema).
+    public fun migrate(
+        uid: &mut UID,
+        old_schema: &Schema,
+        new_schema: &Schema,
+        keys_raw: vector<vector<u8>>,
+        data: vector<vector<u8>>,
+        auth: &TxAuthority
+    ) {
+        assert_valid_ownership_and_schema(uid, schema, auth);
+        assert!(vector::length(&keys_raw) == vector::length(data), EINCORRECT_DATA_LENGTH);
+
+        let keys = ascii2::bytes_to_strings(keys_raw);
+
+        // To save space, drop all of the old_schema's fields which no longer exist in the new schema
+        let items = schema::difference(old_schema, new_schema);
+        let i = 0;
+        while (i < vector::length(items)) {
+            let (key, type, _) = item(vector::borrow(&items, i));
+            drop_field(uid, key, type);
+        };
+
+        // Iterate through the new schema, making sure that all fields are defined
+        let (old, new) = (schema::into_items(old_schema), schema::into_items(new_schema));
+        let i = 0;
+        while (i < vector::length(&new)) {
+            let (key, type, optional) = schema::item(vector::borrow(new, i));
+            let (old_type_maybe, _) = find_type_for_key(old_schema, key);
+
+            let (exists_, j) = vector::index_of(&keys, key);
+            if (exists_) {
+                // the new-type and old-types may be different, so we have to drop the old-value first
+                if (option::is_some(old_type_maybe)) {
+                    drop_field(uid, key, *option::borrow(old_type_maybe));
+                };
+                set_field(uid, key, type, optional, *vector::borrow(data, j));
+            } else {
+                // We're not changing the values stored here, so we make sure any old stored values are
+                // compatible with the new schema
+                let old_bytes = get_bcs_bytes(uid, key, type);
+                if (!optional && old_bytes == vector[0u8]) abort EMISSING_VALUES_FOR_MIGRATION;
+
+                if (option::is_some(&old_type_maybe)) {
+                    let old_type = option::destroy_some(old_type_maybe);
+                    if (old_type != type && old_bytes != vector[0u8]) {
+                        if (optional) {
+                            // Delete the old inconsistent field because its optional
+                            drop_field(uid, key, *option::borrow(old_type_maybe));
+                        }
+                        else {
+                            abort EMISSING_VALUES_FOR_MIGRATION;
+                        };
+                    };
+                };
+            };
+
+            i = i + 1;
+        };
+
+        dynamic_field2::set(uid, SchemaID { }, object::id(new_schema));
     }
 
     // ============= devInspect Functions ============= 
 
     // convenience function so you can supply ascii-bytes rather than ascii types
-    public fun view(id: &UID, keys: vector<vector<u8>>, schema_: &Schema): (vector<vector<u8>>, ID) {
-        let (ascii_keys, i) = (vector::empty<ascii::String>(), 0);
-        while (i < vector::length(&keys)) {
-            vector::push_back(&mut ascii_keys, ascii::string(*vector::borrow(&keys, i)));
-            i = i + 1;
-        };
-        view_(id, ascii_keys, schema_)
+    public fun view(uid: &UID, keys: vector<vector<u8>>, schema: &Schema): vector<vector<u8>> {
+        view_(uid, ascii2::bytes_to_strings(keys), schema)
     }
 
     // This prepends every item with an option byte: 1 (exists) or 0 (doesn't exist)
     // The response we're turning is just raw bytes; it's up to the client app to figure out what the value-types should be,
     // which is why we provide an ID for the object's schema, which is needed in order to deserialize the bytes.
     // Perhaps there is a more convenient way to do this for the client?
-    public fun view_(id: &UID, keys: vector<ascii::String>, schema_: &Schema): (vector<vector<u8>>, ID) {
-        let (i, response) = (0, vector::empty<vector<u8>>());
-        let schema_id = *dynamic_field::borrow<SchemaID, ID>(id, SchemaID { } );
-        assert!(object::id(schema_) == schema_id, EINCORRECT_SCHEMA_SUPPLIED);
+    public fun view_(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<vector<u8>> {
+        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
 
+        let (i, response) = (0, vector::empty<vector<u8>>());
         while (i < vector::length(&keys)) {
             let slot = *vector::borrow(&keys, i);
-            let (type_maybe, _) = schema::find_type_for_key(schema_, slot);
-            if (dynamic_field::exists_(id, Key { slot }) && option::is_some(&type_maybe)) {
-                let type = option::destroy_some(type_maybe);
-                let bytes = get_bcs_bytes(id, Key { slot }, type);
-                // Sui Devnet doesn't have this function yet
-                // vector::insert(&mut bytes, 1u8, 0);
-                vector::reverse(&mut bytes);
-                vector::push_back(&mut bytes, 1u8); // option::is_some
-                vector::reverse(&mut bytes);
-                // So we use these three ugly lines instead for now ^^^
-                vector::push_back(&mut response, bytes);
-            } else {
-                vector::push_back(&mut response, vector[0u8]); // option::is_none
-            };
+            vector::push_back(&mut response, view_key(uid, slot, schema));
             i = i + 1;
         };
 
-        (response, schema_id)
+        response
+    }
+
+    fun view_key(uid: &UID, slot: String, schema: &Schema): vector<u8> {
+        let (type_maybe, _) = schema::find_type_for_key(schema, slot);
+        if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
+            let type = option::destroy_some(type_maybe);
+            let bytes = get_bcs_bytes(uid, Key { slot }, type);
+            vector::insert(&mut bytes, 1u8, 0);
+            bytes
+        } else {
+            vector[0u8] // option::is_none
+        };
     }
 
     // This is the same as calling view_ with all the keys of its own schema
-    public fun view_all(id: &UID, schema_: &Schema): (vector<vector<u8>>, ID) {
-        let (schema, i, keys) = (schema::get(schema_), 0, vector::empty<ascii::String>());
+    public fun view_all(uid: &UID, schema: &Schema): vector<vector<u8>> {
+        let (items, i, keys) = (schema::into_items(schema_), 0, vector::empty<ascii::String>());
 
-        while (i < vector::length(&schema)) {
-            let (key, _, _) = schema::item(vector::borrow(&schema, i));
+        while (i < vector::length(&items)) {
+            let (key, _, _) = schema::item(vector::borrow(&items, i));
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
-        view_(id, keys, schema_)
+        view_(uid, keys, schema)
     }
 
     // You can specify a set of keys to use by taking them from a 'reader schema'. Note that the reader_schema
     // and object's own schema must be compatible, in the sense that any key overlaps = the same type.
     // Maybe we could take into account optionality or do some sort of type coercian to relax this compatability
     // requirement? I.e., turn a u8 into a u64, or an ascii string into a utf8 string
-    public fun view_with_reader_schema(id: &UID, reader_schema_: &Schema, object_schema_: &Schema): (vector<vector<u8>>, ID) {
-        assert!(schema::is_compatible(reader_schema_, object_schema_), EINCOMPATIBLE_READER_SCHEMA);
+    public fun view_with_reader_schema(
+        uid: &UID,
+        reader_schema: &Schema,
+        object_schema: &Schema
+    ): vector<vector<u8>> {
+        assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
 
-        let (reader_schema, i, keys) = (schema::get(reader_schema_), 0, vector::empty<ascii::String>());
+        let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<ascii::String>());
 
-        while (i < vector::length(&reader_schema)) {
-            let (key, _, _) = schema::item(vector::borrow(&reader_schema, i));
+        while (i < vector::length(&reader_items)) {
+            let (key, _, _) = schema::item(vector::borrow(&reader_items, i));
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
-        view_(id, keys, object_schema_)
+        view_(uid, keys, object_schema)
     }
 
-    public fun get_schema_id(id: &UID): ID {
-        *dynamic_field::borrow<SchemaID, ID>(id, SchemaID { } )
+    // Type serves as a very
+    public fun view_with_default<T>(
+        uid: &UID,
+        fallback_type: &Type<T>,
+        keys: vector<vector<u8>>,
+        schema: &Schema,
+        fallback_schema: &Schema,
+    ): vector<vector<u8>> {
+        let type = option::destroy_some(ownership::type(uid));
+        assert!(type == encode::binding_type<Type<T>>(), ETYPE_METADATA_IS_INVALID_FALLBACK);
+        assert!(encode::type_name<T>() == ownership::type(uid), EINCORRECT_TYPE_SPECIFIED_FOR_UID);
+
+        view_with_default_(uid, type::extend(&fallback_type), ascii2::bytes_to_strings(keys), schema, fallback_schema)
+    }
+
+    // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
+    // really only need to have the same types for overlapping keys
+    public fun view_with_default_<T>(
+        uid: &UID,
+        fallback: &UID,
+        keys: vector<String>,
+        schema: &Schema,
+        fallback_schema: &Schema,
+    ): vector<vector<u8>> {
+        assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_READER_SCHEMA);
+        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
+
+        let (i, response) = (0, vector::empty<vector<u8>>());
+        while (i < vector::length(&keys)) {
+            let slot = *vector::borrow(&keys, i);
+            let res = view_key(uid, slot, schema);
+            if (res != 0u8) {
+                vector::push_back(&mut response, view_key(uid, slot, schema));
+            } else {
+                vector::push_back(&mut response, view_key(fallback, slot, fallback_schema));
+            };
+            i = i + 1;
+        };
+
+        response
+    }
+
+    public fun schema_id(uid: &UID): ID {
+        *dynamic_field::borrow<SchemaID, ID>(uid, SchemaID { } )
     }
 
     // ============ (de)serializes objects ============ 
@@ -173,147 +324,217 @@ module metadata::metadata {
         }
     }
 
-    // Aborts if the type is incorrect (schema violation) because the bcs deserialization will fail
-    // Supported: address, bool, objectID, u8, u64, u128, string::String (utf8), ascii::String +  vectors of these types
+    // Private function so that the schema cannot be bypassed
+    // Aborts if the type is incorrect because the bcs deserialization will fail
+    // Supported: address, bool, objectID, u8, u64, u128, string::String (utf8), ascii::String + vectors of these types
     // Not yet supported: u16, u32, u256 <--not included in sui::bcs
-    public fun add_field(id: &mut UID, key: Key, type_: ascii::String, bytes: vector<u8>) {
+    fun set_field(uid: &mut UID, key: Key, type_: ascii::String, optional: bool, bytes: vector<u8>) {
+        // To deserialize, all schema-optional items should be prepended with an option byte, otherwise an abort
+        // will occur here.
+        if (optional) {
+            if (is_some(value)) {
+                vector::remove(&mut bytes, 0); // remove the optional-byte
+            } else { return }; // nothing to add
+        };
+
         let bcs = &mut bcs::new(copy bytes);
         let type = ascii::into_bytes(type_);
 
         if (type == b"address") {
             let addr = bcs::peel_address(bcs);
-            dynamic_field::add(id, key, addr);
+            dynamic_field2::set(uid, key, addr);
         } 
         else if (type == b"bool") {
             let boolean = bcs::peel_bool(bcs);
-            dynamic_field::add(id, key, boolean);
+            dynamic_field2::set(uid, key, boolean);
         } 
         else if (type == b"0x2::object::ID") {
             let object_id = object::id_from_bytes(bytes);
-            dynamic_field::add(id, key, object_id);
+            dynamic_field2::set(uid, key, object_id);
         } 
         else if (type == b"u8") {
             let integer = bcs::peel_u8(bcs);
-            dynamic_field::add(id, key, integer);
+            dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"u64") {
             let integer = bcs::peel_u64(bcs);
-            dynamic_field::add(id, key, integer);
+            dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"u128") {
             let integer = bcs::peel_u128(bcs);
-            dynamic_field::add(id, key, integer);
+            dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"0x1::string::String") {
             let string = string::utf8(bytes);
-            dynamic_field::add(id, key, string);
+            dynamic_field2::set(uid, key, string);
         } 
         else if (type == b"0x1::ascii::String") {
             let string = ascii::string(bytes);
-            dynamic_field::add(id, key, string);
+            dynamic_field2::set(uid, key, string);
         } 
         else if (type == b"vector<address>") {
             let vec = bcs::peel_vec_address(bcs);
-            dynamic_field::add(id, key, vec);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<bool>") {
             let vec = bcs::peel_vec_bool(bcs);
-            dynamic_field::add(id, key, vec);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<0x2::object::ID>") {
-            let vec = peel_vec_id(bcs);
-            dynamic_field::add(id, key, vec);
+            let vec = bcs2::peel_vec_id(bcs);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u8>") {
             let vec = bcs::peel_vec_u8(bcs);
-            dynamic_field::add(id, key, vec);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u64>") {
             let vec = bcs::peel_vec_u64(bcs);
-            dynamic_field::add(id, key, vec);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u128>") {
             let vec = bcs::peel_vec_u128(bcs);
-            dynamic_field::add(id, key, vec);
+            dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<0x1::string::String>") {
-            let (string, _) = peel_vec_utf8_string(*bcs);
-            dynamic_field::add(id, key, string);
+            let (string, _) = bcs2::peel_vec_utf8_string(*bcs);
+            dynamic_field2::set(uid, key, string);
         }
         else if (type == b"vector<0x1::ascii::String>") {
-            let (string, _) = peel_vec_ascii_string(*bcs);
-            dynamic_field::add(id, key, string);
+            let (string, _) = bcs2::peel_vec_ascii_string(*bcs);
+            dynamic_field2::set(uid, key, string);
         }
         else {
             abort EUNRECOGNIZED_TYPE
         }
     }
 
-    public fun get_bcs_bytes(id: &UID, key: Key, type_: ascii::String): vector<u8> {
+    // Private function so that the schema cannot be bypassed
+    // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
+    // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
+    // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
+    fun drop_field(uid: &mut UID, key: Key, type_: ascii::String) {
         let type = ascii::into_bytes(type_);
 
         if (type == b"address") {
-            let addr = dynamic_field::borrow<Key, address>(id, key);
+            dynamic_field2::drop<Key, address>(uid, key);
+        } 
+        else if (type == b"bool") {
+            dynamic_field2::drop<Key, bool>(uid, key);
+        } 
+        else if (type == b"0x2::object::ID") {
+            dynamic_field2::drop<Key, ID>(uid, key);
+        } 
+        else if (type == b"u8") {
+            dynamic_field2::drop<Key, u8>(uid, key);
+        } 
+        else if (type == b"u64") {
+            dynamic_field2::drop<Key, u64>(uid, key);
+        } 
+        else if (type == b"u128") {
+            dynamic_field2::drop<Key, u128>(uid, key);
+        } 
+        else if (type == b"0x1::string::String") {
+            dynamic_field2::drop<Key, string::String>(uid, key);
+        } 
+        else if (type == b"0x1::ascii::String") {
+            dynamic_field2::drop<Key, ascii::String>(uid, key);
+        } 
+        else if (type == b"vector<address>") {
+            dynamic_field2::drop<Key, vector<address>>(uid, key);
+        }
+        else if (type == b"vector<bool>") {
+            dynamic_field2::drop<Key, vector<bool>>(uid, key);
+        }
+        else if (type == b"vector<0x2::object::ID>") {
+            dynamic_field2::drop<Key, vector<ID>>(uid, key);
+        }
+        else if (type == b"vector<u8>") {
+            dynamic_field2::drop<Key, vector<u8>>(uid, key);
+        }
+        else if (type == b"vector<u64>") {
+            dynamic_field2::drop<Key, vector<u64>>(uid, key);
+        }
+        else if (type == b"vector<u128>") {
+            dynamic_field2::drop<Key, vector<u128>>(uid, key);
+        }
+        else if (type == b"vector<0x1::string::String>") {
+            dynamic_field2::drop<Key, vector<string::String>>(uid, key);
+        }
+        else if (type == b"vector<0x1::ascii::String>") {
+            dynamic_field2::drop<Key, vector<ascii::String>>(uid, key);
+        }
+        else {
+            abort EUNRECOGNIZED_TYPE
+        }
+    }
+
+    fun get_bcs_bytes(uid: &UID, key: Key, type_: ascii::String): vector<u8> {
+        if (!dynamic_field::exists_(uid, key)) return vector[0u8]; // empty option byte
+        let type = ascii::into_bytes(type_);
+
+        if (type == b"address") {
+            let addr = dynamic_field::borrow<Key, address>(uid, key);
             bcs::to_bytes(addr)
         } 
         else if (type == b"bool") {
-            let boolean = dynamic_field::borrow<Key, bool>(id, key);
+            let boolean = dynamic_field::borrow<Key, bool>(uid, key);
             bcs::to_bytes(boolean)
         } 
         else if (type == b"0x2::object::ID") {
-            let object_id = dynamic_field::borrow<Key, ID>(id, key);
+            let object_id = dynamic_field::borrow<Key, ID>(uid, key);
             bcs::to_bytes(object_id)
         } 
         else if (type == b"u8") {
-            let int = dynamic_field::borrow<Key, u8>(id, key);
+            let int = dynamic_field::borrow<Key, u8>(uid, key);
             bcs::to_bytes(int)
         } 
         else if (type == b"u64") {
-            let int = dynamic_field::borrow<Key, u64>(id, key);
+            let int = dynamic_field::borrow<Key, u64>(uid, key);
             bcs::to_bytes(int)
         } 
         else if (type == b"u128") {
-            let int = dynamic_field::borrow<Key, u128>(id, key);
+            let int = dynamic_field::borrow<Key, u128>(uid, key);
             bcs::to_bytes(int)
         } 
         else if (type == b"0x1::string::String") {
-            let string = dynamic_field::borrow<Key, string::String>(id, key);
+            let string = dynamic_field::borrow<Key, string::String>(uid, key);
             bcs::to_bytes(string)
         } 
         else if (type == b"0x1::ascii::String") {
-            let string = dynamic_field::borrow<Key, ascii::String>(id, key);
+            let string = dynamic_field::borrow<Key, ascii::String>(uid, key);
             bcs::to_bytes(string)
         } 
         else if (type == b"vector<address>") {
-            let vec = dynamic_field::borrow<Key, vector<address>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<address>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<bool>") {
-            let vec = dynamic_field::borrow<Key, vector<bool>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<bool>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<0x2::object::ID>") {
-            let vec = dynamic_field::borrow<Key, vector<ID>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<ID>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<u8>") {
-            let vec = dynamic_field::borrow<Key, vector<u8>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<u8>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<u64>") {
-            let vec = dynamic_field::borrow<Key, vector<u64>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<u64>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<u128>") {
-            let vec = dynamic_field::borrow<Key, vector<u128>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<u128>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<0x1::string::String>") {
-            let vec = dynamic_field::borrow<Key, vector<string::String>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<string::String>>(uid, key);
             bcs::to_bytes(vec)
         }
         else if (type == b"vector<0x1::ascii::String>") {
-            let vec = dynamic_field::borrow<Key, vector<ascii::String>>(id, key);
+            let vec = dynamic_field::borrow<Key, vector<ascii::String>>(uid, key);
             bcs::to_bytes(vec)
         }
         else {
@@ -321,49 +542,11 @@ module metadata::metadata {
         }
     }
 
-    // ============ BCS extensions ============ 
-    // These functions should be added to sui::bcs
+    // ========= Helper Functions ========= 
 
-    // To do: Check this; does bcs prepend a length to addresses, or is it just assumed that they are of length 20?
-    public fun peel_vec_id(bcs: &mut BCS): vector<ID> {
-        let (len, i, res) = (bcs::peel_vec_length(bcs), 0, vector[]);
-        while (i < len) {
-            let id = object::id_from_address(bcs::peel_address(bcs));
-            vector::push_back(&mut res, id);
-            i = i + 1;
-        };
-        res
-    }
-
-    // To do: check to see if bcs is prepending the length of strings; I believe it does
-    // Returns any remaining BCS bytes. This setup is needed because there is no way to access a BCS'
-    // underlying bytes without destroying it
-    public fun peel_vec_ascii_string(bcs: BCS): (vector<ascii::String>, BCS) {
-        let (num_strings, i, res) = (bcs::peel_vec_length(&mut bcs), 0, vector[]);
-        while (i < num_strings) {
-            let len = bcs::peel_vec_length(&mut bcs);
-            let bytes = bcs::into_remainder_bytes(bcs); // remove bytes from bcs wrapper
-            let string_bytes = slice_mut(&mut bytes, 0, len);
-            let string = ascii::string(string_bytes);
-            vector::push_back(&mut res, string);
-            bcs = bcs::new(bytes); // put bytes back into bcs wrapper for the next loop
-            i = i + 1;
-        };
-        (res, bcs)
-    }
-
-    // Unfortunately the above function had to be copy-paste replicated
-    public fun peel_vec_utf8_string(bcs: BCS): (vector<string::String>, BCS) {
-        let (num_strings, i, res) = (bcs::peel_vec_length(&mut bcs), 0, vector[]);
-        while (i < num_strings) {
-            let len = bcs::peel_vec_length(&mut bcs);
-            let bytes = bcs::into_remainder_bytes(bcs); // remove bytes from bcs wrapper
-            let string_bytes = slice_mut(&mut bytes, 0, len);
-            let string = string::utf8(string_bytes);
-            vector::push_back(&mut res, string);
-            bcs = bcs::new(bytes); // put bytes back into bcs wrapper for the next loop
-            i = i + 1;
-        };
-        (res, bcs)
+    public fun assert_valid_ownership_and_schema(uid: &UID, schema: &Schema, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
+        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(schema_id(uid) == object::id(old_schema), EINCORRECT_SCHEMA_SUPPLIED);
     }
 }

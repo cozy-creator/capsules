@@ -19,14 +19,28 @@ module ownership::tx_authority {
         addresses: vector<address>
     }
 
+    // ========= Begin =========
+
+    // Begins with a transaction-context object
     public fun begin(ctx: &TxContext): TxAuthority {
         TxAuthority { addresses: vector[tx_context::sender(ctx)] }
     }
 
-    // Begins with a transaction-context object
-    public fun begin_(): TxAuthority {
+    // Begins with a capability-id
+    public fun begin_with_id<T: key>(_cap: &T): TxAuthority {
+        TxAuthority { addresses: vector[object::id_address(cap)] }
+    }
+
+    // Begins with a capability-type
+    public fun begin_with_type<T>(_cap: &T): TxAuthority {
+        TxAuthority { addresses: vector[type_into_address<T>()] }
+    }
+
+    public fun begin_empty(): TxAuthority {
         TxAuthority { addresses: vector::empty<address>() }
     }
+
+    // ========= Add Authorities =========
 
     public fun add_capability_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { addresses: *&auth.addresses };

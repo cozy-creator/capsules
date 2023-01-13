@@ -1,142 +1,117 @@
-// Sui's On-Chain Type program
+// Sui's On-Chain Type Metadata
 
-// The Type object has a corresponding dynamic_field, into which the data is stored.
-// Keys correspond to the StructName portion of a fully-qualified type-name: address::module_name::StructName
-// StructNames need not exist; for example, the module 0x3::outlaw_sky need not define Outlaw;
-// it can just be a virtual-type, that exists inside of noot.struct_name = Outlaw
-// The module's one-time witness is the key for module as a whole. So for example, for Type<SUI>,
-// the key SUI is the metadata for the 0x2::sui module as a whole.
+// Type objects are root-level owned objects storing metadata.
+// Clients can use devInspect transactions with the metadata::view() functions to learn more about the corresponding resource.
+// Type objects can additionally be used as fallbacks when querying for data on object-instances. For example,
+// if you're creating a Capsule like 0x599::outlaw_sky::Outlaw, and you have a metadata field like 'created_by', which is
+// identical for every object, it would be useful to duplicate this field 10,000x times. Instead you can leave it undefined
+// on the object itself, and define it once on Type<0x599::outlaw_sky::Outlaw>.
 
-// The intent for metadata object is that they should be owned by the module-deployer, or frozen.
-// Making a Type object a naked shared-object would allow anyone to be able to mutate it (oh no lol).
-// Client-apps will read from Type using a devInspect transaction, not a regular transaction
+// The intent for metadata object is that they should be owned and maintained by the package-publisher, or frozen.
 
-// Data is keyed with type_name + data_name:
-// `<package-id>::<module_name>::<struct_name> <package-id>::<module_name>::<struct_name>`
+// To do: 
+// authorize yourself to metadata
 
-// This means that (1) metadata can define types that they do not own, and (2) metadata can hold multiple
-// different data types for different types
-
-module metadata::package {
-    use std::string::{String, utf8};
+module metadata::type {
+    use std::ascii::{Self, String};
     use sui::object::{Self, UID};
     use sui::types;
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::types::is_one_time_witness;
+    use ownership::tx_authority;
     use metadata::schema::Schema;
     use sui_utils::encode;
+    use metadata::publish_receipt::{Self, PublishReceipt};
 
-    const ETYPE_METADATA_ALREADY_DEFINED: u64 = 3;
-    const EINVALID_METADATA_CAP: u64 = 4;
-    const ENO_PACKAGE_PERMISSION: u64 = 6;
+    // error enums
+    const EINVALID_PUBLISH_RECEIPT: u64 = 0;
+    const ETYPE_ALREADY_DEFINED: u64 = 1;
 
-    // module witness
-    struct PACKAGE has drop {};
-
-    // Shared object
-    // Defines a type generally, like for all 0x59::outlaw_sky::Outlaw. Even if objects have their own metadata,
-    // this acts as a fallback source for undefined metadata keys, so we don't have to duplicate metadata for
-    // every individual object unless it's specific to that object
+    // Singleton, root-level owned object
     struct Type<phantom T> has key {
         id: UID,
         // <metadata::SchemaVersion { }> : ID
-        // <metadata::Key { slot ascii::String }> : <T: store> <- where T is specified in the schema object
+        // <metadata::Key { slot: ascii::String }> : <T: store> <- T conforms to the specified schema type
     }
+
+    struct Key has store, copy, drop { slot: String } // slot is a type, value is boolean
+    struct Witness has drop { }
 
     // ========= Create Type Metadata =========
 
-    public fun define<T>(creator: &mut Creator, schema: &Schema, data: vector<vector<u8>>, creator_cap: &CreatorCap, ctx: &mut TxContext) {
-        let uid = creator::extend(creator, auth);
-        let auth = tx_authority::add_capability_id(creator_cap, tx_authority::begin(ctx));
-        assert!(ownership::is_valid_owner(uid, auth), ENO_CREATOR_PERMISSION);
-
-        let package_id = encode::package_id<T>();
-        assert!(creator::contains_package(creator, package_id), EINCORRECT_CREATOR_FOR_TYPE);
-        assert!(!creator::type_is_defined<T>(creator), ETYPE_METADATA_ALREADY_DEFINED);
-
-        creator::add_type<T>(creator); // So we can't define Type<T> twice
-        
-        let type = Type<T> { id: object::new(ctx) };
-
-        ownership::initialize(&mut type.id, &type, TYPE { }); // full control defaults to owner
-        metadata::define_with_owner_as_editor(&mut type.id, schema, data, &auth); // who gets to edit it though?
-        ownership::bind_transfer_authority_to_type<OwnerTransfer>(&mut type.id, &auth);
-
-        // creator cap - but now we're stuck with it, cannot change it or migrate it
-        // 
-
-        // This doesn't need auth, because there is no metadata-editor or owner yet
-        permissions::set_metadata_editor(&mut outlaw.id, &auth);
-
-        ownership::bind_creator(&mut outlaw.id, &outlaw, creator);
-        ownership::bind_transfer_authority_to_type<Royalty_Market>(&mut outlaw.id, &auth);
-        metadata::define(&mut outlaw.id, schema, data, &auth);
-        ownership::bind_owner(&mut outlaw.id, owner, &auth);
-
-
-
-
-
-
-        metadata::define(&mut type.id, schema, data);
-        
-        transfer::share_object(type);
+    public entry fun define<T>(
+        publisher: &mut PublishReceipt,
+        schema: &Schema,
+        data: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        let type = define(publisher, schema, data, ctx);
+        transfer::transfer(type, tx_context::sender(ctx));
     }
 
-    public entry fun define<T>(creator_cap: &CreatorCap, schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
-        let package_id = encode::package_id<T>();
-        assert!(boss_cap::is_valid(boss_cap, package_id), ENO_PACKAGE_PERMISSION);
-        assert!(boss_cap::define_type<T>(boss_cap), ETYPE_METADATA_ALREADY_DEFINED);
-        // Do they have authority to do this? 
-        // Has this type already been defined?
-        
-        let type = Type<T> { id: object::new(ctx) };
+    public fun define_<T>(
+        publisher: &mut PublishReceipt,
+        schema: &Schema,
+        data: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ): Type<T> {
+        assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
+
+        let key = Key { slot: encode::module_and_struct_names<T>() };
+        let uid = publish_receipt::extend(publisher);
+        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+
+        dynamic_field::add(uid, key, true); 
+
+        let type = Type { id: object::new(ctx) };
+        ownership::initialize_simple(&mut type.id, type, &tx_authority::begin_with_type(&Witness { }));
         metadata::define(&mut type.id, schema, data);
 
-        // set owner authority here
-        transfer::share_object(type);
+        type
     }
 
-    // ======== These are convenience wrappers to make it easier to access a type's UID =====
+    // ======== Metadata Module's API =====
+    // For convenience, we replicate the Metadata Module's API here to make it easier to access Type's
+    // UID, otherwise we would need Sui advanced-batch-transactions (not yet available), or the user would
+    // need to deploy their own custom module (scripts aren't supported either).
 
-    public entry fun remove_optional<T>(type: &mut Type<T>) {
-
+    public entry fun update<T>(type: &mut Type<T>, keys: vector<vector<u8>>, data: vector<vector<u8>>, schema: &Schema) {
+        metadata::update(&mut type.id, keys, data, schema, tx_authority::begin_empty());
     }
 
-    // Works if the updated value is already defined or undefined (optional)
-    public entry fun update<T>(type: &mut Type<T>) {
-
+    public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<vector<u8>>, schema: &Schema) {
+        metadata::remove_optional(&mut type.id, keys, schema, tx_authority::begin_empty());
     }
 
-    // ========= Make Metadata Immutable =========
-
-    // Being able to freeze shared objects is currently being worked on; when it's available, freeze the module here along with
-    // the metadata_cap being destroyed.
-    public fun destroy_metadata_cap<G: drop>(metadata_cap: MetadataCap<G>) {
-        let MetadataCap { id } = metadata_cap;
-        object::delete(id);
+    public entry fun remove_all<T>(type: &mut Type<T>, schema: &Schema) {
+        metadata::remove_all(&mut type.id, schema, tx_authority::begin_empty());
     }
 
-    // Not currently possible
-    public fun freeze_type<T>(cap: &MetadataCap<G>, type: Type<T>) {
-        assert!(is_valid(cap, type), EINVALID_METADATA_CAP);
+    public entry fun migrate<T>(
+        type: &mut Type<T>,
+        old_schema: &Schema,
+        new_schema: &Schema,
+        keys: vector<vector<u8>>,
+        data: vector<vector<u8>>
+    ) {
+        metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, tx_authority::begin_empty());
+    }
+
+    // ======== For Owners =====
+
+    // Makes the metadata immutable. This cannot be undone
+    public entry fun freeze<T>(type: Type<T>) {
         transfer::freeze_object(type);
     }
 
-    // ========= View Functions =========
-
-
-
-    // ========= Authority Checker =========
-
-    public fun is_valid<G: drop, T>(cap: &MetadataCap<G>, type: &Type<T>): bool {
-        let (module_addr, _) = encode::type_name_<G>();
-        *type.module_authority == module_addr
+    // Because Type lacks `store`, polymorphic transfer does not work outside of this module
+    public entry fun transfer<T>(type: Type<T>, new_owner: address) {
+        transfer::transfer(type, new_owner);
     }
 
+    // Owned object, so no need for an ownership check
     public fun extend<T>(type: &mut Type<T>): &mut UID {
-        // add ownership check
         &mut type.id
     }
 }
