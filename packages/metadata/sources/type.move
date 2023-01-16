@@ -82,8 +82,8 @@ module metadata::type {
     // UID, otherwise we would need Sui advanced-batch-transactions (not yet available), or the user would
     // need to deploy their own custom module (scripts aren't supported either).
 
-    public entry fun update<T>(type: &mut Type<T>, keys: vector<vector<u8>>, data: vector<vector<u8>>, schema: &Schema) {
-        metadata::update(&mut type.id, keys, data, schema, &tx_authority::empty());
+    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<vector<u8>>, data: vector<vector<u8>>, schema: &Schema) {
+        metadata::overwrite(&mut type.id, keys, data, schema, &tx_authority::empty());
     }
 
     public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<vector<u8>>, schema: &Schema) {

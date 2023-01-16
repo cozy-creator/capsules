@@ -25,7 +25,7 @@ module metadata::schema {
         optional: bool
     }
 
-    public entry fun create(keys: vector<String>, types: vector<String>, optionals: vector<bool>, ctx: &mut TxContext) {
+    public entry fun define(keys: vector<String>, types: vector<String>, optionals: vector<bool>, ctx: &mut TxContext) {
         let len = vector::length(&keys);
         assert!(len == vector::length(&types) && len == vector::length(&optionals), EMISMATCHED_LENGTHS_OF_INPUTS);
 

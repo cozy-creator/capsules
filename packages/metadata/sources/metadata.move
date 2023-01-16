@@ -68,9 +68,9 @@ module metadata::metadata {
     }
 
     // Overwrites existing values
-    // Keys are strict, in the sense that if you specify keys that do not exist on the schema, this
-    // will abort rather than silently ignoring them.
-    public fun update(
+    // This is strict on keys, in the sense that if you specify keys that do not exist on the schema, this
+    // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
+    public fun overwrite(
         uid: &mut UID,
         keys: vector<vector<u8>>,
         data: vector<vector<u8>>,
@@ -90,6 +90,20 @@ module metadata::metadata {
             set_field(uid, Key { slot: key }, option::destroy_some(type_maybe), option::destroy_some(optional_maybe), value);
             i = i + 1;
         };
+    }
+
+    // Useful if you want to borrow_mut but want to avoid an abort in case the value doesn't exist
+    public fun exists_(uid: &UID, key: vector<u8>): bool {
+        dynamic_field::exists_(uid, Key { slot: ascii::string(key)} )
+    }
+
+    // For atomic updates (like incrementing a counter) use this rather than an `overwrite` to ensure no writes are lost
+    // T must be the type corresponding to the schema, and the value must be defined, or this will abort
+    public fun borrow_mut<T: store>(uid: &mut UID, key: vector<u8>, auth: &TxAuthority): &mut T {
+        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
+        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+
+        dynamic_field::borrow_mut<Key, T>(uid, Key { slot: ascii::string(key)} )
     }
 
     public fun remove_optional(uid: &mut UID, keys: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
