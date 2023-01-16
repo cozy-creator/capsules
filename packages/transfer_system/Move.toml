@@ -9,4 +9,4 @@ SuiUtils = { git = "https://github.com/0xcapsules/sui-utils.git", subdir = "pack
 Ownership = { local = "../ownership" }
 
 [addresses]
-transfer_system = "0x0"
+transfer_system = "0x90c26c51253f6b58832af2421018358bbaa235f2"

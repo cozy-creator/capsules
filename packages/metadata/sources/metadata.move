@@ -334,7 +334,7 @@ module metadata::metadata {
             let boolean = bcs::peel_bool(bcs);
             dynamic_field2::set(uid, key, boolean);
         } 
-        else if (type == b"0x2::object::ID") {
+        else if (type == b"id") {
             let object_id = object::id_from_bytes(bytes);
             dynamic_field2::set(uid, key, object_id);
         } 
@@ -350,11 +350,11 @@ module metadata::metadata {
             let integer = bcs::peel_u128(bcs);
             dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"0x1::string::String") {
+        else if (type == b"utf8") {
             let string = string::utf8(bytes);
             dynamic_field2::set(uid, key, string);
         } 
-        else if (type == b"0x1::ascii::String") {
+        else if (type == b"ascii") {
             let string = ascii::string(bytes);
             dynamic_field2::set(uid, key, string);
         } 
@@ -366,7 +366,7 @@ module metadata::metadata {
             let vec = bcs::peel_vec_bool(bcs);
             dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<0x2::object::ID>") {
+        else if (type == b"vector<id>") {
             let vec = bcs2::peel_vec_id(bcs);
             dynamic_field2::set(uid, key, vec);
         }
@@ -382,11 +382,11 @@ module metadata::metadata {
             let vec = bcs::peel_vec_u128(bcs);
             dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<0x1::string::String>") {
+        else if (type == b"vector<utf8>") {
             let (string, _) = bcs2::peel_vec_utf8_string(*bcs);
             dynamic_field2::set(uid, key, string);
         }
-        else if (type == b"vector<0x1::ascii::String>") {
+        else if (type == b"vector<ascii>") {
             let (string, _) = bcs2::peel_vec_ascii_string(*bcs);
             dynamic_field2::set(uid, key, string);
         }
@@ -408,7 +408,7 @@ module metadata::metadata {
         else if (type == b"bool") {
             dynamic_field2::drop<Key, bool>(uid, key);
         } 
-        else if (type == b"0x2::object::ID") {
+        else if (type == b"id") {
             dynamic_field2::drop<Key, ID>(uid, key);
         } 
         else if (type == b"u8") {
@@ -420,10 +420,10 @@ module metadata::metadata {
         else if (type == b"u128") {
             dynamic_field2::drop<Key, u128>(uid, key);
         } 
-        else if (type == b"0x1::string::String") {
+        else if (type == b"utf8") {
             dynamic_field2::drop<Key, string::String>(uid, key);
         } 
-        else if (type == b"0x1::ascii::String") {
+        else if (type == b"ascii") {
             dynamic_field2::drop<Key, ascii::String>(uid, key);
         } 
         else if (type == b"vector<address>") {
@@ -432,7 +432,7 @@ module metadata::metadata {
         else if (type == b"vector<bool>") {
             dynamic_field2::drop<Key, vector<bool>>(uid, key);
         }
-        else if (type == b"vector<0x2::object::ID>") {
+        else if (type == b"vector<id>") {
             dynamic_field2::drop<Key, vector<ID>>(uid, key);
         }
         else if (type == b"vector<u8>") {
@@ -444,10 +444,10 @@ module metadata::metadata {
         else if (type == b"vector<u128>") {
             dynamic_field2::drop<Key, vector<u128>>(uid, key);
         }
-        else if (type == b"vector<0x1::string::String>") {
+        else if (type == b"vector<utf8>") {
             dynamic_field2::drop<Key, vector<string::String>>(uid, key);
         }
-        else if (type == b"vector<0x1::ascii::String>") {
+        else if (type == b"vector<ascii>") {
             dynamic_field2::drop<Key, vector<ascii::String>>(uid, key);
         }
         else {
@@ -467,7 +467,7 @@ module metadata::metadata {
             let boolean = dynamic_field::borrow<Key, bool>(uid, key);
             bcs::to_bytes(boolean)
         } 
-        else if (type == b"0x2::object::ID") {
+        else if (type == b"id") {
             let object_id = dynamic_field::borrow<Key, ID>(uid, key);
             bcs::to_bytes(object_id)
         } 
@@ -483,11 +483,11 @@ module metadata::metadata {
             let int = dynamic_field::borrow<Key, u128>(uid, key);
             bcs::to_bytes(int)
         } 
-        else if (type == b"0x1::string::String") {
+        else if (type == b"utf8") {
             let string = dynamic_field::borrow<Key, string::String>(uid, key);
             bcs::to_bytes(string)
         } 
-        else if (type == b"0x1::ascii::String") {
+        else if (type == b"ascii") {
             let string = dynamic_field::borrow<Key, ascii::String>(uid, key);
             bcs::to_bytes(string)
         } 
@@ -499,7 +499,7 @@ module metadata::metadata {
             let vec = dynamic_field::borrow<Key, vector<bool>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<0x2::object::ID>") {
+        else if (type == b"vector<id>") {
             let vec = dynamic_field::borrow<Key, vector<ID>>(uid, key);
             bcs::to_bytes(vec)
         }
@@ -515,11 +515,11 @@ module metadata::metadata {
             let vec = dynamic_field::borrow<Key, vector<u128>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<0x1::string::String>") {
+        else if (type == b"vector<utf8>") {
             let vec = dynamic_field::borrow<Key, vector<string::String>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<0x1::ascii::String>") {
+        else if (type == b"vector<ascii>") {
             let vec = dynamic_field::borrow<Key, vector<ascii::String>>(uid, key);
             bcs::to_bytes(vec)
         }
