@@ -17,7 +17,6 @@ module metadata::metadata {
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use metadata::schema::{Self, Schema};
-    use sui_utils::ascii2;
     use sui_utils::bcs2;
     use sui_utils::dynamic_field2;
     use ownership::ownership;
@@ -72,7 +71,7 @@ module metadata::metadata {
     // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
     public fun overwrite(
         uid: &mut UID,
-        keys: vector<vector<u8>>,
+        keys: vector<ascii::String>,
         data: vector<vector<u8>>,
         schema: &Schema,
         auth: &TxAuthority
@@ -82,7 +81,7 @@ module metadata::metadata {
 
         let i = 0;
         while (i < vector::length(&keys)) {
-            let key = ascii::string(*vector::borrow(&keys, i));
+            let key = *vector::borrow(&keys, i);
             let (type_maybe, optional_maybe) = schema::find_type_for_key(schema, key);
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             let value = *vector::borrow(&data, i);
@@ -93,25 +92,25 @@ module metadata::metadata {
     }
 
     // Useful if you want to borrow_mut but want to avoid an abort in case the value doesn't exist
-    public fun exists_(uid: &UID, key: vector<u8>): bool {
-        dynamic_field::exists_(uid, Key { slot: ascii::string(key)} )
+    public fun exists_(uid: &UID, key: ascii::String): bool {
+        dynamic_field::exists_(uid, Key { slot: key } )
     }
 
     // For atomic updates (like incrementing a counter) use this rather than an `overwrite` to ensure no writes are lost
     // T must be the type corresponding to the schema, and the value must be defined, or this will abort
-    public fun borrow_mut<T: store>(uid: &mut UID, key: vector<u8>, auth: &TxAuthority): &mut T {
+    public fun borrow_mut<T: store>(uid: &mut UID, key: ascii::String, auth: &TxAuthority): &mut T {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        dynamic_field::borrow_mut<Key, T>(uid, Key { slot: ascii::string(key)} )
+        dynamic_field::borrow_mut<Key, T>(uid, Key { slot: key } )
     }
 
-    public fun remove_optional(uid: &mut UID, keys: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
+    public fun remove_optional(uid: &mut UID, keys: vector<ascii::String>, schema: &Schema, auth: &TxAuthority) {
         assert_valid_ownership_and_schema(uid, schema, auth);
 
         let i = 0;
         while (i < vector::length(&keys)) {
-            let key = ascii::string(*vector::borrow(&keys, i));
+            let key = *vector::borrow(&keys, i);
             let (type_maybe, optional_maybe) = schema::find_type_for_key(schema, key);
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
@@ -146,14 +145,12 @@ module metadata::metadata {
         uid: &mut UID,
         old_schema: &Schema,
         new_schema: &Schema,
-        keys_raw: vector<vector<u8>>,
+        keys: vector<ascii::String>,
         data: vector<vector<u8>>,
         auth: &TxAuthority
     ) {
         assert_valid_ownership_and_schema(uid, old_schema, auth);
-        assert!(vector::length(&keys_raw) == vector::length(&data), EINCORRECT_DATA_LENGTH);
-
-        let keys = ascii2::bytes_to_strings(keys_raw);
+        assert!(vector::length(&keys) == vector::length(&data), EINCORRECT_DATA_LENGTH);
 
         // To save space, drop all of the old_schema's fields which no longer exist in the new schema
         let items = schema::difference(old_schema, new_schema);
@@ -203,16 +200,11 @@ module metadata::metadata {
 
     // ============= devInspect Functions ============= 
 
-    // convenience function so you can supply ascii-bytes rather than ascii types
-    public fun view(uid: &UID, keys: vector<vector<u8>>, schema: &Schema): vector<vector<u8>> {
-        view_(uid, ascii2::bytes_to_strings(keys), schema)
-    }
-
     // This prepends every item with an option byte: 1 (exists) or 0 (doesn't exist)
     // The response we're turning is just raw bytes; it's up to the client app to figure out what the value-types should be,
     // which is why we provide an ID for the object's schema, which is needed in order to deserialize the bytes.
     // Perhaps there is a more convenient way to do this for the client?
-    public fun view_(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<vector<u8>> {
+    public fun view(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<vector<u8>> {
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response) = (0, vector::empty<vector<u8>>());
@@ -237,7 +229,7 @@ module metadata::metadata {
         }
     }
 
-    // This is the same as calling view_ with all the keys of its own schema
+    // This is the same as calling view with all the keys of its own schema
     public fun view_all(uid: &UID, schema: &Schema): vector<vector<u8>> {
         let (items, i, keys) = (schema::into_items(schema), 0, vector::empty<ascii::String>());
 
@@ -246,7 +238,7 @@ module metadata::metadata {
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
-        view_(uid, keys, schema)
+        view(uid, keys, schema)
     }
 
     // You can specify a set of keys to use by taking them from a 'reader schema'. Note that the reader_schema
@@ -267,7 +259,7 @@ module metadata::metadata {
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
-        view_(uid, keys, object_schema)
+        view(uid, keys, object_schema)
     }
 
     // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
@@ -275,15 +267,13 @@ module metadata::metadata {
     public fun view_with_default(
         uid: &UID,
         fallback: &UID,
-        keys: vector<vector<u8>>,
+        keys: vector<ascii::String>,
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<vector<u8>> {
         assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_READER_SCHEMA);
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
         assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
-
-        let keys = ascii2::bytes_to_strings(keys);
 
         let (i, response) = (0, vector::empty<vector<u8>>());
         while (i < vector::length(&keys)) {

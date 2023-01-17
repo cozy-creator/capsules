@@ -13,7 +13,7 @@
 // authorize yourself to metadata
 
 module metadata::type {
-    use std::ascii::{String};
+    use std::ascii;
     use std::option;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
@@ -39,7 +39,7 @@ module metadata::type {
         // <metadata::Key { slot: ascii::String }> : <T: store> <- T conforms to the specified schema type
     }
 
-    struct Key has store, copy, drop { slot: String } // slot is a type, value is boolean
+    struct Key has store, copy, drop { slot: ascii::String } // slot is a type, value is boolean
     struct Witness has drop { }
 
     // ========= Create Type Metadata =========
@@ -82,11 +82,11 @@ module metadata::type {
     // UID, otherwise we would need Sui advanced-batch-transactions (not yet available), or the user would
     // need to deploy their own custom module (scripts aren't supported either).
 
-    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<vector<u8>>, data: vector<vector<u8>>, schema: &Schema) {
+    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema) {
         metadata::overwrite(&mut type.id, keys, data, schema, &tx_authority::empty());
     }
 
-    public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<vector<u8>>, schema: &Schema) {
+    public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<ascii::String>, schema: &Schema) {
         metadata::remove_optional(&mut type.id, keys, schema, &tx_authority::empty());
     }
 
@@ -98,7 +98,7 @@ module metadata::type {
         type: &mut Type<T>,
         old_schema: &Schema,
         new_schema: &Schema,
-        keys: vector<vector<u8>>,
+        keys: vector<ascii::String>,
         data: vector<vector<u8>>
     ) {
         metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, &tx_authority::empty());
@@ -110,7 +110,7 @@ module metadata::type {
     public fun view_with_default<T>(
         uid: &UID,
         fallback_type: &Type<T>,
-        keys: vector<vector<u8>>,
+        keys: vector<ascii::String>,
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<vector<u8>> {
