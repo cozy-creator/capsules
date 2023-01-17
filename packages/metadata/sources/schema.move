@@ -1,5 +1,5 @@
 module metadata::schema {
-    use std::ascii;
+    use std::ascii::{Self, String};
     use std::option::{Self, Option};
     use std::vector;
     use sui::object::{Self, UID};
@@ -8,6 +8,10 @@ module metadata::schema {
 
     // error constants
     const EMISMATCHED_LENGTHS_OF_INPUTS: u64 = 0;
+    const EUNSUPPORTED_TYPE: u64 = 1;
+
+    // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u64", b"u128", b"ascii", b"utf8", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u64>", b"vector<u128>", b"vector<ascii>", b"vector<utf8>"];
 
     // Immutable root-level object
     struct Schema has key {
@@ -21,14 +25,15 @@ module metadata::schema {
         optional: bool
     }
 
-    public entry fun create(keys: vector<vector<u8>>, types: vector<vector<u8>>, optionals: vector<bool>, ctx: &mut TxContext) {
+    public entry fun define(keys: vector<String>, types: vector<String>, optionals: vector<bool>, ctx: &mut TxContext) {
         let len = vector::length(&keys);
         assert!(len == vector::length(&types) && len == vector::length(&optionals), EMISMATCHED_LENGTHS_OF_INPUTS);
 
         let (i, schema) = (0, vector::empty<Item>());
         while (i < len) {
-            let key = ascii::string(*vector::borrow(&keys, i));
-            let type = ascii::string(*vector::borrow(&types, i));
+            let key = *vector::borrow(&keys, i);
+            let type = *vector::borrow(&types, i);
+            assert!(vector::contains(&SUPPORTED_TYPES, ascii::as_bytes(&type)), EUNSUPPORTED_TYPE);
             let optional = *vector::borrow(&optionals, i);
             let item = Item { key, type, optional };
             vector::push_back(&mut schema, item);

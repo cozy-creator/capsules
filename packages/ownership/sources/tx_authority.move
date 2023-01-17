@@ -155,7 +155,7 @@ module ownership::tx_authority_test {
         let scenario = test_scenario::begin(@0x69);
         let ctx = test_scenario::ctx(&mut scenario);
         {
-            let auth = tx_authority::create(ctx);
+            let auth = tx_authority::begin(ctx);
             tx_authority::add_capability_type(&Witness {}, &auth);
         };
         test_scenario::end(scenario);

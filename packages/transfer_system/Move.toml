@@ -5,8 +5,8 @@ authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
-SuiUtils = { git = "https://github.com/0xcapsules/sui-utils.git", subdir = "package", rev = "master" }
+SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-transfer_system = "0x0"
+transfer_system = "0x621fb0accab1522ab0deb887f7d1a2153cfb607a"

@@ -1,4 +1,5 @@
 module outlaw_sky::outlaw_sky {
+    use std::ascii::{Self, String};
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -26,7 +27,7 @@ module outlaw_sky::outlaw_sky {
         // 
     }
 
-    public fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
         let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
@@ -38,9 +39,7 @@ module outlaw_sky::outlaw_sky {
         transfer::share_object(outlaw);
     }
 
-    public fun load_dispenser() {
-        
-    }
+    public fun load_dispenser() { }
 
     // Public extend
     public fun extend<T: store>(outlaw: &mut Outlaw, auth: &TxAuthority): (&mut UID) {
@@ -52,5 +51,14 @@ module outlaw_sky::outlaw_sky {
     fun init(genesis: OUTLAW_SKY, ctx: &mut TxContext) {
         let receipt = publish_receipt::claim(&genesis, ctx);
         transfer::transfer(receipt, tx_context::sender(ctx));
+    }
+
+    // ====== User Functions ====== 
+
+    public entry fun edit_name(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
+        let keys = vector[ascii::string(b"name")];
+        let data = vector[ascii::into_bytes(new_name)];
+        let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
+        metadata::overwrite(&mut outlaw.id, keys, data, schema, &auth);
     }
 }

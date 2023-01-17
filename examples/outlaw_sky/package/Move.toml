@@ -1,0 +1,14 @@
+[package]
+name = "OutlawSky"
+version = "0.1.0"
+authors = ["Paul Fidika (paul@fidika.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../../../packages/sui_utils" }
+SuiMetadata = { local = "../../../packages/metadata" }
+TransferSystem = { local = "../../../packages/transfer_system" }
+Ownership = { local = "../../../packages/ownership" }
+
+[addresses]
+outlaw_sky = "0xa07f06ed68da9a0de04b32a295507236daf93f6f"
