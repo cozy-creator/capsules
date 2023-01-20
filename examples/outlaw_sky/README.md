@@ -1,4 +1,10 @@
-This is walkthrough on how to create assets on Sui using Capsule-tools. It assumes you have the [Sui CLI installed][https://docs.sui.io/build/install], a keypair generated, enough gas from the faucet to submit transactions, and that devnet is currently broken again.
+This is a walkthrough demonstrating how to create assets on Sui using our Capsule-tools. We demonstrate two methods: (1) [using the Sui CLI](#sui-cli), and (2) [using the Sui Typescript SDK](#sui-typescript-sdk). The CLi is useful for developers performing their own ad-hoc operations, while the Typescript SDK is useful for website UI's and Node.js servers.
+
+---
+
+## Sui CLI
+
+It assumes you have the [Sui CLI installed][https://docs.sui.io/build/install], a keypair generated, enough gas from the faucet to submit transactions, and that devnet is currently broken.
 
 ### Step 1: Publish Your Module
 
@@ -14,9 +20,9 @@ The first address is the package-id you just deployed, and the second is the pub
 
 ### Step 2: Create a Metadata Schema (optional)
 
-Schemas are immutable root-level Sui objects that enforce (key-name, type) pairings, making (de)serialization of on-chain metadata possible. Normally you'd use some industry-standard schema, such as `0x814fb9ce94aa24af648ccc07c587ca73c4ce9a81`, but if you want to deploy your own custom schema, try the following command:
+Schemas are immutable root-level Sui objects that enforce (key-name, type) pairings, making (de)serialization of on-chain metadata possible. Normally you'd use some industry-standard schema, such as `0x94c98a6ee160ad937f19fb9eae94b943e7a6fab4`, but if you want to deploy your own custom schema, try the following command:
 
-`sui client call --package 0x4f2801f232f4cd689e7d1791b74e7fad1dfa068c --module schema --function create --args "[ \"name\", \"image\", \"power level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
+`sui client call --package 0x00684a9eea2a3deeacac08eca766a533ce35ab7f --module schema --function define --args "[ \"name\", \"image\", \"power level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
 
 This defines 3 keys; `name`, `image`, and `power level`, which must be ascii-strings followed by a u64. They are all required fields.
 
@@ -45,5 +51,11 @@ We now have an outlaw with the metadata we've defined!
 -
 
 ### Step 7: Destroy Outlaw
+
+stuff
+
+---
+
+## Sui Typescript SDK
 
 -
