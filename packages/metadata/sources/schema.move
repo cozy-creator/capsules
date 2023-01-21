@@ -11,7 +11,7 @@ module metadata::schema {
     const EUNSUPPORTED_TYPE: u64 = 1;
 
     // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
-    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u64", b"u128", b"ascii", b"utf8", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u64>", b"vector<u128>", b"vector<ascii>", b"vector<utf8>"];
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u64", b"u128", b"ascii", b"utf8", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u64>", b"vector<u128>", b"vector<ascii>", b"vector<utf8>", b"VecMap<utf8,utf8>"];
 
     // Immutable root-level object
     struct Schema has key {
