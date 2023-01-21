@@ -16,6 +16,7 @@ module metadata::metadata {
     use sui::bcs::{Self};
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
+    use sui::vec_map::VecMap;
     use metadata::schema::{Self, Schema};
     use sui_utils::bcs2;
     use sui_utils::dynamic_field2;
@@ -46,6 +47,9 @@ module metadata::metadata {
     // Schema = vector<ascii::String> = [slot_name, slot_type, optional]
     // for example: "age", "u8", "0", where 0 = required, 1 = optional
     // That is, Schema is a vector with 3 items per item in the schema
+    // This is assuming that BCS serialized each value individually, and then appended stored their bytes in an array
+    // What may happen insetad is you get vector<u8>, where all of the bytes are concatanated together, and require
+    // prepended length bytes to deserialize.
     public fun define(uid: &mut UID, schema: &Schema, data: vector<vector<u8>>, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
@@ -218,11 +222,13 @@ module metadata::metadata {
     }
 
     fun view_key(uid: &UID, slot: ascii::String, schema: &Schema): vector<u8> {
-        let (type_maybe, _) = schema::find_type_for_key(schema, slot);
+        let (type_maybe, optional) = schema::find_type_for_key(schema, slot);
         if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
             let type = option::destroy_some(type_maybe);
             let bytes = get_bcs_bytes(uid, Key { slot }, type);
-            vector::insert(&mut bytes, 1u8, 0);
+            if (option::destroy_some(optional)) { // no need to prepend an option byte if the field is required
+                vector::insert(&mut bytes, 1u8, 0); // option::is_some
+            };
             bytes
         } else {
             vector[0u8] // option::is_none
@@ -318,17 +324,20 @@ module metadata::metadata {
     // Aborts if the type is incorrect because the bcs deserialization will fail
     // Supported: address, bool, objectID, u8, u64, u128, string::String (utf8), ascii::String + vectors of these types
     // Not yet supported: u16, u32, u256 <--not included in sui::bcs
-    fun set_field(uid: &mut UID, key: Key, type_: ascii::String, optional: bool, bytes: vector<u8>) {
+    fun set_field(uid: &mut UID, key: Key, type_string: ascii::String, optional: bool, bytes: vector<u8>) {
         // To deserialize, all schema-optional items should be prepended with an option byte, otherwise an abort
-        // will occur here.
+        // will occur in this function
         if (optional) {
             if (is_some(bytes)) {
-                vector::remove(&mut bytes, 0); // remove the optional-byte
-            } else { return }; // nothing to add
+                vector::remove(&mut bytes, 0); // remove the prepended option-byte
+            } else {
+                drop_field(uid, key, type_string);
+                return // nothing more to do
+            }
         };
 
         let bcs = &mut bcs::new(copy bytes);
-        let type = ascii::into_bytes(type_);
+        let type = ascii::into_bytes(type_string);
 
         if (type == b"address") {
             let addr = bcs::peel_address(bcs);
@@ -387,12 +396,16 @@ module metadata::metadata {
             dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<utf8>") {
-            let (string, _) = bcs2::peel_vec_utf8_string(*bcs);
+            let (string, _) = bcs2::peel_vec_utf8(*bcs);
             dynamic_field2::set(uid, key, string);
         }
         else if (type == b"vector<ascii>") {
-            let (string, _) = bcs2::peel_vec_ascii_string(*bcs);
+            let (string, _) = bcs2::peel_vec_ascii(*bcs);
             dynamic_field2::set(uid, key, string);
+        }
+        else if (type == b"VecMap<utf8,utf8>") {
+            let (vec_map, _) = bcs2::peel_vec_map_utf8(*bcs);
+            dynamic_field2::set(uid, key, vec_map);
         }
         else {
             abort EUNRECOGNIZED_TYPE
@@ -403,8 +416,8 @@ module metadata::metadata {
     // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
     // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
     // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
-    fun drop_field(uid: &mut UID, key: Key, type_: ascii::String) {
-        let type = ascii::into_bytes(type_);
+    fun drop_field(uid: &mut UID, key: Key, type_string: ascii::String) {
+        let type = ascii::into_bytes(type_string);
 
         if (type == b"address") {
             dynamic_field2::drop<Key, address>(uid, key);
@@ -454,14 +467,17 @@ module metadata::metadata {
         else if (type == b"vector<ascii>") {
             dynamic_field2::drop<Key, vector<ascii::String>>(uid, key);
         }
+        else if (type == b"VecMap<utf8,utf8>") {
+            dynamic_field2::drop<Key, VecMap<string::String, string::String>>(uid, key);
+        }
         else {
             abort EUNRECOGNIZED_TYPE
         }
     }
 
-    fun get_bcs_bytes(uid: &UID, key: Key, type_: ascii::String): vector<u8> {
+    public fun get_bcs_bytes(uid: &UID, key: Key, type_string: ascii::String): vector<u8> {
         if (!dynamic_field::exists_(uid, key)) return vector[0u8]; // empty option byte
-        let type = ascii::into_bytes(type_);
+        let type = ascii::into_bytes(type_string);
 
         if (type == b"address") {
             let addr = dynamic_field::borrow<Key, address>(uid, key);
@@ -526,6 +542,10 @@ module metadata::metadata {
         else if (type == b"vector<ascii>") {
             let vec = dynamic_field::borrow<Key, vector<ascii::String>>(uid, key);
             bcs::to_bytes(vec)
+        }
+        else if (type == b"VecMap<utf8,utf8>") {
+            let vec_map = dynamic_field::borrow<Key, VecMap<string::String, string::String>>(uid, key);
+            bcs::to_bytes(vec_map)
         }
         else {
             abort EUNRECOGNIZED_TYPE

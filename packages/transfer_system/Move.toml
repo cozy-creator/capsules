@@ -9,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-transfer_system = "0x621fb0accab1522ab0deb887f7d1a2153cfb607a"
+transfer_system = "0xd2ed51e91ce68ac92cabac7ba63a2e853861c13b"
