@@ -9,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-metadata =  "0xe08c3a3eb549af17c2e58177834dee19eb3d3c2a"
+metadata =  "0x74a944bad0ce472ce8e0ef61fa56c73cd4318b0c"
