@@ -25,9 +25,9 @@ module sui_utils::vector2 {
         let (i, slice, remainder, len) = (start, vector::empty<T>(), vector::empty<T>(), vector::length(vec));
         while (i < len) {
             if (i < end) {
-                vector::push_back(&mut slice, vector::swap_remove(vec, i));
+                vector::push_back(&mut slice, vector::swap_remove(vec, start));
             } else {
-                vector::push_back(&mut remainder, vector::swap_remove(vec, i));
+                vector::push_back(&mut remainder, vector::swap_remove(vec, start));
             };
             i = i + 1;
         };
