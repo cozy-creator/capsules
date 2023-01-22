@@ -22,13 +22,22 @@ module sui_utils::vector2 {
     public fun slice_mut<T: store>(vec: &mut vector<T>, start: u64, end: u64): vector<T> {
         assert!(end >= start, EINVALID_SLICE);
 
-        let (i, slice, remainder, len) = (start, vector::empty<T>(), vector::empty<T>(), vector::length(vec));
-        while (i < len) {
-            if (i < end) {
-                vector::push_back(&mut slice, vector::swap_remove(vec, start));
+        let slice_length = end - start;
+        let (i, len, slice) = (0, vector::length(vec), vector::empty<T>());
+        let last_index = len - slice_length - 1;
+        while (i < (len - start - slice_length)) {
+            if (i < slice_length) {
+                vector::push_back(&mut slice, vector::swap_remove(vec, start + i));
             } else {
-                vector::push_back(&mut remainder, vector::swap_remove(vec, start));
+                vector::swap(vec, start + i, last_index);
             };
+            i = i + 1;
+        };
+
+        // Now put the original vector back in order
+        let (i, len, remainder) = (0, vector::length(vec), vector::empty<T>());
+        while (i < (len - start)) {
+            vector::push_back(&mut remainder, vector::pop_back(vec));
             i = i + 1;
         };
         vector::append(vec, remainder);
