@@ -13,16 +13,19 @@ module sui_utils::vector2 {
             vector::push_back(&mut slice, *vector::borrow(vec, i));
             i = i + 1;
         };
+
         slice
     }
 
     public fun slice_mut<T: store>(vec: &mut vector<T>, start: u64, end: u64): vector<T> {
-        let (i, slice) = (start, vector::empty<T>());
+        assert!(end >= start, EINVALID_SLICE);
 
-        while (i < end) {
-            vector::push_back(&mut slice, vector::remove(vec, i));
+        let (i, slice) = (0, vector::empty<T>());
+        while (i < (end - start)) {
+            vector::push_back(&mut slice, vector::remove(vec, start));
             i = i + 1;
         };
+        
         slice
     }
 }

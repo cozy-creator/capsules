@@ -1,30 +1,32 @@
-This is a walkthrough demonstrating how to create assets on Sui using our Capsule-tools. We demonstrate two methods: (1) [using the Sui CLI](#sui-cli), and (2) [using the Sui Typescript SDK](#sui-typescript-sdk). The CLi is useful for developers performing their own ad-hoc operations, while the Typescript SDK is useful for website UI's and Node.js servers.
+This is a walkthrough demonstrating how to create assets on Sui using Capsule-tools. We demonstrate two methods: (1) [using the Sui CLI](#sui-cli), and (2) [using the Sui Typescript SDK](#sui-typescript-sdk). The CLi is useful for developers performing their own ad-hoc operations, while the Typescript SDK is useful for webapps and Node.js servers.
 
 ---
 
 ## Sui CLI
 
-It assumes you have the [Sui CLI installed][https://docs.sui.io/build/install], a keypair generated, enough gas from the faucet to submit transactions, and that devnet is currently broken.
+This assumes you have the [Sui CLI installed](https://docs.sui.io/build/install), a keypair generated to submit transactions from, some gas from the faucet to pay for transactions, and that the devnet currently isn't broken (lol).
 
 ### Step 1: Publish Your Module
 
+Inside of the ./package folder, run the command:
+
 `sui client publish --gas-budget 3000`
 
-You'll get the UID of publish-receipt, which looks something like:
+This will return two UIDs, looking something like:
 
 > Created Objects:
 > ID: 0xeb946f63986f20318253be4da8966667a524695d , Owner: Immutable
 > ID: 0x2fdd358c069400c61b3134a7e1feb092c230d8d6 , Owner: Account Address ( 0xbb81965d327c51d42d1081e5d81909652f05a675 )
 
-The first address is the package-id you just deployed, and the second is the publish-receipt.
+The first ID is the package-id you just deployed, and the second ID is the package's publish-receipt.
 
-### Step 2: Create a Metadata Schema (optional)
+### Step 2: Select or Create a Metadata Schema
 
-Schemas are immutable root-level Sui objects that enforce (key-name, type) pairings, making (de)serialization of on-chain metadata possible. Normally you'd use some industry-standard schema, such as `0x94c98a6ee160ad937f19fb9eae94b943e7a6fab4`, but if you want to deploy your own custom schema, try the following command:
+Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0xbf4a8f90818aad78cc5a10bc1f4f6d0067e2cca7`, but if you want to write and deploy your own custom schema, try the following command:
 
-`sui client call --package 0x00684a9eea2a3deeacac08eca766a533ce35ab7f --module schema --function define --args "[ \"name\", \"image\", \"power level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
+`sui client call --package 0x71b741fe504ee8e7733441d3185c79886000b684 --module schema --function define --args "[ \"name\", \"image\", \"power_level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
 
-This defines 3 keys; `name`, `image`, and `power level`, which must be ascii-strings followed by a u64. They are all required fields.
+This defines 3 keys (fields); `name`, `image`, and `power level`, which are two ascii-strings followed by a u64. They are not optional fields (meaning they're required).
 
 ### Step 3: Create Type Metadata (optional)
 
@@ -38,7 +40,7 @@ All we need is our publish receipt, run this:
 
 Let's call into the `create` function that's part of the module we deployed:
 
-`sui client call --package 0xeb946f63986f20318253be4da8966667a524695d --module outlaw_sky --function create --args 0x814fb9ce94aa24af648ccc07c587ca73c4ce9a81 "[ \"Kyrie\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"3\" ]" --gas-budget 3000`
+`sui client call --package 0x2f1c9c3610d58f793e936821b797b9b63d9e602a --module outlaw_sky --function create --args 0xbf4a8f90818aad78cc5a10bc1f4f6d0067e2cca7 "[ \"Kyrie\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"3\" ]" --gas-budget 3000`
 
 We now have an outlaw with the metadata we've defined!
 

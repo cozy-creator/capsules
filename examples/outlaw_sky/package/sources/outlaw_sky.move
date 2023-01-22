@@ -41,6 +41,11 @@ module outlaw_sky::outlaw_sky {
 
     public fun load_dispenser() { }
 
+    // We need this wrapper until devInspect can create its own UIDs
+    public fun view(outlaw: &Outlaw, schema: &Schema): vector<vector<u8>> {
+        metadata::view_all(&outlaw.id, schema)
+    }
+
     // Public extend
     public fun extend<T: store>(outlaw: &mut Outlaw, auth: &TxAuthority): (&mut UID) {
         assert!(ownership::is_authorized_by_owner(&outlaw.id, auth), ENOT_OWNER);
