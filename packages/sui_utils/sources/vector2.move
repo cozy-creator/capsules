@@ -23,18 +23,19 @@ module sui_utils::vector2 {
         assert!(end >= start, EINVALID_SLICE);
 
         let slice_length = end - start;
-        let (i, len, slice) = (0, vector::length(vec), vector::empty<T>());
-        let last_index = len - slice_length - 1;
-        while (i < (len - start - slice_length)) {
-            if (i < slice_length) {
-                vector::push_back(&mut slice, vector::swap_remove(vec, start + i));
-            } else {
-                vector::swap(vec, start + i, last_index);
-            };
+        let (i, slice) = (0, vector::empty<T>());
+        while (i < slice_length) {
+            vector::push_back(&mut slice, vector::swap_remove(vec, start + i));
             i = i + 1;
         };
 
         // Now put the original vector back in order
+        let last_index = vector::length(vec) - 1;
+        while (i < (last_index - i - slice_length)) {
+            vector::swap(vec, start + i, last_index - i - slice_length);
+            i = i + 1;
+        };
+
         let (i, len, remainder) = (0, vector::length(vec), vector::empty<T>());
         while (i < (len - start)) {
             vector::push_back(&mut remainder, vector::pop_back(vec));
