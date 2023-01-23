@@ -47,7 +47,7 @@ module metadata::type {
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         schema: &Schema,
-        data: vector<vector<u8>>,
+        data: vector<u8>,
         ctx: &mut TxContext
     ) {
         let type = define_<T>(publisher, schema, data, ctx);
@@ -57,7 +57,7 @@ module metadata::type {
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         schema: &Schema,
-        data: vector<vector<u8>>,
+        data: vector<u8>,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -80,10 +80,11 @@ module metadata::type {
     // ======== Metadata Module's API =====
     // For convenience, we replicate the Metadata Module's API here to make it easier to access Type's
     // UID, otherwise we would need Sui advanced-batch-transactions (not yet available), or the user would
-    // need to deploy their own custom module (scripts aren't supported either).
+    // need to deploy their own custom module  that combines type::extend to get `&mut UID` which can then be
+    // pumped into metadata::whatever(). (Sui doesn't support Diem-style scripts either.)
 
-    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema) {
-        metadata::overwrite(&mut type.id, keys, data, schema, &tx_authority::empty());
+    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<u8>, schema: &Schema, overwrite_existing: bool) {
+        metadata::overwrite(&mut type.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
     public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<ascii::String>, schema: &Schema) {
@@ -99,21 +100,21 @@ module metadata::type {
         old_schema: &Schema,
         new_schema: &Schema,
         keys: vector<ascii::String>,
-        data: vector<vector<u8>>
+        data: vector<u8>
     ) {
         metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, &tx_authority::empty());
     }
 
     // ======== View Functions =====
 
-    // Type serves as a very
+    // Type serves as a convenient metadata fallback
     public fun view_with_default<T>(
         uid: &UID,
         fallback_type: &Type<T>,
         keys: vector<ascii::String>,
         schema: &Schema,
         fallback_schema: &Schema,
-    ): vector<vector<u8>> {
+    ): vector<u8> {
         let type = option::destroy_some(ownership::type(uid));
         let binding_type = option::destroy_some(encode::binding_type<Type<T>>());
         assert!(type == binding_type, ETYPE_METADATA_IS_INVALID_FALLBACK);

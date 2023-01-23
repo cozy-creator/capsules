@@ -1,5 +1,6 @@
 module outlaw_sky::outlaw_sky {
     use std::ascii::{Self, String};
+    use sui::bcs;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -27,7 +28,7 @@ module outlaw_sky::outlaw_sky {
         // 
     }
 
-    public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun create(schema: &Schema, data: vector<u8>, ctx: &mut TxContext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
         let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
@@ -42,7 +43,7 @@ module outlaw_sky::outlaw_sky {
     public fun load_dispenser() { }
 
     // We need this wrapper until devInspect can create its own UIDs
-    public fun view(outlaw: &Outlaw, schema: &Schema): vector<vector<u8>> {
+    public fun view(outlaw: &Outlaw, schema: &Schema): vector<u8> {
         metadata::view_all(&outlaw.id, schema)
     }
 
@@ -62,8 +63,8 @@ module outlaw_sky::outlaw_sky {
 
     public entry fun edit_name(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
         let keys = vector[ascii::string(b"name")];
-        let data = vector[ascii::into_bytes(new_name)];
+        let data = bcs::to_bytes(&new_name);
         let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
-        metadata::overwrite(&mut outlaw.id, keys, data, schema, &auth);
+        metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
     }
 }

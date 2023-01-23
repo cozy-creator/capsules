@@ -20,23 +20,31 @@ module sui_utils::bcs2 {
     use sui::bcs::{Self, BCS};
     use sui::object::{Self, ID};
     use sui::vec_map::{Self, VecMap};
-    use sui_utils::vector2;
 
-    public fun peel_ascii(bcs: BCS): (ascii::String, BCS) {
-        let len = bcs::peel_vec_length(&mut bcs);
-        let bytes = bcs::into_remainder_bytes(bcs);
-        let ascii_bytes = vector2::slice_mut(&mut bytes, 0, len);
+    // Error constants
+    const ENO_ULEB_LENGTH_FOUND: u64 = 0;
+    const EINCORRECTLY_SERIALIZED_VEC_MAP: u64 = 1;
 
-        (ascii::string(ascii_bytes), bcs::new(bytes))
+    public fun peel_id(bcs: &mut BCS): ID {
+        let addr = bcs::peel_address(bcs);
+        object::id_from_address(addr)
     }
 
-    public fun peel_utf8(bcs: BCS): (string::String, BCS) {
-        let len = bcs::peel_vec_length(&mut bcs);
-        let bytes = bcs::into_remainder_bytes(bcs);
-        let utf8_bytes = vector2::slice_mut(&mut bytes, 0, len);
-
-        (string::utf8(utf8_bytes), bcs::new(bytes))
+    public fun peel_ascii(bcs: &mut BCS): ascii::String {
+        let ascii_bytes = bcs::peel_vec_u8(bcs);
+        ascii::string(ascii_bytes)
     }
+
+    public fun peel_utf8(bcs: &mut BCS): string::String {
+        let utf8_bytes = bcs::peel_vec_u8(bcs);
+        string::utf8(utf8_bytes)
+    }
+
+    public fun peel_option_byte(bcs: &mut BCS): bool {
+        bcs::peel_bool(bcs)
+    }
+
+    // ======== Vector Peels ======== 
 
     // Because addresses are of fixed size (20 bytes), bcs does not prepend a length before each address
     public fun peel_vec_id(bcs: &mut BCS): vector<ID> {
@@ -46,31 +54,32 @@ module sui_utils::bcs2 {
             vector::push_back(&mut res, id);
             i = i + 1;
         };
+
         res
     }
 
-    public fun peel_vec_ascii(bcs: BCS): (vector<ascii::String>, BCS) {
-        let (num_strings, i, res) = (bcs::peel_vec_length(&mut bcs), 0, vector[]);
-        while (i < num_strings) {
-            let (string, bcs_remainder) = peel_ascii(bcs);
-            vector::push_back(&mut res, string);
-            bcs = bcs_remainder;
+    public fun peel_vec_ascii(bcs: &mut BCS): vector<ascii::String> {
+        let ascii_strings = bcs::peel_vec_vec_u8(bcs);
+        let (i, res) = (0, vector::empty());
+        while (i < vector::length(&ascii_strings)) {
+            let str = ascii::string(*vector::borrow(&ascii_strings, i));
+            vector::push_back(&mut res, str);
             i = i + 1;
         };
 
-        (res, bcs)
+        res
     }
 
-    // Unfortunately the above function had to be copy-pasted
-    public fun peel_vec_utf8(bcs: BCS): (vector<string::String>, BCS) {
-        let (num_strings, i, res) = (bcs::peel_vec_length(&mut bcs), 0, vector[]);
-        while (i < num_strings) {
-            let (string, bcs_remainder) = peel_utf8(bcs);
-            vector::push_back(&mut res, string);
-            bcs = bcs_remainder;
+    public fun peel_vec_utf8(bcs: &mut BCS): vector<string::String> {
+        let utf8_strings = bcs::peel_vec_vec_u8(bcs);
+        let (i, res) = (0, vector::empty());
+        while (i < vector::length(&utf8_strings)) {
+            let str = string::utf8(*vector::borrow(&utf8_strings, i));
+            vector::push_back(&mut res, str);
             i = i + 1;
         };
-        (res, bcs)
+
+        res
     }
 
     // Serialization of Vec_Map looks like:
@@ -79,16 +88,87 @@ module sui_utils::bcs2 {
     // [bytes of item-1 in pair-1]
     // [length of item-2 in pair-1], written in ULEB format
     // ...
-    public fun peel_vec_map_utf8(bcs: BCS): (VecMap<string::String, string::String>, BCS) {
-        let (num_pairs, i, res) = (bcs::peel_vec_length(&mut bcs), 0, vec_map::empty());
-        while (i < num_pairs) {
-            let (str1, bcs_remainder) = peel_utf8(bcs);
-            let (str2, bcs_remainder) = peel_utf8(bcs_remainder);
-            bcs = bcs_remainder;
+    public fun peel_vec_map_utf8(bcs: &mut BCS): VecMap<string::String, string::String> {
+        let utf8_strings = bcs::peel_vec_vec_u8(bcs);
+        assert!(vector::length(&utf8_strings) % 2 == 0, EINCORRECTLY_SERIALIZED_VEC_MAP);
+
+        let (i, res) = (0, vec_map::empty());
+        while (i < vector::length(&utf8_strings)) {
+            let str1 = string::utf8(*vector::borrow(&utf8_strings, i));
+            let str2 = string::utf8(*vector::borrow(&utf8_strings, i + 1));
             vec_map::insert(&mut res, str1, str2);
-            i = i + 1;
+            i = i + 2;
         };
 
-        (res, bcs)
+        res
+    }
+
+    //     var arr = [];
+    // var len = 0;
+
+    // if (num === 0)
+    //     return [0];
+
+    // while (num > 0) {
+    //     arr[len] = num & 0x7F;
+    //     if (num >>= 7) arr[len] |= 0x80;
+    //     len++;
+    // }
+
+    // return arr;
+
+    // Encodes a u64 as a sequence of ULEB128 bytes
+    public fun u64_into_uleb128(num: u64): vector<u8> {
+        let uleb = vector::empty<u8>();
+        while (true) {
+            let byte = ((num & 0x7f) as u8);
+            num = num >> 7;
+            if (num == 0) {
+                vector::push_back(&mut uleb, byte);
+                break
+            } else {
+                vector::push_back(&mut uleb, byte | 0x80);
+            };
+        };
+
+        uleb
+    }
+
+    // This read the first bytes of `data` assuming it is serialized ULEB128 bytes
+    // ULEB128 bytes are prepended to vectors by BCS to indicate the length of the vector
+    public fun uleb128_length(data: &vector<u8>): u64 {
+        let (total, shift, len) = (0u64, 0, 0);
+        while (true) {
+            assert!(len <= 4, ENO_ULEB_LENGTH_FOUND);
+
+            let byte = (*vector::borrow(data, len) as u64);
+            total = total | ((byte & 0x7f) << shift);
+
+            if ((byte & 0x80) == 0) {
+                break
+            };
+
+            shift = shift + 7;
+            len = len + 1;
+        };
+
+        total
+    }
+}
+
+#[test_only]
+module sui_utils::bcs2_tests {
+    use std::vector;
+    use sui_utils::bcs2;
+
+    #[test]
+    public fun test_uleb128() {
+        let test_numbers = vector[0, 17, 128, 240, 256, 900, 17001, 614599, 1270999];
+        let i = 0;
+        while (i < vector::length(&test_numbers)) {
+            let x = *vector::borrow(&test_numbers, i);
+            assert!(bcs2::uleb128_length(&bcs2::u64_into_uleb128(x)) == x, 0);
+            i = i + 1;
+        }
     }
 }
