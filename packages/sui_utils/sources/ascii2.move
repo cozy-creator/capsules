@@ -9,6 +9,10 @@ module sui_utils::ascii2 {
     const EINVALID_SUB_STRING: u64 = 0;
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
 
+    public fun empty(): String {
+        ascii::string(vector::empty<u8>())
+    }
+
     // Appends a string.
     public fun append(s: &mut String, r: String) {
         let i = 0;

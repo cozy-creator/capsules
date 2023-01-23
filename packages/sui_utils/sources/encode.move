@@ -103,10 +103,23 @@ module sui_utils::encode {
         let s1 = type_name<T>();
 
         let i = ascii2::index_of(&s1, &ascii::string(b"<"));
-        if (ascii::length(&s1) > i) { 
+        if (ascii::length(&s1) == i) { 
             option::none()
         } else {
             option::some(ascii2::sub_string(&s1, i + 1, ascii::length(&s1) - 1))
+        }
+    }
+
+    public fun type_name_with_generic<T>(): (String, String) {
+        let s1 = type_name<T>();
+        let i = ascii2::index_of(&s1, &ascii::string(b"<"));
+
+        if (ascii::length(&s1) == i) { 
+            (s1, ascii2::empty())
+        } else {
+            let s2 = ascii2::sub_string(&s1, 0, i);
+            let generic = ascii2::sub_string(&s1, i + 1, ascii::length(&s1) - 1);
+            (s2, generic)
         }
     }
 
@@ -138,6 +151,7 @@ module sui_utils::encode_test {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui_utils::encode;
+    use sui_utils::ascii2;
 
     // test failure codes
     const EID_DOES_NOT_MATCH: u64 = 1;
@@ -200,5 +214,16 @@ module sui_utils::encode_test {
             assert!(encode::package_id<Coin<SUI>>() == object::id_from_address(@0x2), EID_DOES_NOT_MATCH);
         };
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_type_name_with_generic() {
+        let (type, generic) = encode::type_name_with_generic<Coin<SUI>>();
+        assert!(ascii::string(b"0000000000000000000000000000000000000002::coin::Coin") == type, 0);
+        assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == generic, 0);
+
+        let (type, generic) = encode::type_name_with_generic<SUI>();
+        assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == type, 0);
+        assert!(ascii2::empty() == generic, 0);
     }
 }
