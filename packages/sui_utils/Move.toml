@@ -1,9 +1,9 @@
 [package]
 name = "SuiUtils"
-version = "0.9.0"
+version = "0.10.0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 
 [addresses]
-sui_utils =  "0xd74d108d19b37e1630c69f01106241cbb682e517"
+sui_utils =  "0xa0821a6db5ae725ca9e892ad10a3d3554b577f43"

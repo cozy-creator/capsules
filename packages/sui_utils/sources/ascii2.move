@@ -147,7 +147,6 @@ module sui_utils::ascii2 {
 #[test_only]
 module sui_utils::ascii_test {
     use std::ascii::{string, length};
-    use sui::object;
     use sui::test_scenario;
     use sui_utils::ascii2;
 
@@ -176,13 +175,10 @@ module sui_utils::ascii_test {
     #[test]
     public fun addr_into_string() {
         let scenario = test_scenario::begin(@0x5);
-        let ctx = test_scenario::ctx(&mut scenario);
+        let _ctx = test_scenario::ctx(&mut scenario);
         {
-            let uid = object::new(ctx);
-            let addr = object::uid_to_address(&uid);
-            let string = ascii2::addr_into_string(&addr);
-            assert!(string(b"fdc6d587c83a348e456b034e1e0c31e9a7e1a3aa") == string, 0);
-            object::delete(uid);
+            let string = ascii2::addr_into_string(&@0x23a);
+            assert!(string(b"000000000000000000000000000000000000023a") == string, 0);
         };
         test_scenario::end(scenario);
     }

@@ -22,9 +22,9 @@ The first ID is the package-id you just deployed, and the second ID is the packa
 
 ### Step 2: Select or Create a Metadata Schema
 
-Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0xbf4a8f90818aad78cc5a10bc1f4f6d0067e2cca7`, but if you want to write and deploy your own custom schema, try the following command:
+Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0x5169e6aa4136ce330960559ec8416f32b2d01645`, but if you want to write and deploy your own custom schema, try the following command:
 
-`sui client call --package 0x71b741fe504ee8e7733441d3185c79886000b684 --module schema --function define --args "[ \"name\", \"image\", \"power_level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
+`sui client call --package 0xbc50256c264edddbd9f246eed3faf13d62a39763 --module schema --function define --args "[ \"name\", \"image\", \"power_level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
 
 This defines 3 keys (fields); `name`, `image`, and `power level`, which are two ascii-strings followed by a u64. They are not optional fields (meaning they're required).
 

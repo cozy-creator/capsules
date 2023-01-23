@@ -11,4 +11,4 @@ TransferSystem = { local = "../../../packages/transfer_system" }
 Ownership = { local = "../../../packages/ownership" }
 
 [addresses]
-outlaw_sky = "0x3a2c283ae8f5693d19fc5607049cf75ad096c525"
+outlaw_sky = "0x6d4d5cd3a4ab962539513d011c03c8a10b5a31f6"

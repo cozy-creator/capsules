@@ -1,6 +1,6 @@
-// TxAuthority uses the convention that modules can sign for themselves using a struct named `Witness`,
-// i.e., 0x899::my_module::Witness. Modules should always define a Witness struct, and carefully guard
-// its access, as it represents the authority of the module at runtime.
+// TxAuthority uses the convention that modules can sign for themselves using the reserved struct name
+//  `Witness`, i.e., 0x899::my_module::Witness. Modules should always define a Witness struct, and
+// carefully guard access to it, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
     use std::ascii::{Self, String};
@@ -13,8 +13,6 @@ module ownership::tx_authority {
     use sui_utils::vector2;
     use sui_utils::encode;
 
-    // This is a special struct-name used to assert ownership of a module at runtime
-    // Each module should declare their own 0x123::my_module::Witness struct
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
     struct TxAuthority has drop {
