@@ -103,20 +103,6 @@ module sui_utils::bcs2 {
         res
     }
 
-    //     var arr = [];
-    // var len = 0;
-
-    // if (num === 0)
-    //     return [0];
-
-    // while (num > 0) {
-    //     arr[len] = num & 0x7F;
-    //     if (num >>= 7) arr[len] |= 0x80;
-    //     len++;
-    // }
-
-    // return arr;
-
     // Encodes a u64 as a sequence of ULEB128 bytes
     public fun u64_into_uleb128(num: u64): vector<u8> {
         let uleb = vector::empty<u8>();

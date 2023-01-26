@@ -42,6 +42,12 @@ module outlaw_sky::outlaw_sky {
 
     public fun load_dispenser() { }
 
+    // We need this wrapper until Dynamic Batch Transactions are available
+    public entry fun overwrite(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<u8>, schema: &Schema, ctx: &mut TxContext) {
+        let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
+        metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
+    }
+
     // We need this wrapper until devInspect can create its own UIDs
     public fun view(outlaw: &Outlaw, schema: &Schema): vector<u8> {
         metadata::view_all(&outlaw.id, schema)

@@ -87,10 +87,10 @@ module metadata::metadata {
         auth: &TxAuthority
     ) {
         assert_valid_ownership_and_schema(uid, schema, auth);
-        assert!(vector::length(&keys) == bcs2::uleb128_length(&data), EINCORRECT_DATA_LENGTH);
+        // assert!(vector::length(&keys) == bcs2::uleb128_length(&data), EINCORRECT_DATA_LENGTH);
 
         let bcs_data = bcs::new(data);
-        bcs::peel_vec_length(&mut bcs_data);
+        // bcs::peel_vec_length(&mut bcs_data);
 
         let i = 0;
         while (i < vector::length(&keys)) {
@@ -220,15 +220,14 @@ module metadata::metadata {
 
     // ============= devInspect Functions ============= 
 
-    // This prepends every item with an option byte: 1 (exists) or 0 (doesn't exist)
-    // The response we're turning is just raw bytes; it's up to the client app to figure out what the value-types should be,
-    // which is why we provide an ID for the object's schema, which is needed in order to deserialize the bytes.
-    // Perhaps there is a more convenient way to do this for the client?
+    // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
+    // corresponding keys that were queried in order to deserialize the results.
     public fun view(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<u8> {
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-        vector::append(&mut response, bcs2::u64_into_uleb128(len));
+        // I don't think this is useful?
+        // vector::append(&mut response, bcs2::u64_into_uleb128(len));
 
         while (i < len) {
             let slot = *vector::borrow(&keys, i);
@@ -269,11 +268,13 @@ module metadata::metadata {
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
+
         view(uid, keys, schema)
     }
 
-    // You can specify a set of keys to use by taking them from a 'reader schema'. Note that the reader_schema
-    // and object's own schema must be compatible, in the sense that any key overlaps = the same type.
+    // Query all keys specified inside of `reader_schema`
+    // Note that the reader_schema and the object's own schema must be compatible, in the sense that any key
+    // overlaps are the same type.
     // Maybe we could take into account optionality or do some sort of type coercian to relax this compatability
     // requirement? I.e., turn a u8 into a u64, or an ascii string into a utf8 string
     public fun view_with_reader_schema(
@@ -282,6 +283,7 @@ module metadata::metadata {
         object_schema: &Schema
     ): vector<u8> {
         assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
+        assert!(object::id(object_schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<ascii::String>());
 
@@ -290,11 +292,12 @@ module metadata::metadata {
             vector::push_back(&mut keys, key);
             i = i + 1;
         };
+
         view(uid, keys, object_schema)
     }
 
     // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
-    // really only need to have the same types for overlapping keys
+    // really only need to have the same types for the keys being used here
     public fun view_with_default(
         uid: &UID,
         fallback: &UID,
