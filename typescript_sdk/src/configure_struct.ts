@@ -12,6 +12,7 @@ import {
   Struct
 } from 'superstruct';
 
+
 export type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
   -readonly [K in keyof T]: MoveToJSTypes[T[K]];
 };

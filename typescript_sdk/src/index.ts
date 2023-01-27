@@ -6,7 +6,7 @@ import { parseViewResults } from './response_parser';
 
 const outlawSchema = {
   name: 'ascii',
-  description: 'Option<ascii>',
+  // description: 'Option<ascii>',
   image: 'ascii',
   power_level: 'u64'
 } as const;
@@ -17,9 +17,10 @@ type Outlaw = JSTypes<typeof outlawSchema>;
 
 // ====== Instantiate and Validate ======
 
+
 const kyrie: Outlaw = {
   name: 'Kyrie',
-  description: { none: null },
+  // description: { none: null },
   image: 'https://www.wikipedia.org/',
   power_level: 199n
 };
@@ -52,7 +53,6 @@ async function create() {
     gasBudget: 15000
   });
 }
-// create();
 
 async function readAll() {
   let result = await provider.devInspectMoveCall('0xed2c39b73e055240323cf806a7d8fe46ced1cabb', {
@@ -65,11 +65,12 @@ async function readAll() {
       '0x37cef7c69de4b1cea22f1ef445940432d6968ac6'
     ]
   });
-
+  console.log("result", result)
   let data = parseViewResults(result);
+  console.log("parsedViewResults", data);
   let outlaw = bcs.de('Outlaw', new Uint8Array(data)) as Outlaw;
+  console.log("Outlaw", outlaw)
 }
-// readAll();
 
 async function readSubset() {}
 
@@ -93,4 +94,10 @@ async function updateSubset() {
     gasBudget: 15000
   });
 }
+
+
+
+readAll();
 // updateSubset()
+// create();
+
