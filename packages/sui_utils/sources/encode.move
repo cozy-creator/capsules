@@ -258,4 +258,20 @@ module sui_utils::encode_test {
         assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == type, 0);
         assert!(ascii2::empty() == generic, 0);
     }
+
+    #[test]
+    public fun test_parse_option() {
+        let none = ascii::string(b"Does not contain");
+        let value1 = encode::parse_option(none);
+
+        let some = ascii::string(b"Does contain Option<vector<vector<u8>>>");
+        let value2 = encode::parse_option(some);
+
+        let none = ascii::string(b"Failure is not an Option");
+        let value3 = encode::parse_option(none);
+
+        assert!(value1 == ascii2::empty(), 0);
+        assert!(value2 == ascii::string(b"vector<vector<u8>>"), 0);
+        assert!(value3 == ascii2::empty(), 0);
+    }
 }

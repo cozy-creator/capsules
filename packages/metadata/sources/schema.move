@@ -1,5 +1,6 @@
 module metadata::schema {
     use std::ascii::{Self, String};
+    use std::debug;
     use std::option::{Self, Option};
     use std::vector;
     use sui::object::{Self, UID};
@@ -12,7 +13,7 @@ module metadata::schema {
     const EUNSUPPORTED_TYPE: u64 = 1;
 
     // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
-    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"string", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<string>", b"VecMap<string,string>"];
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"string", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<string>", b"VecMap<string,string>", b"vector<vector<u8>>"];
 
     // Immutable root-level object
     struct Schema has key {
@@ -26,13 +27,14 @@ module metadata::schema {
         optional: bool
     }
 
+    // Schema is defined like [ [name, type], [name, type], ... ]
     public entry fun define(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
         let len = vector::length(&schema_fields);
 
         let (i, schema) = (0, vector::empty<Item>());
         while (i < len) {
             let tuple = vector::borrow(&schema_fields, i);
-            let type_raw = *vector::borrow(tuple, i);
+            let type_raw = *vector::borrow(tuple, 1);
             let type_parsed = encode::parse_option(type_raw);
             let (type, optional) = if (ascii::length(&type_parsed) == 0) {
                 (type_raw, false)
@@ -40,9 +42,11 @@ module metadata::schema {
                 (type_parsed, true)
             };
 
+            debug::print(&type);
+
             assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
-            let key = *vector::borrow(tuple, i);
+            let key = *vector::borrow(tuple, 0);
             vector::push_back(&mut schema, Item { key, type, optional });
             i = i + 1;
         };

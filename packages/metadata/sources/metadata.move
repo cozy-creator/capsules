@@ -10,7 +10,7 @@
 
 module metadata::metadata {
     use std::ascii;
-    use std::string::{Self, String};
+    use std::string::String;
     use std::option;
     use std::vector;
     use sui::bcs::{Self};
@@ -18,7 +18,7 @@ module metadata::metadata {
     use sui::object::{Self, UID, ID};
     use sui::vec_map::VecMap;
     use metadata::schema::{Self, Schema};
-    use sui_utils::bcs2;
+    use sui_utils::deserialize;
     use sui_utils::dynamic_field2;
     use ownership::ownership;
     use ownership::tx_authority::TxAuthority;
@@ -37,9 +37,6 @@ module metadata::metadata {
     const EKEY_IS_NOT_OPTIONAL: u64 = 10;
     const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 11;
     const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 12;
-
-    /// Address length in Sui is 20 bytes.
-    const SUI_ADDRESS_LENGTH: u64 = 20;
 
     struct SchemaID has store, copy, drop { }
     struct Key has store, copy, drop { slot: ascii::String }
@@ -305,7 +302,7 @@ module metadata::metadata {
         assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-        vector::append(&mut response, bcs2::u64_into_uleb128(len));
+        // vector::append(&mut response, bcs2::u64_into_uleb128(len));
 
         while (i < len) {
             let slot = *vector::borrow(&keys, i);
@@ -330,100 +327,131 @@ module metadata::metadata {
     // Private function so that the schema cannot be bypassed
     // Aborts if the type is incorrect because the bcs deserialization will fail
     // Supported: address, bool, objectID, u8, u64, u128, string (utf8), + vectors of these types
-    // + VecMap<string,string>
+    // + VecMap<string,string>, vector<vector<u8>>
     // Not yet supported: u16, u32, u256 <--not included in sui::bcs
     fun set_field(
         uid: &mut UID,
         key: Key,
         type_string: ascii::String,
         optional: bool,
-        bytes: vector<u8>,
+        value: vector<u8>,
         overwrite: bool
     ) {
-        // To deserialize, all schema-optional items must be prepended with an option byte, otherwise an abort
-        // will occur here
-        if (vector::length(&bytes) == 0) {
+        if (vector::length(&value) == 0) {
             if (optional) {
                 drop_field(uid, key, type_string);
                 return
-            } else abort EKEY_IS_NOT_OPTIONAL;
+            } else abort EKEY_IS_NOT_OPTIONAL
         };
 
         let type = ascii::into_bytes(type_string);
-        let bcs_data = &mut bcs::new(bytes);
 
         if (type == b"address") {
-            let addr = bcs::peel_address(bcs_data);
+            let addr = deserialize::address_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, addr);
         } 
         else if (type == b"bool") {
-            let boolean = bcs::peel_bool(bcs_data);
+            let boolean = deserialize::bool_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, boolean);
         } 
         else if (type == b"id") {
-            let object_id = bcs2::peel_id(bcs_data);
+            let object_id = deserialize::id_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, object_id);
         } 
         else if (type == b"u8") {
-            let integer = bcs::peel_u8(bcs_data);
+            let integer = deserialize::u8_(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, integer);
+        }
+        else if (type == b"u16") {
+            let integer = deserialize::u16_(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, integer);
+        } 
+        else if (type == b"u32") {
+            let integer = deserialize::u32_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"u64") {
-            let integer = bcs::peel_u64(bcs_data);
+            let integer = deserialize::u64_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"u128") {
-            let integer = bcs::peel_u128(bcs_data);
+            let integer = deserialize::u128_(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, integer);
+        } 
+        else if (type == b"u256") {
+            let integer = deserialize::u256_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
         else if (type == b"string") {
-            let string = bcs2::peel_utf8(bcs_data);
+            let string = deserialize::string_(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, string);
         } 
         else if (type == b"vector<address>") {
-            let vec = bcs::peel_vec_address(bcs_data);
+            let vec = deserialize::vec_address(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<bool>") {
-            let vec = bcs::peel_vec_bool(bcs_data);
+            let vec = deserialize::vec_bool(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<id>") {
-            let vec = bcs2::peel_vec_id(bcs_data);
+            let vec = deserialize::vec_id(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u8>") {
-            let vec = bcs::peel_vec_u8(bcs_data);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, value);
+        }
+        else if (type == b"vector<u16>") {
+            let vec = deserialize::vec_u16(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, vec);
+        }
+        else if (type == b"vector<u32>") {
+            let vec = deserialize::vec_u32(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u64>") {
-            let vec = bcs::peel_vec_u64(bcs_data);
+            let vec = deserialize::vec_u64(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<u128>") {
-            let vec = bcs::peel_vec_u128(bcs_data);
+            let vec = deserialize::vec_u128(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, vec);
+        }
+        else if (type == b"vector<u256>") {
+            let vec = deserialize::vec_u256(value);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, vec);
+        }
+        else if (type == b"vector<vector<u8>>") {
+            let vec = deserialize::vec_vec_u8(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
         else if (type == b"vector<string>") {
-            let string = bcs2::peel_vec_utf8(bcs_data);
+            let strings = deserialize::vec_string(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, string);
+                dynamic_field2::set(uid, key, strings);
         }
         else if (type == b"VecMap<string,string>") {
-            let vec_map = bcs2::peel_vec_map_utf8(bcs_data);
+            let vec_map = deserialize::vec_map_string_string(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_map);
         }
@@ -594,13 +622,14 @@ module metadata::metadata_tests {
 
     #[test]
     public fun test_define() {
-        let data = vector<u8>[5, 75, 121, 114, 105, 101,  22, 104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47,  54,  13, 3, 0, 0, 0, 0, 0];
+        let data = vector<vector<u8>>[ vector[75, 121, 114, 105, 101],  vector[104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47],  vector[54,  13, 3, 0, 0, 0, 0, 0] ];
+        // let data = vector<u8>[5, 75, 121, 114, 105, 101,  22, 104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47,  54,  13, 3, 0, 0, 0, 0, 0];
 
         let scenario_val = test_scenario::begin(@0x99);
         let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
-            schema::define(vector[string(b"name"), string(b"image"), string(b"power_level")], vector[string(b"ascii"), string(b"ascii"), string(b"u64")], vector[false, false, false], ctx);
+            schema::define(vector[ vector[string(b"name"), string(b"string")], vector[string(b"image"), string(b"string")], vector[string(b"power_level"), string(b"u64")] ], ctx);
         };
 
         test_scenario::next_tx(scenario, @0x99);

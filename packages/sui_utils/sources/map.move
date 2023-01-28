@@ -138,7 +138,6 @@ module sui_utils::map {
 module sui_utils::map_tests {
     use sui::test_scenario;
     use sui_utils::map::{Self, Map, Iter};
-    use std::debug;
     use std::option;
     use std::vector;
 
@@ -156,8 +155,7 @@ module sui_utils::map_tests {
             loop {
                 let next = map::next(&new_map, &mut iter);
                 if (next == option::none()) { break };
-                let value = map::borrow_mut(&mut new_map, option::destroy_some(next));
-                debug::print(value);
+                let _value = map::borrow_mut(&mut new_map, option::destroy_some(next));
             };
 
             map::delete(new_map);
@@ -179,8 +177,7 @@ module sui_utils::map_tests {
             let i = 0;
             while (i < vector::length(&index)) {
                 let next = vector::borrow(&index, i);
-                let value = map::borrow_mut(&mut new_map, *next);
-                debug::print(value);
+                let _value = map::borrow_mut(&mut new_map, *next);
                 i = i + 1;
             };
 
@@ -211,8 +208,7 @@ module sui_utils::map_tests {
         if (next == option::none()) { 
             return
         };
-        let value = map::borrow(map, option::destroy_some(next));
-        debug::print(value);
+        let _value = map::borrow(map, option::destroy_some(next));
 
         recursive(map, iter);
     }
