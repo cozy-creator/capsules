@@ -22,11 +22,11 @@ The first ID is the package-id you just deployed, and the second ID is the packa
 
 ### Step 2: Select or Create a Metadata Schema
 
-Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0x37cef7c69de4b1cea22f1ef445940432d6968ac6`, but if you want to write and deploy your own custom schema, try the following command:
+Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0xed6154cf3cee249872897048342f87bd9eb0b13d`, but if you want to write and deploy your own custom schema, try the following command:
 
-`sui client call --package 0xc58218250eec94ee3241ac999dd564a6e267f107 --module schema --function define --args "[ \"name\", \"description\", \"image\", \"power_level\" ]" "[ \"ascii\", \"Option<ascii>\", \"ascii\", \"u64\" ]" [false,true,false,false] --gas-budget 1000`
+`sui client call --package 0x62e1355a57ff4f07434166e519e5e71e13e9d999 --module schema --function define --args "[ [\"name\", \"string\"], [ \"description\", \"Option<string>\" ], [ \"image\", \"string\" ], [ \"power_level\", \"u64\" ] ]" --gas-budget 2000`
 
-This defines 3 keys (fields); `name`, `image`, and `power level`, which are two ascii-strings followed by a u64. They are not optional fields (meaning they're required).
+This defines 34 keys (fields); `name`, `description`, `image`, and `power level`, which are are three utf8 strings followed by a u64. Only `description` is optional, while the rest are not (meaning they're required).
 
 ### Step 3: Create Type Metadata (optional)
 
@@ -34,13 +34,13 @@ Our module is going to create a new type of object; an Outlaw. Our outlaw type w
 
 All we need is our publish receipt, run this:
 
-`sui client call --package 0x4f2801f232f4cd689e7d1791b74e7fad1dfa068c --module type --function define --type-args 0xeb946f63986f20318253be4da8966667a524695d::outlaw_sky::Outlaw --args 0x2fdd358c069400c61b3134a7e1feb092c230d8d6 0x814fb9ce94aa24af648ccc07c587ca73c4ce9a81 "[ \"Kyrie\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"3\" ]" --gas-budget 3000`
+`sui client call --package 0x62e1355a57ff4f07434166e519e5e71e13e9d999 --module type --function define --type-args 0xad10acb641b8d2581f105c4e6dad061470518468::outlaw_sky::Outlaw --args 0x237bb79378aef2c477638f0000ee8e0c32b762d0 0xed6154cf3cee249872897048342f87bd9eb0b13d "[ \"Kyrie\", \"great description\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"1999\" ]" --gas-budget 3000`
 
 ### Step 4: Create Outlaw
 
 Let's call into the `create` function that's part of the module we deployed:
 
-`sui client call --package 0x2f1c9c3610d58f793e936821b797b9b63d9e602a --module outlaw_sky --function create --args 0xbf4a8f90818aad78cc5a10bc1f4f6d0067e2cca7 "[ \"Kyrie\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"3\" ]" --gas-budget 3000`
+`sui client call --package 0xad10acb641b8d2581f105c4e6dad061470518468 --module outlaw_sky --function create --args 0xed6154cf3cee249872897048342f87bd9eb0b13d "[ \"Kyrie\", \"description here\", \"https://pilots-cdn.taiyopilots.com/pre/images/enforcers.png\", \"[0, 1, 2, 3, 4, 5, 6, 7]\" ]" --gas-budget 10000`
 
 We now have an outlaw with the metadata we've defined!
 
