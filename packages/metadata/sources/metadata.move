@@ -106,7 +106,7 @@ module metadata::metadata {
         dynamic_field::exists_(uid, Key { slot: key } )
     }
 
-    // We allow any metadata field to be read without any permission
+    // We allow any metadata field to be read without any permission. T must be correct, otherwise this will abort
     public fun borrow<T: store>(uid: &UID, key: ascii::String): &T {
         dynamic_field::borrow<Key, T>(uid, Key { slot: key } )
     }
@@ -622,7 +622,7 @@ module metadata::metadata_tests {
 
     #[test]
     public fun test_define() {
-        let data = vector<vector<u8>>[ vector[75, 121, 114, 105, 101],  vector[104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47],  vector[54,  13, 3, 0, 0, 0, 0, 0] ];
+        let data = vector<vector<u8>>[ b"Kyrie",  b"https://wikipedia.org/", vector[54,  13, 3, 0, 0, 0, 0, 0] ];
         // let data = vector<u8>[5, 75, 121, 114, 105, 101,  22, 104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47,  54,  13, 3, 0, 0, 0, 0, 0];
 
         let scenario_val = test_scenario::begin(@0x99);

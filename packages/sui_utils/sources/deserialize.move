@@ -257,16 +257,15 @@ module sui_utils::deserialize {
         result
     }
 
-    // Enco
     public fun vec_map_string_string(bytes: vector<u8>): VecMap<String,String> {
-        let string_bytes = vec_vec_u8(bytes);
-        let (i, len) = (0, vector::length(&string_bytes));
+        let strings = vec_string(bytes);
+        let (i, len) = (0, vector::length(&strings));
         assert!(len % 2 == 0, EINCORRECT_DATA_SIZE);
 
         let result = vec_map::empty();
         while (i < len) {
-            let key = string::utf8(*vector::borrow(&string_bytes, i));
-            let value = string::utf8(*vector::borrow(&string_bytes, i + 1));
+            let key = *vector::borrow(&strings, i);
+            let value = *vector::borrow(&strings, i + 1);
             vec_map::insert(&mut result, key, value);
             i = i + 2;
         };

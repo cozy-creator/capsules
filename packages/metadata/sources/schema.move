@@ -1,6 +1,5 @@
 module metadata::schema {
     use std::ascii::{Self, String};
-    use std::debug;
     use std::option::{Self, Option};
     use std::vector;
     use sui::object::{Self, UID};
@@ -41,8 +40,6 @@ module metadata::schema {
             } else {
                 (type_parsed, true)
             };
-
-            debug::print(&type);
 
             assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
