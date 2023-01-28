@@ -12,4 +12,4 @@ Ownership = { local = "../../../packages/ownership" }
 
 [addresses]
 # Testnet Address
-outlaw_sky = "0x8af0cbf8380f7738907ef9aee9aab4e34c3d0716"
+outlaw_sky = "0xad10acb641b8d2581f105c4e6dad061470518468"

@@ -10,4 +10,4 @@ Ownership = { local = "../ownership" }
 
 [addresses]
 # Testnet 2 Address
-metadata =  "0x53024386068b9d3db48272d786065882cd5ff1b7"
+metadata =  "0x62e1355a57ff4f07434166e519e5e71e13e9d999"

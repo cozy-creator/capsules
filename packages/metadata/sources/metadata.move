@@ -41,7 +41,6 @@ module metadata::metadata {
     struct SchemaID has store, copy, drop { }
     struct Key has store, copy, drop { slot: ascii::String }
 
-    // `data` should be a serialized struct, hence it will NOT be prepended with ULEB128 bytes
     // Schema = vector<ascii::String> = [slot_name, slot_type, optional]
     // for example: "age", "u8", "0", where 0 = required, 1 = optional
     // That is, Schema is a vector with 3 fields per item in the schema
@@ -67,7 +66,6 @@ module metadata::metadata {
         dynamic_field::add(uid, SchemaID { }, object::id(schema));
     }
 
-    // `data` should be a vector of fields, hence prepended with ULEB128 bytes
     // If `overwrite` == true, then values or overwritten. Otherwise they are filled-in, in the sense that
     // data will only be written if (1) it is missing, or (2) if the existing data is of the wrong type.
     // This is strict on keys, in the sense that if you specify keys that do not exist on the schema, this
@@ -155,7 +153,6 @@ module metadata::metadata {
         dynamic_field2::drop<SchemaID, ID>(uid, SchemaID { });
     }
 
-    // `data` should be a vector of fields, hence prepended with ULEB128 bytes
     // Moves from old-schema -> new-schema.
     // Keys and data act as fill-ins; i.e., if there is already a value at 'name' of the type specified in
     // new_schema, then the old view will be left in place. However, if the value is missing, or if the type
@@ -218,8 +215,6 @@ module metadata::metadata {
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-        // I don't think this is useful?
-        // vector::append(&mut response, bcs2::u64_into_uleb128(len));
 
         while (i < len) {
             let slot = *vector::borrow(&keys, i);
@@ -302,7 +297,6 @@ module metadata::metadata {
         assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-        // vector::append(&mut response, bcs2::u64_into_uleb128(len));
 
         while (i < len) {
             let slot = *vector::borrow(&keys, i);
@@ -606,6 +600,7 @@ module metadata::metadata {
 #[test_only]
 module metadata::metadata_tests {
     use std::ascii::string;
+    use sui::bcs;
     use sui::object::{Self, UID};
     use sui::test_scenario;
     use metadata::metadata;
@@ -622,14 +617,19 @@ module metadata::metadata_tests {
 
     #[test]
     public fun test_define() {
-        let data = vector<vector<u8>>[ b"Kyrie",  b"https://wikipedia.org/", vector[54,  13, 3, 0, 0, 0, 0, 0] ];
+        let data = vector<vector<u8>>[ b"Kyrie", vector[], b"https://wikipedia.org/", bcs::to_bytes(&19999u64) ];
         // let data = vector<u8>[5, 75, 121, 114, 105, 101,  22, 104, 116, 116, 112, 115,  58,  47,  47, 119, 105, 107, 105, 112, 101, 100, 105,  97,  46, 111, 114, 103,  47,  54,  13, 3, 0, 0, 0, 0, 0];
 
         let scenario_val = test_scenario::begin(@0x99);
         let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
-            schema::define(vector[ vector[string(b"name"), string(b"string")], vector[string(b"image"), string(b"string")], vector[string(b"power_level"), string(b"u64")] ], ctx);
+            schema::define(vector[ 
+                vector[string(b"name"), string(b"string")],
+                vector[string(b"description"), string(b"Option<string>")],
+                vector[string(b"image"), string(b"string")], 
+                vector[string(b"power_level"), string(b"u64")] 
+            ], ctx);
         };
 
         test_scenario::next_tx(scenario, @0x99);
