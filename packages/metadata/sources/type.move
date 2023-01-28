@@ -47,7 +47,7 @@ module metadata::type {
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         schema: &Schema,
-        data: vector<u8>,
+        data: vector<vector<u8>>,
         ctx: &mut TxContext
     ) {
         let type = define_<T>(publisher, schema, data, ctx);
@@ -57,7 +57,7 @@ module metadata::type {
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         schema: &Schema,
-        data: vector<u8>,
+        data: vector<vector<u8>>,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -83,7 +83,7 @@ module metadata::type {
     // need to deploy their own custom module  that combines type::extend to get `&mut UID` which can then be
     // pumped into metadata::whatever(). (Sui doesn't support Diem-style scripts either.)
 
-    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<u8>, schema: &Schema, overwrite_existing: bool) {
+    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, overwrite_existing: bool) {
         metadata::overwrite(&mut type.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
@@ -100,7 +100,7 @@ module metadata::type {
         old_schema: &Schema,
         new_schema: &Schema,
         keys: vector<ascii::String>,
-        data: vector<u8>
+        data: vector<vector<u8>>
     ) {
         metadata::migrate(&mut type.id, old_schema, new_schema, keys, data, &tx_authority::empty());
     }

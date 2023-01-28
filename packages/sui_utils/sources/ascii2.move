@@ -36,9 +36,8 @@ module sui_utils::ascii2 {
     // Naive implementation of a substring matching algorithm, intended to be used with < 100 length strings.
     // More efficient algorithms are possible for larger strings.
     public fun index_of(s: &String, r: &String): u64 {
-        let (haystack, needle) = if (ascii::length(s) >= ascii::length(r)) {
-            (s, r)
-        } else { (r, s) };
+        if (ascii::length(r) > ascii::length(s)) return ascii::length(s);
+        let (haystack, needle) = (s, r);
         
         let (i, end) = (0, ascii::length(needle) - 1);
         while (i + end < ascii::length(haystack)) {
@@ -153,6 +152,13 @@ module sui_utils::ascii_test {
     use std::ascii::{string, length};
     use sui::test_scenario;
     use sui_utils::ascii2;
+
+    #[test]
+    public fun test_index_of() {
+        let my_string = string(b"long text here");
+        let i = ascii2::index_of(&my_string, &string(b"bull"));
+        assert!(i == length(&my_string), 0);
+    }
 
     #[test]
     public fun decompose_type() {

@@ -37,12 +37,11 @@ const SCHEMA_ID = '0x37cef7c69de4b1cea22f1ef445940432d6968ac6';
 // We can enter an ObjectID, and assume that its contents == our JS Schema here
 
 bcs.registerStructType('Outlaw', outlawSchema);
-let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
 
-console.log(kyrieBytes);
-
-// This will post data as vector<u8>
 async function create() {
+  // TO DO: change this from vector<u8> to vector<vector<u8>>
+  let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
+
   const moveCallTxn = await signer.executeMoveCall({
     packageObjectId: OUTLAW_SKY_PACKAGE_ID,
     module: 'outlaw_sky',
@@ -67,17 +66,31 @@ async function readAll() {
   });
 
   let data = parseViewResults(result);
-  let outlaw = bcs.de('Outlaw', new Uint8Array(data)) as Outlaw;
-}
-// readAll();
+  console.log(data);
 
-async function readSubset() {}
+  let outlaw = bcs.de('Outlaw', new Uint8Array(data)) as Outlaw;
+  console.log(outlaw);
+}
+readAll();
+
+async function readSubset() {
+  const keysToRead = [];
+}
+
+async function readLocal() {
+  let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
+
+  let bytes = new Uint8Array(kyrieBytes);
+  let kyrieDeserialized = bcs.de('Outlaw', bytes);
+  console.log(kyrieDeserialized);
+}
+// readLocal();
 
 async function updateAll() {}
 
 async function updateSubset() {
   // How do we serialize just a subset of keys, rather than the entire object?
-  let KeysToUpdate = ['name', 'description'];
+  const keysToUpdate = ['name', 'description'];
   let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
 
   let objectID = '0xc6c3028a0df2eb49af8cf766971c9b2cf5a8d0c2';
@@ -89,8 +102,12 @@ async function updateSubset() {
     function: 'overwrite',
     typeArguments: [],
     // outlaw id, keys, data bytes, schema
-    arguments: [objectID, KeysToUpdate, kyrieBytes, SCHEMA_ID],
+    arguments: [objectID, keysToUpdate, kyrieBytes, SCHEMA_ID],
     gasBudget: 15000
   });
 }
 // updateSubset()
+
+async function deleteSubset() {}
+
+async function deleteAll() {}

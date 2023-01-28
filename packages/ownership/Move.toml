@@ -9,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 
 [addresses]
 # Testnet Address
-ownership = "0xa74947a7527c14b06fd0712e3c88b4a067399fef"
+ownership = "0x255b95c6d04aeb60250e01fa13c9a71ddaaf9f47"

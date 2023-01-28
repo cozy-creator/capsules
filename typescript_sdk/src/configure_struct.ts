@@ -29,7 +29,7 @@ export type MoveToJSTypes = {
   ascii: string;
   utf8: string;
   'vector<u8>': number[];
-  'Option<ascii>': { some: string } | { none: null };
+  'Option<ascii>': { none: null } | { some: string };
 };
 
 export const MoveToStruct: Record<string, any> = {

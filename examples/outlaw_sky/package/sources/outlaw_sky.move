@@ -28,7 +28,7 @@ module outlaw_sky::outlaw_sky {
         // 
     }
 
-    public entry fun create(schema: &Schema, data: vector<u8>, ctx: &mut TxContext) {
+    public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
         let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
@@ -42,8 +42,10 @@ module outlaw_sky::outlaw_sky {
 
     public fun load_dispenser() { }
 
-    // We need this wrapper until Dynamic Batch Transactions are available
-    public entry fun overwrite(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<u8>, schema: &Schema, ctx: &mut TxContext) {
+    // We need this wrapper because (1) we need &mut outlaw.id from an entry function, which is not possible until
+    // Dynamic Batch Transactions are available, and (2) the metadata program requires that we, the creator module, sign off
+    // on all changes to metadata.
+    public entry fun overwrite(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
         let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
         metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
     }
@@ -69,7 +71,7 @@ module outlaw_sky::outlaw_sky {
 
     public entry fun edit_name(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
         let keys = vector[ascii::string(b"name")];
-        let data = bcs::to_bytes(&new_name);
+        let data = vector[bcs::to_bytes(&new_name)];
         let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
         metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
     }

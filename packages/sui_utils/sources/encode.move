@@ -123,6 +123,38 @@ module sui_utils::encode {
         }
     }
 
+    // Takes something like `Option<u64>` and returns `u64`. Returns an empty-string if the string supplied 
+    // does not contain `Option<`
+    public fun parse_option(str: String): String {
+        let len = ascii::length(&str);
+        let i = ascii2::index_of(&str, &ascii::string(b"Option"));
+
+        if (i == len) ascii2::empty()
+        else parse_angle_bracket(ascii2::sub_string(&str, i + 6, len))
+    }
+
+    public fun parse_angle_bracket(str: String): String {
+        let (opening_bracket, closing_bracket) = (ascii::char(60u8), ascii::char(62u8));
+        let len = ascii::length(&str);
+        let (start, j, count) = (len, 0, 0);
+        while (j < len) {
+                let char = ascii2::into_char(&str, j);
+
+                if (char == opening_bracket) {
+                    if (count == 0) start = j; // we found the first opening bracket
+                    count = count + 1;
+                } else if (char == closing_bracket) {
+                    if (count == 0 || count == 1) break; // we found the last closing bracket
+                    count = count - 1;
+                };
+
+                j = j + 1;
+            };
+
+        if (j == len || (start + 1) >= j) ascii2::empty()
+        else ascii2::sub_string(&str, start + 1, j)
+    }
+
     // =============== Module Comparison ===============
 
     public fun is_same_module<Type1, Type2>(): bool {
@@ -225,5 +257,21 @@ module sui_utils::encode_test {
         let (type, generic) = encode::type_name_with_generic<SUI>();
         assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == type, 0);
         assert!(ascii2::empty() == generic, 0);
+    }
+
+    #[test]
+    public fun test_parse_option() {
+        let none = ascii::string(b"Does not contain");
+        let value1 = encode::parse_option(none);
+
+        let some = ascii::string(b"Does contain Option<vector<vector<u8>>>");
+        let value2 = encode::parse_option(some);
+
+        let none = ascii::string(b"Failure is not an Option");
+        let value3 = encode::parse_option(none);
+
+        assert!(value1 == ascii2::empty(), 0);
+        assert!(value2 == ascii::string(b"vector<vector<u8>>"), 0);
+        assert!(value3 == ascii2::empty(), 0);
     }
 }

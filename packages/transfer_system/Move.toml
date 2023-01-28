@@ -10,4 +10,4 @@ Ownership = { local = "../ownership" }
 
 [addresses]
 # Testnet 2 Address
-transfer_system = "0x9a0955138b627b7cc3d1bf9f422bba8e074ca79d"
+transfer_system = "0x1a1c467b8c119d3a2196f17c60fa793ffa66c429"
