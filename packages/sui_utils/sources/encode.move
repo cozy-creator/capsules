@@ -123,6 +123,38 @@ module sui_utils::encode {
         }
     }
 
+    // Takes something like `Option<u64>` and returns `u64`. Returns an empty-string if the string supplied 
+    // does not contain `Option<`
+    public fun parse_option(str: String): String {
+        let len = ascii::length(&str);
+        let i = ascii2::index_of(&str, &ascii::string(b"Option"));
+
+        if (i == len) ascii2::empty()
+        else parse_angle_bracket(ascii2::sub_string(&str, i + 6, len))
+    }
+
+    public fun parse_angle_bracket(str: String): String {
+        let (opening_bracket, closing_bracket) = (ascii::char(60u8), ascii::char(62u8));
+        let len = ascii::length(&str);
+        let (start, j, count) = (len, 0, 0);
+        while (j < len) {
+                let char = ascii2::into_char(&str, j);
+
+                if (char == opening_bracket) {
+                    if (count == 0) start = j; // we found the first opening bracket
+                    count = count + 1;
+                } else if (char == closing_bracket) {
+                    if (count == 0 || count == 1) break; // we found the last closing bracket
+                    count = count - 1;
+                };
+
+                j = j + 1;
+            };
+
+        if (j == len || (start + 1) >= j) ascii2::empty()
+        else ascii2::sub_string(&str, start + 1, j)
+    }
+
     // =============== Module Comparison ===============
 
     public fun is_same_module<Type1, Type2>(): bool {

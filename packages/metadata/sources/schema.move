@@ -5,13 +5,14 @@ module metadata::schema {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
+    use sui_utils::encode;
 
     // error constants
     const EMISMATCHED_LENGTHS_OF_INPUTS: u64 = 0;
     const EUNSUPPORTED_TYPE: u64 = 1;
 
     // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
-    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u64", b"u128", b"ascii", b"utf8", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u64>", b"vector<u128>", b"vector<ascii>", b"vector<utf8>", b"VecMap<utf8,utf8>"];
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"string", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<string>", b"VecMap<string,string>"];
 
     // Immutable root-level object
     struct Schema has key {
@@ -20,23 +21,29 @@ module metadata::schema {
     }
 
     struct Item has store, copy, drop {
-        key: ascii::String,
-        type: ascii::String,
+        key: String,
+        type: String,
         optional: bool
     }
 
-    public entry fun define(keys: vector<String>, types: vector<String>, optionals: vector<bool>, ctx: &mut TxContext) {
-        let len = vector::length(&keys);
-        assert!(len == vector::length(&types) && len == vector::length(&optionals), EMISMATCHED_LENGTHS_OF_INPUTS);
+    public entry fun define(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
+        let len = vector::length(&schema_fields);
 
         let (i, schema) = (0, vector::empty<Item>());
         while (i < len) {
-            let key = *vector::borrow(&keys, i);
-            let type = *vector::borrow(&types, i);
-            assert!(vector::contains(&SUPPORTED_TYPES, ascii::as_bytes(&type)), EUNSUPPORTED_TYPE);
-            let optional = *vector::borrow(&optionals, i);
-            let item = Item { key, type, optional };
-            vector::push_back(&mut schema, item);
+            let tuple = vector::borrow(&schema_fields, i);
+            let type_raw = *vector::borrow(tuple, i);
+            let type_parsed = encode::parse_option(type_raw);
+            let (type, optional) = if (ascii::length(&type_parsed) == 0) {
+                (type_raw, false)
+            } else {
+                (type_parsed, true)
+            };
+
+            assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
+
+            let key = *vector::borrow(tuple, i);
+            vector::push_back(&mut schema, Item { key, type, optional });
             i = i + 1;
         };
 
@@ -63,12 +70,12 @@ module metadata::schema {
     }
 
     // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
-    public fun is_compatible(schema1_: &Schema, schema2_: &Schema): bool {
-        let schema1 = into_items(schema1_);
+    public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
+        let items1 = into_items(schema1);
         let i = 0;
-        while (i < vector::length(&schema1)) {
-            let (key, type1, _) = item(vector::borrow(&schema1, i));
-            let (type2_maybe, _) = find_type_for_key(schema2_, key);
+        while (i < vector::length(&items1)) {
+            let (key, type1, _) = item(vector::borrow(&items1, i));
+            let (type2_maybe, _) = find_type_for_key(schema2, key);
             if (option::is_some(&type2_maybe)) {
                 let type2 = option::destroy_some(type2_maybe);
                 if (type1 != type2) return false;
@@ -81,20 +88,29 @@ module metadata::schema {
 
     // ========= Accessor Functions =========
 
-    public fun into_items(schema_: &Schema): vector<Item> {
-        *&schema_.schema
+    public fun into_items(schema: &Schema): vector<Item> {
+        *&schema.schema
     }
 
-    public fun item(item: &Item): (ascii::String, ascii::String, bool) {
-        let Item { key, type, optional } = *item;
-        (key, type, optional)
+    public fun item(item: &Item): (String, String, bool) {
+        (item.key, item.type, item.optional)
     }
 
-    public fun length(schema_: &Schema): u64 {
-        vector::length(&schema_.schema)
+    public fun length(schema: &Schema): u64 {
+        vector::length(&schema.schema)
     }
 
     // ============ Helper Function ============
+
+    public fun is_supported_type(type: String): bool {
+        if (vector::contains(&SUPPORTED_TYPES, &ascii::into_bytes(type))) true
+        else {
+            let option_type = encode::parse_option(type);
+            if (ascii::length(&option_type) == 0) false
+            else if (vector::contains(&SUPPORTED_TYPES, &ascii::into_bytes(option_type))) true
+            else false
+        }
+    }
 
     public fun has_key(schema: &Schema, key: ascii::String): bool {
         let (items, i) = (into_items(schema), 0);
@@ -107,10 +123,10 @@ module metadata::schema {
     }
 
     // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
-    public fun find_type_for_key(schema_: &Schema, key: ascii::String): (Option<ascii::String>, Option<bool>) {
-        let (schema, i) = (&schema_.schema, 0);
-        while (i < vector::length(schema)) {
-            let item = vector::borrow(schema, i);
+    public fun find_type_for_key(schema: &Schema, key: ascii::String): (Option<ascii::String>, Option<bool>) {
+        let (items, i) = (&schema.schema, 0);
+        while (i < vector::length(items)) {
+            let item = vector::borrow(items, i);
             if (item.key == key) {
                 return (option::some(item.type), option::some(item.optional))
             };

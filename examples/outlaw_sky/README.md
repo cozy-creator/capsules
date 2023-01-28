@@ -24,7 +24,7 @@ The first ID is the package-id you just deployed, and the second ID is the packa
 
 Schemas are immutable root-level Sui objects that enforce <key-name, type> pairings, making (de)serialization of on-chain metadata possible. Because schema-objects are immutable, they can never change or be deleted; if you want to change a schema, you'd deploy a new scheam of your own. Normally you'd select some standard schema, such as `0x37cef7c69de4b1cea22f1ef445940432d6968ac6`, but if you want to write and deploy your own custom schema, try the following command:
 
-`sui client call --package 0xc58218250eec94ee3241ac999dd564a6e267f107 --module schema --function define --args "[ \"name\", \"image\", \"power_level\" ]" "[ \"ascii\", \"ascii\", \"u64\" ]" [false,false,false] --gas-budget 1000`
+`sui client call --package 0xc58218250eec94ee3241ac999dd564a6e267f107 --module schema --function define --args "[ \"name\", \"description\", \"image\", \"power_level\" ]" "[ \"ascii\", \"Option<ascii>\", \"ascii\", \"u64\" ]" [false,true,false,false] --gas-budget 1000`
 
 This defines 3 keys (fields); `name`, `image`, and `power level`, which are two ascii-strings followed by a u64. They are not optional fields (meaning they're required).
 

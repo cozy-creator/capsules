@@ -67,11 +67,19 @@ async function readAll() {
   });
 
   let data = parseViewResults(result);
+  console.log(data);
   let outlaw = bcs.de('Outlaw', new Uint8Array(data)) as Outlaw;
 }
-// readAll();
+readAll();
 
 async function readSubset() {}
+
+async function readLocal() {
+  let bytes = new Uint8Array(kyrieBytes);
+  let kyrie = bcs.de('Outlaw', bytes);
+  console.log(kyrie);
+}
+// readLocal();
 
 async function updateAll() {}
 
@@ -94,3 +102,7 @@ async function updateSubset() {
   });
 }
 // updateSubset()
+
+async function deleteSubset() {}
+
+async function deleteAll() {}
