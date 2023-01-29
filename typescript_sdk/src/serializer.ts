@@ -20,7 +20,7 @@ let bcsConfig: BcsConfig = {
   withPrimitives: true,
 };
 
-let bcs = new BCS(bcsConfig);
+export let bcs = new BCS(bcsConfig);
 
 bcs.registerType(
   "ascii",

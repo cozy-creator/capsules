@@ -68,9 +68,9 @@ export class Validator {
     return object(dynamicStruct);
   }
 
-  public check() {
+  public check(data: object) {
     const validator = this.structValidator(); 
-    assert(this.schema, validator);
+    assert(data, validator);
   }
 
 }
