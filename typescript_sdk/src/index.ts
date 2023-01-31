@@ -1,6 +1,8 @@
 import { assert } from 'superstruct';
-import { moveStructValidator, serialize, JSTypes } from './configure_struct';
+import { moveStructValidator, serialize, deserialize, JSTypes } from './configure_struct';
 import { parseViewResults } from './response_parser';
+import { bcs } from './configure_bcs';
+import { signer, provider, OUTLAW_SKY_PACKAGE_ID, SCHEMA_ID} from './config';
 
 // ====== Define Move Schema, JSType, and StructValidator ======
 
@@ -11,7 +13,7 @@ const outlawSchema = {
   power_level: 'u64'
 } as const;
 
-let outlawValidator = moveStructValidator(outlawSchema);
+const outlawValidator = moveStructValidator(outlawSchema);
 
 type Outlaw = JSTypes<typeof outlawSchema>;
 
@@ -27,21 +29,24 @@ const kyrie: Outlaw = {
 assert(kyrie, outlawValidator);
 
 // ====== Interact with the Sui Network ======
+const kyrieBytes = serialize(bcs, kyrie, outlawSchema);
+console.log("Serialize", kyrieBytes)
 
-import { bcs, signer, provider } from './configure_bcs';
+const kyrieBytesPartial = serialize(bcs, kyrie, outlawSchema, ["name", "image"]);
+console.log("Partial Serialize", kyrieBytesPartial)
 
-const OUTLAW_SKY_PACKAGE_ID = '0x8af0cbf8380f7738907ef9aee9aab4e34c3d0716';
-const SCHEMA_ID = '0x37cef7c69de4b1cea22f1ef445940432d6968ac6';
+// @ts-ignore
+const deKyrie = deserialize(bcs, kyrieBytes, outlawSchema)
+console.log("Deserialize", deKyrie);
 
-// How do we know that our JS Schema here == the Move Schema on-chain?
-// We can enter an ObjectID, and assume that its contents == our JS Schema here
+// @ts-ignore
+const deKyriePartial = deserialize(bcs, kyrieBytesPartial, outlawSchema, ["name", "image"])
+console.log("Partial deserialize", deKyriePartial);
 
-bcs.registerStructType('Outlaw', outlawSchema);
 
-async function create() {
-  // TO DO: change this from vector<u8> to vector<vector<u8>>
-  let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
+async function create(data: Outlaw) {
 
+  const kyrieBytes = serialize(bcs, data, outlawSchema);
   const moveCallTxn = await signer.executeMoveCall({
     packageObjectId: OUTLAW_SKY_PACKAGE_ID,
     module: 'outlaw_sky',
@@ -50,8 +55,8 @@ async function create() {
     arguments: [SCHEMA_ID, kyrieBytes],
     gasBudget: 15000
   });
+  console.log(moveCallTxn)
 }
-// create();
 
 async function readAll() {
   let result = await provider.devInspectMoveCall('0xed2c39b73e055240323cf806a7d8fe46ced1cabb', {
@@ -71,16 +76,16 @@ async function readAll() {
   let outlaw = bcs.de('Outlaw', new Uint8Array(data)) as Outlaw;
   console.log(outlaw);
 }
-readAll();
+// readAll();
 
 async function readSubset() {
   const keysToRead = [];
 }
 
 async function readLocal() {
-  let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
+  // let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
 
-  let bytes = new Uint8Array(kyrieBytes);
+  let bytes = new Uint8Array([]);
   let kyrieDeserialized = bcs.de('Outlaw', bytes);
   console.log(kyrieDeserialized);
 }
@@ -88,13 +93,7 @@ async function readLocal() {
 
 async function updateAll() {}
 
-async function updateSubset() {
-  // How do we serialize just a subset of keys, rather than the entire object?
-  const keysToUpdate = ['name', 'description'];
-  let kyrieBytes = serialize(bcs, 'Outlaw', kyrie);
-
-  let objectID = '0xc6c3028a0df2eb49af8cf766971c9b2cf5a8d0c2';
-  let schemaID = '0x37cef7c69de4b1cea22f1ef445940432d6968ac6';
+async function updateSubset(objectID: string, keysToUpdate: string[], data: Outlaw) {
 
   const moveCallTxn = await signer.executeMoveCall({
     packageObjectId: OUTLAW_SKY_PACKAGE_ID,
@@ -102,6 +101,7 @@ async function updateSubset() {
     function: 'overwrite',
     typeArguments: [],
     // outlaw id, keys, data bytes, schema
+    //@ts-ignore
     arguments: [objectID, keysToUpdate, kyrieBytes, SCHEMA_ID],
     gasBudget: 15000
   });
@@ -111,3 +111,11 @@ async function updateSubset() {
 async function deleteSubset() {}
 
 async function deleteAll() {}
+
+
+
+// create(kyrie);
+// const keysToUpdate = ['name', 'description'];
+// const objectID = '0xc6c3028a0df2eb49af8cf766971c9b2cf5a8d0c2';  
+
+// updateSubset(objectID, keysToUpdate, kyrie)

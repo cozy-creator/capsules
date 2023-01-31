@@ -1,4 +1,4 @@
-import { BCS } from '@mysten/bcs';
+import { BCS } from "@mysten/bcs";
 import {
   object,
   integer,
@@ -9,8 +9,8 @@ import {
   array,
   union,
   any,
-  Struct
-} from 'superstruct';
+  Struct,
+} from "superstruct";
 
 export type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
   -readonly [K in keyof T]: MoveToJSTypes[T[K]];
@@ -28,8 +28,8 @@ export type MoveToJSTypes = {
   u256: bigint;
   ascii: string;
   utf8: string;
-  'vector<u8>': number[];
-  'Option<ascii>': { none: null } | { some: string };
+  "vector<u8>": number[];
+  "Option<ascii>": { none: null } | { some: string };
 };
 
 export const MoveToStruct: Record<string, any> = {
@@ -44,8 +44,8 @@ export const MoveToStruct: Record<string, any> = {
   u256: bigint(),
   ascii: string(),
   utf8: string(),
-  'vector<u8>': array(integer()),
-  'Option<ascii>': union([object({ none: any() }), object({ some: string() })])
+  "vector<u8>": array(integer()),
+  "Option<ascii>": union([object({ none: any() }), object({ some: string() })]),
 };
 
 // ====== Helper Functions ======
@@ -55,13 +55,54 @@ export function moveStructValidator(
 ): Struct<{ [x: string]: any }, Record<string, any>> {
   const dynamicStruct: Record<string, any> = {};
 
-  Object.keys(schema).map(key => {
+  Object.keys(schema).map((key) => {
     dynamicStruct[key] = MoveToStruct[schema[key]];
   });
 
   return object(dynamicStruct);
 }
 
-export function serialize<T>(bcs: BCS, structName: string, data: T): number[] {
-  return Array.from(bcs.ser(structName, data).toBytes());
+function ser<T>(bcs: BCS, value: any, key: string): number[] {
+  return Array.from(bcs.ser(key, value).toBytes());
+}
+
+
+export function serialize<T>(
+  bcs: BCS,
+  data: any,
+  schema: Record<string, string>,
+  onlyKeys?: string[]
+): number[][] {
+  const serializedData: number[][] = [];
+  if (!onlyKeys) {
+    for (const [key, keyType] of Object.entries(schema)) {
+      const bytesArray = ser(bcs, data[key], keyType);
+      serializedData.push(bytesArray);
+    }
+  } else {
+    onlyKeys.forEach((key) => {
+      const bytesArray = ser(bcs, data[key], schema[key]);
+      serializedData.push(bytesArray);
+    });
+  }
+  return serializedData;
+}
+
+
+export function deserialize<T>(
+  bcs: BCS,
+  bytesArray: Uint8Array[],
+  schema: Record<string, string>,
+  keys?:string[]
+): Record<string, string> | null{
+  let deserializedData: Record<string, string> = {};
+  if (keys && bytesArray.length !== keys?.length){
+    throw Error("Number of keys to deserialize must be equal to bytesArray length.")
+  }
+  const iterable = keys || Object.keys(schema); 
+  iterable.forEach((key, index) => {
+    const data = bcs.de(schema[key], new Uint8Array(bytesArray[index]));
+    deserializedData[key] = data;
+  });
+  return deserializedData;
 }

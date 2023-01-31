@@ -1,21 +1,6 @@
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 import { BCS, BcsConfig } from '@mysten/bcs';
 
-// public key (hex): 0xed2c39b73e055240323cf806a7d8fe46ced1cabb
-// private key (base64): hDZ6+qWBigkbi40a+4Rpxd4NY9Y6+ZEiv0XO6OjQfzy9iW+TkgOZx2RKQIORP4bbY1XrG8Egc+Yo2Q74TNRYUw==
-const privateKeyBytes = new Uint8Array([
-  132, 54, 122, 250, 165, 129, 138, 9, 27, 139, 141, 26, 251, 132, 105, 197, 222, 13, 99, 214, 58,
-  249, 145, 34, 191, 69, 206, 232, 232, 208, 127, 60, 189, 137, 111, 147, 146, 3, 153, 199, 100, 74,
-  64, 131, 145, 63, 134, 219, 99, 85, 235, 27, 193, 32, 115, 230, 40, 217, 14, 248, 76, 212, 88, 83
-]);
-
-// Build a class to connect to Sui RPC servers
-const provider = new JsonRpcProvider('https://fullnode.testnet.sui.io:443');
-
-// Import the above keypair
-let keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-const signer = new RawSigner(keypair, provider);
-
 // ===== First we instantiate bcs, and define Option enums =====
 
 let bcsConfig: BcsConfig = {
@@ -79,4 +64,4 @@ bcs.registerType(
   value => typeof value == 'string'
 );
 
-export { bcs, provider, signer };
+export { bcs };
