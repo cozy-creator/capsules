@@ -4,7 +4,7 @@
   "author": "Paul Fidika <paul@fidika.com>",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ./src/index.ts"
+    "start": "ts-node ./examples/outlaw_sky.ts"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@mysten/bcs": "^0.5.0",
-    "@mysten/sui.js": "^0.24.0",
+    "@mysten/sui.js": "^0.25.0",
     "superstruct": "^1.0.3"
   }
 }

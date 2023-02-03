@@ -66,7 +66,7 @@ module metadata::metadata {
         dynamic_field::add(uid, SchemaID { }, object::id(schema));
     }
 
-    // If `overwrite` == true, then values or overwritten. Otherwise they are filled-in, in the sense that
+    // If `overwrite` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
     // data will only be written if (1) it is missing, or (2) if the existing data is of the wrong type.
     // This is strict on keys, in the sense that if you specify keys that do not exist on the schema, this
     // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
@@ -444,7 +444,7 @@ module metadata::metadata {
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, strings);
         }
-        else if (type == b"VecMap<string,string>") {
+        else if (type == b"vecmap<string,string>") {
             let vec_map = deserialize::vec_map_string_string(value);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_map);
@@ -503,7 +503,7 @@ module metadata::metadata {
         else if (type == b"vector<string>") {
             dynamic_field2::drop<Key, vector<String>>(uid, key);
         }
-        else if (type == b"VecMap<string,string>") {
+        else if (type == b"vecmap<string,string>") {
             dynamic_field2::drop<Key, VecMap<String, String>>(uid, key);
         }
         else {
@@ -511,6 +511,7 @@ module metadata::metadata {
         }
     }
 
+    // If we get dynamic_field::get_bcs_bytes we can simplify this down into 2 or 3 lines
     public fun get_bcs_bytes(uid: &UID, key: Key, type_string: ascii::String): vector<u8> {
         if (!dynamic_field::exists_(uid, key)) return vector[0u8]; // empty option byte
         let type = ascii::into_bytes(type_string);
@@ -579,7 +580,7 @@ module metadata::metadata {
             let vec = dynamic_field::borrow<Key, vector<ascii::String>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"VecMap<utf8,utf8>") {
+        else if (type == b"vecmap<utf8,utf8>") {
             let vec_map = dynamic_field::borrow<Key, VecMap<String, String>>(uid, key);
             bcs::to_bytes(vec_map)
         }
