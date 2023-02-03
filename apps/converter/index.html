@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<script src="./dist/bundle.js"></script>
+<head>
+  <title>Serializer</title>
+  <style>
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    textarea {
+      width: 500px;
+      height: 200px;
+      font-size: 1.2em;
+      padding: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      width: 200px;
+      height: 50px;
+      font-size: 1.2em;
+      background-color: #0070f3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Serialize Text Input</h1>
+    <textarea id="input"></textarea>
+    <button id="serialize-btn">Serialize</button>
+    <h1>Output</h1>
+    <textarea id="output" readonly></textarea>
+  </div>
+  <script>
+    const input = document.getElementById("input");
+    const output = document.getElementById("output");
+    const serializeBtn = document.getElementById("serialize-btn");
+
+    serializeBtn.addEventListener("click", function () {
+      const inputValue = input.value;
+      const outputValue = serializeText(inputValue);
+      output.value = outputValue;
+    });
+  </script>
+</body>
+</html>
