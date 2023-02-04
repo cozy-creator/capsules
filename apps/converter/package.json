@@ -1,19 +1,21 @@
 {
-  "name": "converter",
+  "name": "y",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Converter app from string of [ kyrie:string, 34:uint8 ] to vec<vev<uint8>> bytes",
+  "main": "webpack.config.js",
   "scripts": {
+    "build": "webpack",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@capsulecraft/serializer": "^0.1.0",
+  "author": "george.st",
+  "license": "MIT",
+  "devDependencies": {
     "ts-loader": "^9.4.2",
     "typescript": "^4.9.5",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.1"
+  },
+  "dependencies": {
+    "@capsulecraft/serializer": "^0.1.4"
   }
 }

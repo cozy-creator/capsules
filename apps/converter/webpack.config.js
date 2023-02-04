@@ -1,8 +1,10 @@
+const { dirname } = require("path");
 const path = require("path");
+const webpack = require('webpack');
 
 module.exports = {
   entry: "./src/index.ts",
-  mode: "development",
+  mode: "production",
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "bundle.js",
@@ -16,6 +18,7 @@ module.exports = {
         test: /\.ts$/,
         use: "ts-loader",
         exclude: /node_modules/,
+        include: [path.resolve(__dirname, "src")]
       },
     ],
   },

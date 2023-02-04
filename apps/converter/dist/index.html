@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<script src="./dist/bundle.js"></script>
+<!-- <script src="bundle.js"></script> -->
 <head>
   <title>Serializer</title>
   <style>
@@ -10,7 +10,7 @@
       align-items: center;
     }
     textarea {
-      width: 500px;
+      width: 70%;
       height: 200px;
       font-size: 1.2em;
       padding: 10px;
@@ -37,16 +37,6 @@
     <h1>Output</h1>
     <textarea id="output" readonly></textarea>
   </div>
-  <script>
-    const input = document.getElementById("input");
-    const output = document.getElementById("output");
-    const serializeBtn = document.getElementById("serialize-btn");
-
-    serializeBtn.addEventListener("click", function () {
-      const inputValue = input.value;
-      const outputValue = serializeText(inputValue);
-      output.value = outputValue;
-    });
-  </script>
+  <script src="bundle.js"></script>
 </body>
 </html>
