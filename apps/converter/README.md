@@ -4,7 +4,7 @@
 
 ```
 npm install 
-cd dist
+npm run build
 npx serve
 ```
 
