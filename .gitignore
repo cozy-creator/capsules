@@ -4,3 +4,4 @@ sui.log**
 *.bpl
 **/build
 **/node_modules
+*.npmignore
