@@ -1,11 +1,11 @@
 import {serializeBcs, bcs } from "@capsulecraft/serializer";
 
+
 const input = <HTMLInputElement>document.getElementById("input");
 const output = <HTMLOutputElement>document.getElementById("output");
 const serializeBtn = document.getElementById("serialize-btn");
 
 serializeBtn.addEventListener("click", function () {
-  console.log("asdfafsdf");
   const inputValue = input.value;
   const outputValue = serializeText(inputValue);
   output.value = JSON.stringify(outputValue);
@@ -25,7 +25,9 @@ function serializeText(text: string): number[][]{
       type = type.trim()
       const parsedData = JSON.parse(data);
       console.log(parsedData, type);
-      const bytesArray = serializeBcs(bcs, type, parsedData)
+      let bytesArray = serializeBcs(bcs, type, parsedData)
+      let {value, length}  = ulebDecode(bytesArray)
+      console.log("ULEB:", value,"LEN", length)
       serializedData.push(bytesArray);
     })
     console.log(serializedData);
@@ -33,3 +35,26 @@ function serializeText(text: string): number[][]{
     return serializedData
 }
 
+function ulebDecode(arr: number[] | Uint8Array): {
+  value: number;
+  length: number;
+} {
+  let total = 0;
+  let shift = 0;
+  let len = 0;
+
+  while (true) {
+    let byte = arr[len];
+    len += 1;
+    total |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) {
+      break;
+    }
+    shift += 7;
+  }
+
+  return {
+    value: total,
+    length: len,
+  };
+}
