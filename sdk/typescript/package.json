@@ -1,15 +1,20 @@
 {
   "name": "@capsulecraft/serializer",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "author": "Paul Fidika <paul@fidika.com>",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ./examples/outlaw_sky.ts"
+    "test": "echo \"error: no test specified\" && exit 1",
+    "start": "ts-node ./examples/outlaw_sky.ts",
+    "build": "tsc"
   },
+  "files": [
+    "/dist"
+  ],
   "devDependencies": {
     "@types/node": "^18.11.18",
     "ts-node": "^10.9.1",
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.5"
   },
   "dependencies": {
     "@mysten/bcs": "^0.5.0",
@@ -17,7 +22,8 @@
     "superstruct": "^1.0.3"
   },
   "description": "## Intro A small typescript sdk consisting of (de)serializing funtions. The purpose of this tool is to prepare argument data to invoke Move functions on the Sui blockchain.",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "directories": {
     "example": "examples"
   },
