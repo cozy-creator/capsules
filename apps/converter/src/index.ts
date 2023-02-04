@@ -26,8 +26,11 @@ function serializeText(text: string): number[][]{
       const parsedData = JSON.parse(data);
       console.log(parsedData, type);
       let bytesArray = serializeBcs(bcs, type, parsedData)
-      let {value, length}  = ulebDecode(bytesArray)
-      console.log("ULEB:", value,"LEN", length)
+      if (type.includes("string") || type.includes("vector")) {
+        let {value, length}  = ulebDecode(bytesArray)  
+        console.log("ULEB:", value,"LEN", length)
+        bytesArray = bytesArray.slice(length, bytesArray.length)
+      }
       serializedData.push(bytesArray);
     })
     console.log(serializedData);
