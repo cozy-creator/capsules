@@ -6,17 +6,16 @@ import {
   serializeByField,
   parseViewResults,
   bcs
-} from '../src';
+} from '../../../../sdk/typescript/src';
 import { objectID, packageID, provider, publicKey, schemaID, signer } from './config';
-import { UnserializedSignableTransaction } from '@mysten/sui.js';
 
-// Define a schema (don't forget to add `as const`)
+// Step 1: Define your schema
 const outlawSchema = {
   name: 'string',
   description: 'Option<string>',
   image: 'string',
   power_level: 'u64'
-} as const;
+} as const; // Ensure the schema fields cannot be modified
 
 // Create the schema validator
 const outlawValidator = moveStructValidator(outlawSchema);
@@ -45,7 +44,6 @@ async function create(data: Outlaw) {
     module: 'outlaw_sky',
     function: 'create',
     typeArguments: [],
-    // @ts-ignore
     arguments: [schemaID, byteArray],
     gasBudget: 12000
   });
@@ -82,7 +80,6 @@ async function update(objectID: string, keysToUpdate: string[], data: Outlaw) {
     module: 'outlaw_sky',
     function: 'overwrite',
     typeArguments: [],
-    // @ts-ignore
     arguments: [objectID, keysToUpdate, byteArray, schemaID],
     gasBudget: 12000
   });

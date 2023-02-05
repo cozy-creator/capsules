@@ -9,5 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-# Testnet 2 Address
-metadata =  "0x62e1355a57ff4f07434166e519e5e71e13e9d999"
+metadata =  "0xa7b5d34fd01c30201076521b6feb2b4b5e0c7532"

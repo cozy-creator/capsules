@@ -72,6 +72,8 @@ module metadata::schema {
 
     // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
     public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
+        if (schema1 == schema2) return true;
+
         let items1 = into_items(schema1);
         let i = 0;
         while (i < vector::length(&items1)) {

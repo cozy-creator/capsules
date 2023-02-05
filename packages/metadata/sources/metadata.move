@@ -99,7 +99,7 @@ module metadata::metadata {
         };
     }
 
-    // Useful if you want to borrow_mut but want to avoid an abort in case the value doesn't exist
+    // Useful if you want to borrow / borrow_mut but want to avoid an abort in case the value doesn't exist
     public fun exists_(uid: &UID, key: ascii::String): bool {
         dynamic_field::exists_(uid, Key { slot: key } )
     }

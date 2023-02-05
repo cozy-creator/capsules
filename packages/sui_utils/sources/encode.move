@@ -7,6 +7,13 @@
 // This does not include the 0x i the package-id
 // A 'module address' is just <package_id>::<module_name>
 
+// StructTag {
+//     address: SUI_FRAMEWORK_ADDRESS,
+//     module: OBJECT_MODULE_NAME.to_owned(),
+//     name: UID_STRUCT_NAME.to_owned(),
+//     type_params: Vec::new(),
+// }
+
 module sui_utils::encode {
     use std::ascii::{Self, String};
     use std::option::{Self, Option};
@@ -82,7 +89,7 @@ module sui_utils::encode {
     // or my_module::CoolStruct
     public fun module_and_struct_names<T>(): String {
         let bytes_full = ascii::into_bytes(type_name<T>());
-        vector2::slice_mut(&mut bytes_full, 0, SUI_ADDRESS_LENGTH * 2 + 2);
+        vector2::slice_mut(&mut bytes_full, 0, SUI_ADDRESS_LENGTH + 2);
         ascii::string(bytes_full)
     }
 
@@ -99,7 +106,7 @@ module sui_utils::encode {
         module_addr
     }
 
-    public fun binding_type<T>(): Option<String> {
+    public fun type_of_generic<T>(): Option<String> {
         let s1 = type_name<T>();
 
         let i = ascii2::index_of(&s1, &ascii::string(b"<"));

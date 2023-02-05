@@ -1,6 +1,6 @@
 [package]
 name = "OutlawSky"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
@@ -11,5 +11,4 @@ TransferSystem = { local = "../../../packages/transfer_system" }
 Ownership = { local = "../../../packages/ownership" }
 
 [addresses]
-# Testnet Address
-outlaw_sky = "0xad10acb641b8d2581f105c4e6dad061470518468"
+outlaw_sky = "0x311fba79f29e8ce8c5fb755a00e322aa813e456a"

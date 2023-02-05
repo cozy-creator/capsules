@@ -9,5 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-# Testnet 2 Address
-transfer_system = "0x1a1c467b8c119d3a2196f17c60fa793ffa66c429"
+transfer_system = "0x084cd440d41916251f9dceab0861a929a9601e49"

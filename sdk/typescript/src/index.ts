@@ -239,7 +239,7 @@ function serializeByField<T>(
       serializedData.push(bytesArray);
     });
   }
-  console.log(serializedData);
+
   return serializedData;
 }
 
