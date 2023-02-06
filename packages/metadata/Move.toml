@@ -1,6 +1,6 @@
 [package]
 name = "SuiMetadata"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
@@ -9,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-metadata =  "0xa7b5d34fd01c30201076521b6feb2b4b5e0c7532"
+metadata =  "0xd6314e8ae2a9b6564a053c6757a56a987e4263b4"

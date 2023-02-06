@@ -231,6 +231,7 @@ module sui_utils::deserialize {
         result
     }
 
+    // Turns [ 2, 0, 0, 3, 0, 0, 0 ] into [ [ 0, 0 ], [ 0, 0, 0 ] ]
     public fun vec_vec_u8(bytes: vector<u8>): vector<vector<u8>> {
         let (i, result) = (0, vector::empty<vector<u8>>());
         while (true) {
@@ -244,6 +245,7 @@ module sui_utils::deserialize {
         result
     }
 
+    // Turns [ 2, 72, 105, 3, 89, 111, 117 ] into [ Hi, You ]
     public fun vec_string(bytes: vector<u8>): vector<String> {
         let string_bytes = vec_vec_u8(bytes);
 
@@ -257,6 +259,7 @@ module sui_utils::deserialize {
         result
     }
 
+    // Turns [ 3, 75, 101, 121, 5, 86, 97, 108, 117, 101 ] into VecMap { contents: [ Entry { k: Key, v: Value } ] }
     public fun vec_map_string_string(bytes: vector<u8>): VecMap<String,String> {
         let strings = vec_string(bytes);
         let (i, len) = (0, vector::length(&strings));

@@ -1,3 +1,4 @@
+import { MoveCallTransaction, UnserializedSignableTransaction } from '@mysten/sui.js';
 import { assert } from 'superstruct';
 import {
   deserializeBcs,
@@ -11,10 +12,11 @@ import { objectID, packageID, provider, publicKey, schemaID, signer } from './co
 
 // Step 1: Define your schema
 const outlawSchema = {
-  name: 'string',
-  description: 'Option<string>',
-  image: 'string',
-  power_level: 'u64'
+  name: 'String',
+  description: 'Option<String>',
+  image: 'String',
+  power_level: 'u64',
+  attributes: 'VecMap<String,String>'
 } as const; // Ensure the schema fields cannot be modified
 
 // Create the schema validator
@@ -28,7 +30,8 @@ const kyrie: Outlaw = {
   name: 'Kyrie',
   description: { none: null },
   image: 'https://pbs.twimg.com/profile_images/1569727324081328128/7sUnJvRg_400x400.jpg',
-  power_level: 199n
+  power_level: 199n,
+  attributes: { Background: 'White', Face: 'Wholesome' }
 };
 
 // Validate on runtime that your object complies with the schema
@@ -52,18 +55,50 @@ async function create(data: Outlaw) {
 
 // Read from the sui blockchain
 async function read(objectID: string, dataType: string): Promise<Record<string, string>> {
-  const result = await provider.devInspectTransaction(publicKey, {
+  // const result = await provider.devInspectTransaction(publicKey, {
+  //   kind: 'moveCall',
+  //   data: {
+  //     packageObjectId: packageID,
+  //     module: 'outlaw_sky',
+  //     function: 'view_all',
+  //     typeArguments: [],
+  //     arguments: [objectID, schemaID]
+  //   } as MoveCallTransaction
+  // } as UnserializedSignableTransaction);
+
+  const signableTxn = {
     kind: 'moveCall',
     data: {
-      packageObjectId: packageID,
+      packageObjectId: '0x34cf4b9fb4a5dce02a7ca003f2cc619dd0c9c54e',
       module: 'outlaw_sky',
-      function: 'view',
+      function: 'view_all',
       typeArguments: [],
-      arguments: [objectID, schemaID]
-    }
-  });
+      arguments: [
+        '0x20def772eba38237b331faa2870113f05abbed42',
+        '0x6bd0af67e5634dca308f4674b9e770bb2b1f0bc6'
+      ]
+    } as MoveCallTransaction
+  } as UnserializedSignableTransaction;
 
-  console.log(result);
+  let result = await provider.devInspectTransaction(publicKey, signableTxn);
+
+  // This doesn't work yet, but eventually we'll want to use it instead.
+  //
+  // const result = await provider.devInspectTransaction(publicKey, {
+  //   kind: 'moveCall',
+  //   data: {
+  //     packageObjectId: '0xa7b5d34fd01c30201076521b6feb2b4b5e0c7532',
+  //     module: 'metadata',
+  //     function: 'view_all',
+  //     typeArguments: [],
+  //     arguments: [
+  //       '0x3fcd6d18b440acc67d2a40afc40357b29681fb51',
+  //       '0x6bd0af67e5634dca308f4674b9e770bb2b1f0bc6'
+  //     ]
+  //   }
+  // });
+
+  console.log('response is: ', result);
   const data = parseViewResults(result);
   const outlaw = deserializeBcs(bcs, dataType, data);
   return outlaw;
@@ -93,16 +128,20 @@ async function deleteAll() {}
 
 async function fullCycle() {}
 
-create(kyrie).then(r => {
-  console.log('Create function result:', r);
-});
+// create(kyrie).then(r => {
+//   console.log('Create function result:', r);
+// });
 
-read(objectID, 'Outlaw').then(r => {
-  console.log('Read function result:', r);
-});
+console.log('trying...');
 
-kyrie.name = 'newKyrie';
-kyrie.power_level = 50n;
-update(objectID, ['name', 'power_level'], kyrie).then(r => {
-  console.log('Update function result:', r);
-});
+read(objectID, 'Outlaw');
+
+// read(objectID, 'Outlaw').then(r => {
+//   console.log('Read function result:', r);
+// });
+
+// kyrie.name = 'newKyrie';
+// kyrie.power_level = 50n;
+// update(objectID, ['name', 'power_level'], kyrie).then(r => {
+//   console.log('Update function result:', r);
+// });

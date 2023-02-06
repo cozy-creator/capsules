@@ -16,6 +16,6 @@ const keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
 export const signer = new RawSigner(keypair, provider);
 
 export const publicKey = '0xed2c39b73e055240323cf806a7d8fe46ced1cabb';
-export const packageID = '0xad10acb641b8d2581f105c4e6dad061470518468';
-export const schemaID = '0x54acc3f4e76cfd3316899f5782acf10b967b730d';
-export const objectID = '0x899fb0358b6b85114a6258743d0605eb0fc2c4b2';
+export const packageID = '0x34cf4b9fb4a5dce02a7ca003f2cc619dd0c9c54e';
+export const schemaID = '0x6bd0af67e5634dca308f4674b9e770bb2b1f0bc6';
+export const objectID = '0x20def772eba38237b331faa2870113f05abbed42';

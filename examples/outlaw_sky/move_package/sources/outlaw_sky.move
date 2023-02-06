@@ -1,6 +1,5 @@
 module outlaw_sky::outlaw_sky {
     use std::ascii::{Self, String};
-    use sui::bcs;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -28,26 +27,39 @@ module outlaw_sky::outlaw_sky {
         // 
     }
 
-    public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun create(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
         let outlaw = Outlaw { id: object::new(ctx) };
         let owner = tx_context::sender(ctx);
-        let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         let proof = ownership::setup(&outlaw);
 
         ownership::initialize(&mut outlaw.id, proof, &auth);
-        metadata::define(&mut outlaw.id, schema, data, &auth);
+        metadata::create(&mut outlaw.id, data, schema, &auth);
         ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut outlaw.id, owner, &auth);
         transfer::share_object(outlaw);
     }
 
-    public fun load_dispenser() { }
+    // This function is needed until we can use UID's directly in devInspect transactions
+    public fun view_all(outlaw: &Outlaw, schema: &Schema): vector<u8> {
+        metadata::view_all(&outlaw.id, schema)
+    }
 
     // We need this wrapper because (1) we need &mut outlaw.id from an entry function, which is not possible until
-    // Dynamic Batch Transactions are available, and (2) the metadata program requires that we, the creator module, sign off
+    // Programmable Transactions are available, and (2) the metadata program requires that we, the creator module, sign off
     // on all changes to metadata.
-    public entry fun overwrite(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
-        let auth = tx_authority::add_capability_type(&Witness {}, &tx_authority::begin(ctx));
-        metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
+    public entry fun update(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
+    }
+
+    // We cannot delete shared objects yet, like the Outlaw itself, but we _can_ delete metadata
+    public entry fun delete_all(outlaw: &mut Outlaw, schema: &Schema, ctx: &mut TxContext) {
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        metadata::delete_all(&mut outlaw.id, schema, &auth);
+    }
+
+    public fun load_dispenser() { 
+        // TO DO
     }
 
     // Public extend
@@ -64,10 +76,18 @@ module outlaw_sky::outlaw_sky {
 
     // ====== User Functions ====== 
 
-    public entry fun edit_name(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
+    // This is a sample of how a user-facing function would work
+    public entry fun rename(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
         let keys = vector[ascii::string(b"name")];
-        let data = vector[bcs::to_bytes(&new_name)];
-        let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
-        metadata::overwrite(&mut outlaw.id, keys, data, schema, true, &auth);
+        let data = vector[ascii::into_bytes(new_name)];
+        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+
+        metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
     }
+
+    public entry fun add_attribute() {}
+
+    public entry fun remove_attribute() {}
+
+    public entry fun increment_power_level() {}
 }

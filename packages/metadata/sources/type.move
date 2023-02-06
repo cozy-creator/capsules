@@ -43,18 +43,18 @@ module metadata::type {
 
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
-        schema: &Schema,
         data: vector<vector<u8>>,
+        schema: &Schema,
         ctx: &mut TxContext
     ) {
-        let type = define_<T>(publisher, schema, data, ctx);
+        let type = define_<T>(publisher, data, schema, ctx);
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
     public fun define_<T>(
         publisher: &mut PublishReceipt,
-        schema: &Schema,
         data: vector<vector<u8>>,
+        schema: &Schema,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -69,7 +69,7 @@ module metadata::type {
         let auth = tx_authority::begin_with_type(&Witness { });
         let proof = ownership::setup(&type);
         ownership::initialize_without_module_authority(&mut type.id, proof, &auth);
-        metadata::define(&mut type.id, schema, data, &tx_authority::empty());
+        metadata::create(&mut type.id, data, schema, &tx_authority::empty());
 
         type
     }
@@ -81,16 +81,16 @@ module metadata::type {
     // Otherwise without these, the app-developer could deploy their own custom module that calls into type::extend to get `&mut UID`
     // and then uses it in metadata::whatever(). (Sui doesn't support Diem-style scripts either.)
 
-    public entry fun overwrite<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, overwrite_existing: bool) {
-        metadata::overwrite(&mut type.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
+    public entry fun update<T>(type: &mut Type<T>, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, overwrite_existing: bool) {
+        metadata::update(&mut type.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
-    public entry fun remove_optional<T>(type: &mut Type<T>, keys: vector<ascii::String>, schema: &Schema) {
-        metadata::remove_optional(&mut type.id, keys, schema, &tx_authority::empty());
+    public entry fun delete_optional<T>(type: &mut Type<T>, keys: vector<ascii::String>, schema: &Schema) {
+        metadata::delete_optional(&mut type.id, keys, schema, &tx_authority::empty());
     }
 
-    public entry fun remove_all<T>(type: &mut Type<T>, schema: &Schema) {
-        metadata::remove_all(&mut type.id, schema, &tx_authority::empty());
+    public entry fun delete_all<T>(type: &mut Type<T>, schema: &Schema) {
+        metadata::delete_all(&mut type.id, schema, &tx_authority::empty());
     }
 
     public entry fun migrate<T>(
@@ -159,7 +159,7 @@ module metadata::type_tests {
     public fun test_define_type() {
         let sender = @0x123;
 
-        let schema_fields = vector[ vector[ ascii::string(b"name"), ascii::string(b"string")], vector[ ascii::string(b"description"), ascii::string(b"Option<string>")], vector[ ascii::string(b"image"), ascii::string(b"string")], vector[ ascii::string(b"power_level"), ascii::string(b"u64")]];
+        let schema_fields = vector[ vector[ ascii::string(b"name"), ascii::string(b"string")], vector[ ascii::string(b"description"), ascii::string(b"Option<String>")], vector[ ascii::string(b"image"), ascii::string(b"String")], vector[ ascii::string(b"power_level"), ascii::string(b"u64")]];
 
         let data = vector[ vector[79, 117, 116, 108, 97, 119], vector[84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67], vector[104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103], vector[199, 0, 0, 0, 0, 0, 0, 0] ];
 
@@ -167,7 +167,7 @@ module metadata::type_tests {
         let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
-            schema::define(schema_fields, ctx);
+            schema::create(schema_fields, ctx);
         };
 
         test_scenario::next_tx(scenario, sender);

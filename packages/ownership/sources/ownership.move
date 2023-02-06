@@ -27,8 +27,7 @@ module ownership::ownership {
     // initialized
     struct Type has store, copy, drop { } // ascii::string
 
-    // Has in the setup -> initialize handoff process
-    // It's pretty stupid that we even need to do this, but unfortunately
+    // Simple struct used in the initialize process. Wish we didn't have to use this, but
     // `initialize(&mut object.id, &object)` gives the error `Invalid borrow of variable, it is still
     // being mutably borrowed by another reference`. Hence why we have to break the type verification
     // setup into two function calls
@@ -37,14 +36,14 @@ module ownership::ownership {
         type: String
     }
 
-    // ======= Module Authority =======
-
     public fun setup<T: key>(obj: &T): ProofOfType {
         ProofOfType {
             id: object::id(obj),
             type: encode::type_name<T>()
         }
     }
+
+    // ======= Module Authority =======
 
     // Convenience function
     public fun initialize(uid: &mut UID, proof: ProofOfType, auth: &TxAuthority) {

@@ -162,6 +162,14 @@ module sui_utils::encode {
         else ascii2::sub_string(&str, start + 1, j)
     }
 
+    public fun is_vector(str: String): bool {
+        if (ascii::length(&str) < 6) false
+        else {
+            if (ascii2::sub_string(&str, 0, 6) == ascii::string(b"vector")) true
+            else false
+        }
+    }
+
     // =============== Module Comparison ===============
 
     public fun is_same_module<Type1, Type2>(): bool {
