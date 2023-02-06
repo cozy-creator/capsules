@@ -1,6 +1,7 @@
 import { BCS, BcsConfig, EnumTypeDefinition, BcsWriter, BcsReader } from '@mysten/bcs';
 import { DevInspectResults } from '@mysten/sui.js';
 import {
+  is,
   object,
   integer,
   bigint,
@@ -15,30 +16,47 @@ import {
 
 // ===== Instantiate bcs, and define Option enums =====
 
-let supportedTypes = ['address', 'bool', 'id', 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'String'];
+let supportedTypes = [
+  'address',
+  'bool',
+  'id',
+  'u8',
+  'u16',
+  'u32',
+  'u64',
+  'u128',
+  'u256',
+  'String',
+  'vector<u8>',
+  'VecMap<String,String>'
+];
 let enums: { [key: string]: EnumTypeDefinition } = {};
 
-supportedTypes.map(typeName => {
+type SupportedType =
+  | Uint8Array
+  | boolean
+  | number
+  | bigint
+  | string
+  | number[]
+  | Record<string, string>
+  | { none: null }
+  | { some: string };
+
+supportedTypes.forEach(typeName => {
   enums[`Option<${typeName}>`] = {
     none: null,
     some: typeName
   };
+
+  // Option<vector<VecMap<String,String>>> is not supported
+  if (typeName == 'VecMap<String,String>') return;
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
     some: `vector<${typeName}>`
   };
 });
-
-enums['Option<vector<vector<u8>>>'] = {
-  none: null,
-  some: 'vector<vector<u8>>'
-};
-
-enums['Option<VecMap<String,String>>'] = {
-  none: null,
-  some: 'VecMap<String,String>'
-};
 
 let bcsConfig: BcsConfig = {
   vectorType: 'vector',
@@ -50,7 +68,7 @@ let bcsConfig: BcsConfig = {
 
 let bcs = new BCS(bcsConfig);
 
-// ===== Register ascii and utf8 as custom primitive types =====
+// ===== Register String and VecMap<String,String> primitive types =====
 
 bcs.registerType(
   'String',
@@ -63,7 +81,45 @@ bcs.registerType(
     let bytes = reader.readBytes(reader.readULEB());
     return new TextDecoder('utf8').decode(bytes);
   },
-  value => typeof value == 'string'
+  value => is(value, MoveToStruct['String'])
+);
+
+// bcs.registerStructType('VecMap<String,String>', {
+//   contents: 'vector<Entry<String,String>>'
+// });
+
+// bcs.registerStructType('Entry<String,String>', {
+//   k: 'String',
+//   v: 'String'
+// });
+
+bcs.registerType(
+  'VecMap',
+  (writer, data: Record<string, string>) => {
+    writer.writeULEB(Object.entries(data).length);
+    let strings = Object.entries(data).flat();
+
+    let byteArray = strings.map(string => {
+      return new TextEncoder().encode(string);
+    });
+
+    byteArray.forEach(bytes => {
+      writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    });
+    return writer;
+  },
+  reader => {
+    let data: Record<string, string> = {};
+
+    reader.readVec(reader => {
+      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      data[key] = value;
+    });
+
+    return data;
+  },
+  value => is(value, MoveToStruct['VecMap<String,String>'])
 );
 
 type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
@@ -117,19 +173,6 @@ type MoveToJSTypes = {
   'Option<VecMap<String,String>>': { none: null } | { some: Record<string, string> };
 };
 
-type GenericType = Record<
-  string,
-  | Uint8Array
-  | boolean
-  | number
-  | bigint
-  | string
-  | number[]
-  | Record<string, string>
-  | { none: null }
-  | { some: string }
->;
-
 const MoveToStruct: Record<string, Struct<any, any>> = {
   address: array(integer()),
   bool: boolean(),
@@ -175,12 +218,8 @@ function moveStructValidator(
   return object(dynamicStruct);
 }
 
-function ser<T>(bcs: BCS, value: any, key: string): number[] {
-  return Array.from(bcs.ser(key, value).toBytes());
-}
-
-function serializeBcs(bcs: BCS, dataType: string, data: Record<string, string>): number[] {
-  return ser(bcs, data, dataType);
+function serializeBcs(bcs: BCS, dataType: string, data: SupportedType): number[] {
+  return Array.from(bcs.ser(dataType, data).toBytes());
 }
 
 function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Record<string, string> {
@@ -196,21 +235,21 @@ function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Reco
  * @param {string[]} [onlyKeys] - an optional list of keys to be serialized.
  * @returns {number[][]} - an array of arrays of bytes representing the serialized data.
  */
-function serializeByField<T>(
+function serializeByField(
   bcs: BCS,
-  data: GenericType,
+  data: Record<string, SupportedType>,
   schema: Record<string, string>,
   onlyKeys?: string[]
 ): number[][] {
   const serializedData: number[][] = [];
   if (!onlyKeys) {
     for (const [key, keyType] of Object.entries(schema)) {
-      const bytesArray = ser(bcs, data[key], keyType);
+      const bytesArray = serializeBcs(bcs, keyType, data[key]);
       serializedData.push(bytesArray);
     }
   } else {
     onlyKeys.forEach(key => {
-      const bytesArray = ser(bcs, data[key], schema[key]);
+      const bytesArray = serializeBcs(bcs, schema[key], data[key]);
       serializedData.push(bytesArray);
     });
   }

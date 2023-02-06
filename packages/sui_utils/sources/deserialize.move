@@ -231,7 +231,7 @@ module sui_utils::deserialize {
         result
     }
 
-    // Turns [ 2, 0, 0, 3, 0, 0, 0 ] into [ [ 0, 0 ], [ 0, 0, 0 ] ]
+    // Turns [ 2, 2, 0, 0, 3, 0, 0, 0 ] into [ [ 0, 0 ], [ 0, 0, 0 ] ]
     public fun vec_vec_u8(bytes: vector<u8>): vector<vector<u8>> {
         let (i, result) = (0, vector::empty<vector<u8>>());
         while (true) {
@@ -245,7 +245,7 @@ module sui_utils::deserialize {
         result
     }
 
-    // Turns [ 2, 72, 105, 3, 89, 111, 117 ] into [ Hi, You ]
+    // Turns [ 2, 2, 72, 105, 3, 89, 111, 117 ] into [ Hi, You ]
     public fun vec_string(bytes: vector<u8>): vector<String> {
         let string_bytes = vec_vec_u8(bytes);
 
@@ -259,7 +259,7 @@ module sui_utils::deserialize {
         result
     }
 
-    // Turns [ 3, 75, 101, 121, 5, 86, 97, 108, 117, 101 ] into VecMap { contents: [ Entry { k: Key, v: Value } ] }
+    // Turns [ 2, 3, 75, 101, 121, 5, 86, 97, 108, 117, 101 ] into VecMap { contents: [ Entry { k: Key, v: Value } ] }
     public fun vec_map_string_string(bytes: vector<u8>): VecMap<String,String> {
         let strings = vec_string(bytes);
         let (i, len) = (0, vector::length(&strings));
@@ -279,8 +279,11 @@ module sui_utils::deserialize {
 
 #[test_only]
 module sui_utils::test_deserialize {
+    use std::ascii;
     use std::string::{Self, String};
     use std::vector;
+    use sui::bcs;
+    use sui::vec_map;
     use sui_utils::bcs2;
     use sui_utils::deserialize;
 
@@ -310,6 +313,31 @@ module sui_utils::test_deserialize {
         while (i < vector::length(&test_strings)) {
             assert!(*vector::borrow(&decoded_strings, i) == *vector::borrow(&test_strings, i), 0);
             // debug::print(vector::borrow(&decoded_strings, i));
+            i = i + 1;
+        };
+    }
+
+    #[test]
+    public fun bcs_encoding() {
+        let test_strings = vector[ascii::string(b"hello"), ascii::string(b"world")];
+
+        let bytes = bcs::to_bytes(&test_strings);
+
+        let i = 0;
+        while (i < vector::length(&bytes)) {
+            // debug::print(vector::borrow(&bytes, i));
+            i = i + 1;
+        };
+
+        let vec = vec_map::empty();
+        vec_map::insert(&mut vec, ascii::string(b"key1"), ascii::string(b"hello"));
+        vec_map::insert(&mut vec, ascii::string(b"key2"), ascii::string(b"world"));
+
+        let bytes = bcs::to_bytes(&vec);
+
+        let i = 0;
+        while (i < vector::length(&bytes)) {
+            // debug::print(vector::borrow(&bytes, i));
             i = i + 1;
         };
     }

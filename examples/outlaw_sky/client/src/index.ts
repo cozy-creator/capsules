@@ -134,7 +134,7 @@ async function fullCycle() {}
 
 console.log('trying...');
 
-read(objectID, 'Outlaw');
+// read(objectID, 'Outlaw');
 
 // read(objectID, 'Outlaw').then(r => {
 //   console.log('Read function result:', r);
