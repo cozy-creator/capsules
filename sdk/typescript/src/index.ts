@@ -218,13 +218,13 @@ function moveStructValidator(
   return object(dynamicStruct);
 }
 
-function serializeBcs(bcs: BCS, dataType: string, data: SupportedType): number[] {
-  return Array.from(bcs.ser(dataType, data).toBytes());
-}
+// function serializeBcs(bcs: BCS, dataType: string, data: SupportedType): number[] {
+//   return Array.from(bcs.ser(dataType, data).toBytes());
+// }
 
-function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Record<string, string> {
-  return bcs.de(dataType, byteArray);
-}
+// function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Record<string, string> {
+//   return bcs.de(dataType, byteArray);
+// }
 
 /**
  * Serializes data into an array of arrays of bytes using the provided BCS, schema, and optionally a list of onlyKeys.
@@ -240,16 +240,16 @@ function serializeByField(
   data: Record<string, SupportedType>,
   schema: Record<string, string>,
   onlyKeys?: string[]
-): number[][] {
-  const serializedData: number[][] = [];
+): Uint8Array[] {
+  const serializedData: Uint8Array[] = [];
   if (!onlyKeys) {
     for (const [key, keyType] of Object.entries(schema)) {
-      const bytesArray = serializeBcs(bcs, keyType, data[key]);
+      const bytesArray = bcs.ser(keyType, data[key]).toBytes();
       serializedData.push(bytesArray);
     }
   } else {
     onlyKeys.forEach(key => {
-      const bytesArray = serializeBcs(bcs, schema[key], data[key]);
+      const bytesArray = bcs.ser(schema[key], data[key]).toBytes();
       serializedData.push(bytesArray);
     });
   }
@@ -301,8 +301,8 @@ export {
   bcs,
   serializeByField,
   deserializeByField,
-  serializeBcs,
-  deserializeBcs,
+  // serializeBcs,
+  // deserializeBcs,
   parseViewResults,
   moveStructValidator
 };

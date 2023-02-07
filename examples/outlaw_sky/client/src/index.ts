@@ -1,10 +1,10 @@
 import { MoveCallTransaction, UnserializedSignableTransaction } from '@mysten/sui.js';
 import { assert } from 'superstruct';
 import {
-  deserializeBcs,
   JSTypes,
   moveStructValidator,
   serializeByField,
+  deserializeByField,
   parseViewResults,
   bcs
 } from '../../../../sdk/typescript/src';
@@ -47,6 +47,7 @@ async function create(data: Outlaw) {
     module: 'outlaw_sky',
     function: 'create',
     typeArguments: [],
+    /// @ts-ignore
     arguments: [schemaID, byteArray],
     gasBudget: 12000
   });
@@ -100,7 +101,7 @@ async function read(objectID: string, dataType: string): Promise<Record<string, 
 
   console.log('response is: ', result);
   const data = parseViewResults(result);
-  const outlaw = deserializeBcs(bcs, dataType, data);
+  const outlaw = bcs.de(dataType, data);
   return outlaw;
 }
 
@@ -115,6 +116,7 @@ async function update(objectID: string, keysToUpdate: string[], data: Outlaw) {
     module: 'outlaw_sky',
     function: 'overwrite',
     typeArguments: [],
+    /// @ts-ignore
     arguments: [objectID, keysToUpdate, byteArray, schemaID],
     gasBudget: 12000
   });

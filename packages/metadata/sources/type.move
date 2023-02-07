@@ -159,9 +159,9 @@ module metadata::type_tests {
     public fun test_define_type() {
         let sender = @0x123;
 
-        let schema_fields = vector[ vector[ ascii::string(b"name"), ascii::string(b"string")], vector[ ascii::string(b"description"), ascii::string(b"Option<String>")], vector[ ascii::string(b"image"), ascii::string(b"String")], vector[ ascii::string(b"power_level"), ascii::string(b"u64")]];
+        let schema_fields = vector[ vector[ ascii::string(b"name"), ascii::string(b"String")], vector[ ascii::string(b"description"), ascii::string(b"Option<String>")], vector[ ascii::string(b"image"), ascii::string(b"String")], vector[ ascii::string(b"power_level"), ascii::string(b"u64")]];
 
-        let data = vector[ vector[79, 117, 116, 108, 97, 119], vector[84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67], vector[104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103], vector[199, 0, 0, 0, 0, 0, 0, 0] ];
+        let data = vector[ vector[6, 79, 117, 116, 108, 97, 119], vector[35, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67], vector[34, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103], vector[199, 0, 0, 0, 0, 0, 0, 0] ];
 
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
@@ -176,7 +176,7 @@ module metadata::type_tests {
             let ctx = test_scenario::ctx(scenario);
             let publisher = publish_receipt::test_claim(&TEST_OTW {}, ctx);
 
-            type::define<TestType>(&mut publisher, &schema, data, ctx);
+            type::define<TestType>(&mut publisher, data, &schema, ctx);
 
             test_scenario::return_immutable(schema);
             transfer::transfer(publisher, tx_context::sender(ctx));
