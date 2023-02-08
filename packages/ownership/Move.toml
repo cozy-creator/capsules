@@ -8,5 +8,4 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 SuiUtils = { local = "../sui_utils" }
 
 [addresses]
-# Testnet Address
-ownership = "0x255b95c6d04aeb60250e01fa13c9a71ddaaf9f47"
+ownership = "0xe125bb854aee683bbb1b6d44dcfa1215c87fa723"

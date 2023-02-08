@@ -25,12 +25,10 @@ module metadata::publish_receipt {
     public fun claim<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): PublishReceipt {
         assert!(is_one_time_witness(genesis), EBAD_WITNESS);
 
-        let publisher = PublishReceipt {
+        PublishReceipt {
             id: object::new(ctx),
             package: encode::package_id<GENESIS>()
-        };
-
-        publisher
+        }
     }
 
     public fun into_package_id(publisher: &PublishReceipt): ID {
@@ -43,5 +41,13 @@ module metadata::publish_receipt {
 
     public fun extend(publisher: &mut PublishReceipt): &mut UID {
         &mut publisher.id
+    }
+
+    #[test_only]
+    public fun test_claim<GENESIS: drop>(_: &GENESIS, ctx: &mut TxContext): PublishReceipt {
+        PublishReceipt {
+            id: object::new(ctx),
+            package: encode::package_id<GENESIS>()
+        }
     }
 }

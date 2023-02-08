@@ -12,7 +12,7 @@ module metadata::schema {
     const EUNSUPPORTED_TYPE: u64 = 1;
 
     // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
-    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"string", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<string>", b"VecMap<string,string>", b"vector<vector<u8>>"];
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"VecMap<String,String>", b"vector<vector<u8>>"];
 
     // Immutable root-level object
     struct Schema has key {
@@ -27,7 +27,7 @@ module metadata::schema {
     }
 
     // Schema is defined like [ [name, type], [name, type], ... ]
-    public entry fun define(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
+    public entry fun create(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
         let len = vector::length(&schema_fields);
 
         let (i, schema) = (0, vector::empty<Item>());
@@ -72,6 +72,8 @@ module metadata::schema {
 
     // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
     public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
+        if (schema1 == schema2) return true;
+
         let items1 = into_items(schema1);
         let i = 0;
         while (i < vector::length(&items1)) {
@@ -99,6 +101,17 @@ module metadata::schema {
 
     public fun length(schema: &Schema): u64 {
         vector::length(&schema.schema)
+    }
+
+    public fun into_keys(schema: &Schema): vector<String> {
+        let (items, i, keys) = (into_items(schema), 0, vector::empty<String>());
+        while (i < vector::length(&items)) {
+            let (key, _, _) = item(vector::borrow(&items, i));
+            vector::push_back(&mut keys, key);
+            i = i + 1;
+        };
+
+        keys
     }
 
     // ============ Helper Function ============

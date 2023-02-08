@@ -120,16 +120,14 @@ module sui_utils::bcs2 {
         uleb
     }
 
-    // This read the first bytes of `data` assuming it is serialized ULEB128 bytes
-    // ULEB128 bytes are prepended to vectors by BCS to indicate the length of the vector
-    // This also returns the length of the prefix bytes itself (1 - 5 bytes) so that the prefix
-    // can be skipped over
+    // Reads the ULEB128 length from the byte-array at the specified index, returns the number along with the index where it
+    // left off
     public fun uleb128_length(data: &vector<u8>, start: u64): (u64, u64) {
         let (total, shift, len) = (0u64, 0, 0);
         while (true) {
             assert!(len <= 4, ENO_ULEB_LENGTH_FOUND);
 
-            let byte = (*vector::borrow(data, len + start) as u64);
+            let byte = (*vector::borrow(data, start + len) as u64);
             total = total | ((byte & 0x7f) << shift);
 
             if ((byte & 0x80) == 0) {
@@ -140,7 +138,7 @@ module sui_utils::bcs2 {
             len = len + 1;
         };
 
-        (total, len + 1)
+        (total, start + len + 1)
     }
 }
 
@@ -151,7 +149,7 @@ module sui_utils::bcs2_tests {
 
     #[test]
     public fun test_uleb128() {
-        let test_numbers = vector[0, 17, 128, 240, 256, 900, 17001, 614599, 1270999];
+        let test_numbers = vector[77, 0, 17, 128, 240, 256, 900, 17001, 614599, 1270999];
         let i = 0;
         while (i < vector::length(&test_numbers)) {
             let x = *vector::borrow(&test_numbers, i);

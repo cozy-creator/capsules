@@ -42,14 +42,14 @@ module ownership::tx_authority {
 
     // ========= Add Authorities =========
 
-    public fun add_capability_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
+    public fun add_id_capability<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { addresses: *&auth.addresses };
         add_internal(object::id_address(cap), &mut new_auth);
 
         new_auth
     }
 
-    public fun add_capability_type<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
+    public fun add_type_capability<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { addresses: *&auth.addresses };
         add_internal(type_into_address<T>(), &mut new_auth);
 
@@ -154,7 +154,7 @@ module ownership::tx_authority_test {
         let ctx = test_scenario::ctx(&mut scenario);
         {
             let auth = tx_authority::begin(ctx);
-            tx_authority::add_capability_type(&Witness {}, &auth);
+            tx_authority::add_type_capability(&Witness {}, &auth);
         };
         test_scenario::end(scenario);
     }
