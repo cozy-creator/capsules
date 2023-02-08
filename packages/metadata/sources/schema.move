@@ -103,6 +103,17 @@ module metadata::schema {
         vector::length(&schema.schema)
     }
 
+    public fun into_keys(schema: &Schema): vector<String> {
+        let (items, i, keys) = (into_items(schema), 0, vector::empty<String>());
+        while (i < vector::length(&items)) {
+            let (key, _, _) = item(vector::borrow(&items, i));
+            vector::push_back(&mut keys, key);
+            i = i + 1;
+        };
+
+        keys
+    }
+
     // ============ Helper Function ============
 
     public fun is_supported_type(type: String): bool {

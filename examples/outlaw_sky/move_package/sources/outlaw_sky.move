@@ -1,8 +1,10 @@
 module outlaw_sky::outlaw_sky {
-    use std::ascii::{Self, String};
+    use std::ascii::{Self};
+    use std::string::String;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
+    use sui::vec_map::{Self, VecMap};
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
     use metadata::metadata;
@@ -18,13 +20,9 @@ module outlaw_sky::outlaw_sky {
     struct Witness has drop { }
 
     struct Outlaw has key, store {
-        id: UID,
-        // <metadata> -> image
-        // name -> owner can change arbitrarily using a custom-API
-        //    (module_authority: witness)
-        // level -> owner consent not needed, module can alter it arbitrarily
-        //    (module_authority: object-ID, object-Type, shared-admin-list + address)
-        // 
+        id: UID
+        // Ownership fields
+        // Metadata fields
     }
 
     public entry fun create(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
@@ -34,7 +32,7 @@ module outlaw_sky::outlaw_sky {
         let proof = ownership::setup(&outlaw);
 
         ownership::initialize(&mut outlaw.id, proof, &auth);
-        metadata::create(&mut outlaw.id, data, schema, &auth);
+        metadata::attach(&mut outlaw.id, data, schema, &auth);
         ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut outlaw.id, owner, &auth);
         transfer::share_object(outlaw);
     }
@@ -75,9 +73,12 @@ module outlaw_sky::outlaw_sky {
     }
 
     // ====== User Functions ====== 
+    // Note that these functions assume that the metadata schema used includes the specified strings, of the specified types
+    // These assumptions are hardcoded here
 
     // This is a sample of how a user-facing function would work
-    public entry fun rename(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
+    // This is an overwrite-update, which means that the entire metadata field is replaced
+    public entry fun rename(outlaw: &mut Outlaw, new_name: ascii::String, schema: &Schema, ctx: &TxContext) {
         let keys = vector[ascii::string(b"name")];
         let data = vector[ascii::into_bytes(new_name)];
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
@@ -85,9 +86,25 @@ module outlaw_sky::outlaw_sky {
         metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
     }
 
-    public entry fun add_attribute() {}
+    // This is a sample of how atomic updates work, versus overwrite-updates
+    public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
+        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+        let attributes = metadata::borrow_mut<VecMap<String,String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        vec_map::insert(attributes, key, value);
+    }
 
-    public entry fun remove_attribute() {}
+    public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
+        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+        let attributes = metadata::borrow_mut<VecMap<String,String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        vec_map::remove(attributes, &key);
+    }
 
-    public entry fun increment_power_level() {}
+    public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {
+        let slot = ascii::string(b"power_level");
+        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+
+        let power_level = metadata::borrow_mut<u64>(&mut outlaw.id, slot, &auth);
+
+        *power_level = *power_level + 1;
+    }
 }

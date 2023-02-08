@@ -149,7 +149,7 @@ module sui_utils::bcs2_tests {
 
     #[test]
     public fun test_uleb128() {
-        let test_numbers = vector[0, 17, 128, 240, 256, 900, 17001, 614599, 1270999];
+        let test_numbers = vector[77, 0, 17, 128, 240, 256, 900, 17001, 614599, 1270999];
         let i = 0;
         while (i < vector::length(&test_numbers)) {
             let x = *vector::borrow(&test_numbers, i);

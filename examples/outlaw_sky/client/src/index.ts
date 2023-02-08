@@ -8,7 +8,14 @@ import {
   parseViewResults,
   bcs
 } from '../../../../sdk/typescript/src';
-import { objectID, packageID, provider, publicKey, schemaID, signer } from './config';
+import {
+  outlawObjectID,
+  outlawSkyPackageID,
+  provider,
+  publicKey,
+  schemaObjectID,
+  signer
+} from './config';
 
 // Step 1: Define your schema
 const outlawSchema = {
@@ -43,27 +50,27 @@ bcs.registerStructType('Outlaw', outlawSchema);
 async function create(data: Outlaw) {
   const byteArray = serializeByField(bcs, data, outlawSchema);
   const moveCallTxn = await signer.executeMoveCall({
-    packageObjectId: packageID,
+    packageObjectId: outlawSkyPackageID,
     module: 'outlaw_sky',
     function: 'create',
     typeArguments: [],
     /// @ts-ignore
-    arguments: [schemaID, byteArray],
+    arguments: [schemaObjectID, byteArray],
     gasBudget: 12000
   });
   return moveCallTxn;
 }
 
 // Read from the sui blockchain
-async function read(objectID: string, dataType: string): Promise<Record<string, string>> {
+async function read(outlawObjectID: string, dataType: string): Promise<Record<string, string>> {
   // const result = await provider.devInspectTransaction(publicKey, {
   //   kind: 'moveCall',
   //   data: {
-  //     packageObjectId: packageID,
+  //     packageObjectId: outlawSkyPackageID,
   //     module: 'outlaw_sky',
   //     function: 'view_all',
   //     typeArguments: [],
-  //     arguments: [objectID, schemaID]
+  //     arguments: [outlawObjectID, schemaObjectID]
   //   } as MoveCallTransaction
   // } as UnserializedSignableTransaction);
 
@@ -109,15 +116,15 @@ async function readSubset() {
   const keysToRead = [];
 }
 
-async function update(objectID: string, keysToUpdate: string[], data: Outlaw) {
+async function update(outlawObjectID: string, keysToUpdate: string[], data: Outlaw) {
   const byteArray = serializeByField(bcs, data, outlawSchema, keysToUpdate);
   const moveCallTxn = await signer.executeMoveCall({
-    packageObjectId: packageID,
+    packageObjectId: outlawSkyPackageID,
     module: 'outlaw_sky',
     function: 'overwrite',
     typeArguments: [],
     /// @ts-ignore
-    arguments: [objectID, keysToUpdate, byteArray, schemaID],
+    arguments: [outlawObjectID, keysToUpdate, byteArray, schemaObjectID],
     gasBudget: 12000
   });
 }
@@ -136,14 +143,14 @@ async function fullCycle() {}
 
 console.log('trying...');
 
-// read(objectID, 'Outlaw');
+// read(outlawObjectID, 'Outlaw');
 
-// read(objectID, 'Outlaw').then(r => {
+// read(outlawObjectID, 'Outlaw').then(r => {
 //   console.log('Read function result:', r);
 // });
 
 // kyrie.name = 'newKyrie';
 // kyrie.power_level = 50n;
-// update(objectID, ['name', 'power_level'], kyrie).then(r => {
+// update(outlawObjectID, ['name', 'power_level'], kyrie).then(r => {
 //   console.log('Update function result:', r);
 // });

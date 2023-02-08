@@ -28,7 +28,7 @@ let supportedTypes = [
   'u256',
   'String',
   'vector<u8>',
-  'VecMap<String,String>'
+  'VecMap'
 ];
 let enums: { [key: string]: EnumTypeDefinition } = {};
 
@@ -50,7 +50,7 @@ supportedTypes.forEach(typeName => {
   };
 
   // Option<vector<VecMap<String,String>>> is not supported
-  if (typeName == 'VecMap<String,String>') return;
+  if (typeName == 'VecMap') return;
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
