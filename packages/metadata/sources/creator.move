@@ -1,4 +1,4 @@
-module metadata::creator {
+module metadata::package {
     use std::ascii::{Self, String};
 
     use sui::tx_context::TxContext;
@@ -18,7 +18,7 @@ module metadata::creator {
     const EBAD_WITNESS: u64 = 0;
     const ECREATOR_ALREADY_DEFINED: u64 = 1;
 
-    struct Creator has key, store {
+    struct Package has key, store {
         id: UID,
         name: String,
         logo: String,
@@ -34,15 +34,15 @@ module metadata::creator {
         assert!(is_one_time_witness(witness), EBAD_WITNESS);
 
         let (name, description, logo, website_url) = (ascii::string(_name), ascii::string(_description), ascii::string(_logo), ascii::string(_website_url));
-        let creator = define_(receipt, name, description, logo, website_url, ctx);
+        let package = define_(receipt, name, description, logo, website_url, ctx);
 
-        setup_ownership<W>(witness, &mut creator, ctx);
+        setup_ownership_and_capability<W>(witness, &mut package, ctx);
 
-        transfer::share_object(creator);
+        transfer::share_object(package);
     }
 
-    fun define_(receipt: &mut PublishReceipt, name: String, description: String, logo: String, website_url: String, ctx: &mut TxContext): Creator {
-        let creator = Creator { 
+    fun define_(receipt: &mut PublishReceipt, name: String, description: String, logo: String, website_url: String, ctx: &mut TxContext): Package {
+        let package = Package { 
             id: object::new(ctx),
             name,
             logo, 
@@ -60,13 +60,13 @@ module metadata::creator {
         assert!(!dynamic_field::exists_(receipt_uid, key), ECREATOR_ALREADY_DEFINED);
         dynamic_field::add(receipt_uid, key, true);
 
-        creator
+        package
     }
 
-    fun setup_ownership<W: drop>(witness: &W, creator: &mut Creator, ctx: &mut TxContext) {
-        let proof = ownership::setup(creator);
+    fun setup_ownership_and_capability<W: drop>(witness: &W, package: &mut Package, ctx: &mut TxContext) {
+        let proof = ownership::setup(package);
         let auth = tx_authority::add_capability_type<W>(witness, &tx_authority::begin(ctx));
 
-        ownership::initialize(&mut creator.id, proof, &auth);
+        ownership::initialize(&mut package.id, proof, &auth);
     }
 }
