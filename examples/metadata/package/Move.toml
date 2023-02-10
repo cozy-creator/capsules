@@ -1,0 +1,16 @@
+[package]
+name = "Power"
+version = "0.1.0"
+authors = []
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../../../packages/sui_utils" }
+SuiMetadata = { local = "../../../packages/metadata" }
+Ownership = { local = "../../../packages/ownership" }
+
+[addresses]
+power = "0x0"
+metadata = "0x0"
+sui_utils = "0x0"
+ownership = "0x0"
