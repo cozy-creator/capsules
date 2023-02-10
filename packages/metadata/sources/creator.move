@@ -5,6 +5,7 @@ module metadata::creator {
     use sui::object::{Self, UID};
     use sui::dynamic_field;
     use sui::transfer;
+    use sui::types::is_one_time_witness;
 
     use metadata::publish_receipt::{Self, PublishReceipt};
     
@@ -29,13 +30,13 @@ module metadata::creator {
         slot: String
     }
 
-    struct Witness has drop { }
+    public fun define<W: drop>(witness: &W, receipt: &mut PublishReceipt, _name: vector<u8>, _description: vector<u8>,  _logo: vector<u8>, _website_url: vector<u8>, ctx: &mut TxContext) {
+        assert!(is_one_time_witness(witness), EBAD_WITNESS);
 
-    public fun define(receipt: &mut PublishReceipt, _name: vector<u8>, _description: vector<u8>,  _logo: vector<u8>, _website_url: vector<u8>, ctx: &mut TxContext) {
         let (name, description, logo, website_url) = (ascii::string(_name), ascii::string(_description), ascii::string(_logo), ascii::string(_website_url));
         let creator = define_(receipt, name, description, logo, website_url, ctx);
 
-        setup_ownership(&mut creator, ctx);
+        setup_ownership<W>(witness, &mut creator, ctx);
 
         transfer::share_object(creator);
     }
@@ -62,9 +63,9 @@ module metadata::creator {
         creator
     }
 
-    fun setup_ownership(creator: &mut Creator, ctx: &mut TxContext) {
+    fun setup_ownership<W: drop>(witness: &W, creator: &mut Creator, ctx: &mut TxContext) {
         let proof = ownership::setup(creator);
-        let auth = tx_authority::begin(ctx);
+        let auth = tx_authority::add_capability_type<W>(witness, &tx_authority::begin(ctx));
 
         ownership::initialize(&mut creator.id, proof, &auth);
     }
