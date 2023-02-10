@@ -50,17 +50,21 @@ module metadata::creator {
             website_url
         };
 
-        let id_address = object::id_to_address(&publish_receipt::into_creator_id(receipt));
-        let key = Key { 
-            slot: ascii2::addr_into_string(&id_address) 
-        };
-
+        let key = get_key(receipt);
         let receipt_uid = publish_receipt::extend(receipt);
 
         assert!(!dynamic_field::exists_(receipt_uid, key), ECREATOR_ALREADY_DEFINED);
         dynamic_field::add(receipt_uid, key, true);
 
         creator
+    }
+
+    fun get_key(receipt: &PublishReceipt): Key {
+        let id_address = object::id_to_address(&publish_receipt::into_package_id(receipt));
+
+        Key { 
+            slot: ascii2::addr_into_string(&id_address) 
+        }
     }
 
     fun setup_ownership_and_capability<W: drop>(witness: &W, creator: &mut Creator, ctx: &mut TxContext) {
