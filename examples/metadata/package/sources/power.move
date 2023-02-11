@@ -19,9 +19,6 @@ module power::power {
     fun init(witness: POWER, ctx: &mut TxContext) {
         let receipt = publish_receipt::claim(&witness, ctx);
 
-        creator::define(&witness, &mut receipt, b"Creator name", b"some desc", b"https://url.com/", b"https://website.com", ctx);
-        // package::define(&witness, &mut receipt, &creator, b"Package name", ctx);
-
         transfer::transfer(receipt, tx_context::sender(ctx));
     }
 }
