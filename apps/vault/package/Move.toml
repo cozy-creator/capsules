@@ -1,0 +1,13 @@
+[package]
+name = "Vault"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../../../packages/sui_utils" }
+SuiMetadata = { local = "../../../packages/metadata" }
+TransferSystem = { local = "../../../packages/transfer_system" }
+Ownership = { local = "../../../packages/ownership" }
+
+[addresses]
+vault =  "0x0"
