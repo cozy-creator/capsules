@@ -32,7 +32,7 @@ module metadata::creator {
         slot: String
     }
 
-    public fun define(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let creator = Creator { 
             id: object::new(ctx),
             packages: vector::empty()
