@@ -7,6 +7,7 @@ authors = ["Paul Fidika (paul@fidika.com)"]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
+TransferSystem = { local = "../transfer_system" }
 
 [addresses]
 # Testnet 2 Address
