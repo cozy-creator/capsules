@@ -3,17 +3,21 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.ts",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "george.st",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.1308.0",
     "commander": "^10.0.0",
-    "fs": "^0.0.1-security"
+    "fs": "^0.0.1-security",
+    "mime": "^3.0.0",
+    "nft.storage": "^7.0.0",
+    "node-fetch": "^3.3.0"
   },
   "devDependencies": {
+    "@types/mime": "^3.0.1",
     "@types/node": "^18.11.18"
   }
 }
