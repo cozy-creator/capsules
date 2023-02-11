@@ -1,125 +1,85 @@
-import { BCS, BcsConfig, EnumTypeDefinition, BcsWriter, BcsReader } from '@mysten/bcs';
-import { DevInspectResults } from '@mysten/sui.js';
 import {
-  is,
+  BCS,
+  BcsConfig,
+  EnumTypeDefinition,
+  BcsWriter,
+  BcsReader,
+} from "@mysten/bcs";
+import { DevInspectResults } from "@mysten/sui.js";
+import {
   object,
   integer,
   bigint,
   string,
   boolean,
-  record,
   array,
   union,
   any,
-  Struct
-} from 'superstruct';
+  Struct,
+} from "superstruct";
 
 // ===== Instantiate bcs, and define Option enums =====
 
 let supportedTypes = [
-  'address',
-  'bool',
-  'id',
-  'u8',
-  'u16',
-  'u32',
-  'u64',
-  'u128',
-  'u256',
-  'String',
-  'vector<u8>',
-  'VecMap'
+  "address",
+  "bool",
+  "id",
+  "u8",
+  "u16",
+  "u32",
+  "u64",
+  "u128",
+  "u256",
+  "string",
 ];
 let enums: { [key: string]: EnumTypeDefinition } = {};
 
-type SupportedType =
-  | Uint8Array
-  | boolean
-  | number
-  | bigint
-  | string
-  | number[]
-  | Record<string, string>
-  | { none: null }
-  | { some: string };
-
-supportedTypes.forEach(typeName => {
+supportedTypes.map((typeName) => {
   enums[`Option<${typeName}>`] = {
     none: null,
-    some: typeName
+    some: typeName,
   };
-
-  // Option<vector<VecMap<String,String>>> is not supported
-  if (typeName == 'VecMap') return;
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
-    some: `vector<${typeName}>`
+    some: `vector<${typeName}>`,
   };
 });
 
+enums["Option<vector<vector<u8>>>"] = {
+  none: null,
+  some: "vector<vector<u8>>",
+};
+
+enums["Option<VecMap<string,string>>"] = {
+  none: null,
+  some: "VecMap<string,string>",
+};
+
 let bcsConfig: BcsConfig = {
-  vectorType: 'vector',
+  vectorType: "vector",
   addressLength: 20,
-  addressEncoding: 'hex',
+  addressEncoding: "hex",
   types: { enums },
-  withPrimitives: true
+  withPrimitives: true,
 };
 
 let bcs = new BCS(bcsConfig);
 
-// ===== Register String and VecMap<String,String> primitive types =====
+// ===== Register ascii and utf8 as custom primitive types =====
 
 bcs.registerType(
-  'String',
-  (writer, data: string) => {
+  "string",
+  (writer: BcsWriter, data: string) => {
     let bytes = new TextEncoder().encode(data);
     writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
     return writer;
   },
   (reader: BcsReader) => {
     let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder('utf8').decode(bytes);
+    return new TextDecoder("utf8").decode(bytes);
   },
-  value => is(value, MoveToStruct['String'])
-);
-
-// bcs.registerStructType('VecMap<String,String>', {
-//   contents: 'vector<Entry<String,String>>'
-// });
-
-// bcs.registerStructType('Entry<String,String>', {
-//   k: 'String',
-//   v: 'String'
-// });
-
-bcs.registerType(
-  'VecMap',
-  (writer, data: Record<string, string>) => {
-    writer.writeULEB(Object.entries(data).length);
-    let strings = Object.entries(data).flat();
-
-    let byteArray = strings.map(string => {
-      return new TextEncoder().encode(string);
-    });
-
-    byteArray.forEach(bytes => {
-      writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-    });
-    return writer;
-  },
-  reader => {
-    let data: Record<string, string> = {};
-
-    reader.readVec(reader => {
-      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      data[key] = value;
-    });
-
-    return data;
-  },
-  value => is(value, MoveToStruct['VecMap<String,String>'])
+  (value) => typeof value == "string"
 );
 
 type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
@@ -136,42 +96,56 @@ type MoveToJSTypes = {
   u64: bigint;
   u128: bigint;
   u256: bigint;
-  String: string;
-  'vector<address>': Uint8Array[];
-  'vector<bool>': boolean[];
-  'vector<id>': Uint8Array[];
-  'vector<u8>': Uint8Array;
-  'vector<u16>': Uint16Array;
-  'vector<u32>': Uint32Array;
-  'vector<u64>': BigUint64Array;
-  'vector<u128>': BigInt[];
-  'vector<u256>': BigInt[];
-  'vector<String>': string[];
-  'vector<vector<u8>>': Uint8Array[];
-  'VecMap<String,String>': Record<string, string>;
-  'Option<address>': { none: null } | { some: Uint8Array };
-  'Option<bool>': { none: null } | { some: boolean };
-  'Option<id>': { none: null } | { some: Uint8Array };
-  'Option<u8>': { none: null } | { some: number };
-  'Option<u16>': { none: null } | { some: number };
-  'Option<u32>': { none: null } | { some: number };
-  'Option<u64>': { none: null } | { some: bigint };
-  'Option<u128>': { none: null } | { some: bigint };
-  'Option<u256>': { none: null } | { some: bigint };
-  'Option<String>': { none: null } | { some: string };
-  'Option<vector<address>>': { none: null } | { some: Uint8Array[] };
-  'Option<vector<bool>>': { none: null } | { some: boolean[] };
-  'Option<vector<id>>': { none: null } | { some: Uint8Array[] };
-  'Option<vector<u8>>': { none: null } | { some: Uint8Array };
-  'Option<vector<u16>>': { none: null } | { some: Uint16Array };
-  'Option<vector<u32>>': { none: null } | { some: Uint32Array };
-  'Option<vector<u64>>': { none: null } | { some: BigUint64Array };
-  'Option<vector<u128>>': { none: null } | { some: BigInt[] };
-  'Option<vector<u256>>': { none: null } | { some: BigInt[] };
-  'Option<vector<String>>': { none: null } | { some: string[] };
-  'Option<vector<vector<u8>>>': { none: null } | { some: Uint8Array[] };
-  'Option<VecMap<String,String>>': { none: null } | { some: Record<string, string> };
+  string: string;
+  "vector<address>": Uint8Array[];
+  "vector<bool>": boolean[];
+  "vector<id>": Uint8Array[];
+  "vector<u8>": Uint8Array;
+  "vector<u16>": Uint16Array;
+  "vector<u32>": Uint32Array;
+  "vector<u64>": BigUint64Array;
+  "vector<u128>": BigInt[];
+  "vector<u256>": BigInt[];
+  "vector<string>": string[];
+  "vector<vector<u8>>": Uint8Array[];
+  "VecMap<string,string>": Record<string, string>;
+  "Option<address>": { none: null } | { some: Uint8Array };
+  "Option<bool>": { none: null } | { some: boolean };
+  "Option<id>": { none: null } | { some: Uint8Array };
+  "Option<u8>": { none: null } | { some: number };
+  "Option<u16>": { none: null } | { some: number };
+  "Option<u32>": { none: null } | { some: number };
+  "Option<u64>": { none: null } | { some: bigint };
+  "Option<u128>": { none: null } | { some: bigint };
+  "Option<u256>": { none: null } | { some: bigint };
+  "Option<string>": { none: null } | { some: string };
+  "Option<vector<address>>": { none: null } | { some: Uint8Array[] };
+  "Option<vector<bool>>": { none: null } | { some: boolean[] };
+  "Option<vector<id>>": { none: null } | { some: Uint8Array[] };
+  "Option<vector<u8>>": { none: null } | { some: Uint8Array };
+  "Option<vector<u16>>": { none: null } | { some: Uint16Array };
+  "Option<vector<u32>>": { none: null } | { some: Uint32Array };
+  "Option<vector<u64>>": { none: null } | { some: BigUint64Array };
+  "Option<vector<u128>>": { none: null } | { some: BigInt[] };
+  "Option<vector<u256>>": { none: null } | { some: BigInt[] };
+  "Option<vector<string>>": { none: null } | { some: string[] };
+  "Option<vector<vector<u8>>>": { none: null } | { some: Uint8Array[] };
+  "Option<VecMap<string,string>>":
+    | { none: null }
+    | { some: Record<string, string> };
 };
+
+type GenericType = Record<
+  string,
+  | Uint8Array
+  | boolean
+  | number
+  | bigint
+  | string
+  | number[]
+  | { none: null }
+  | { some: string }
+>;
 
 const MoveToStruct: Record<string, Struct<any, any>> = {
   address: array(integer()),
@@ -183,20 +157,20 @@ const MoveToStruct: Record<string, Struct<any, any>> = {
   u64: bigint(),
   u128: bigint(),
   u256: bigint(),
-  String: string()
+  string: string(),
 };
 
-Object.keys(MoveToStruct).map(field => {
+Object.keys(MoveToStruct).map((field) => {
   MoveToStruct[`vector<${field}>`] = array(MoveToStruct[field]);
 });
 
-MoveToStruct['vector<vector<u8>>'] = array(array(integer()));
-MoveToStruct['VecMap<String,String>'] = record(string(), string());
+MoveToStruct["vector<vector<u8>>"] = array(array(integer()));
+MoveToStruct["VecMap<string,string>"] = array(array(string()));
 
-Object.keys(MoveToStruct).map(field => {
+Object.keys(MoveToStruct).map((field) => {
   MoveToStruct[`Option<${field}>`] = union([
     object({ none: any() }),
-    object({ some: MoveToStruct[field] })
+    object({ some: MoveToStruct[field] }),
   ]);
 });
 
@@ -211,20 +185,32 @@ function moveStructValidator(
 ): Struct<{ [x: string]: any }, Record<string, any>> {
   const dynamicStruct: Record<string, any> = {};
 
-  Object.keys(schema).map(key => {
+  Object.keys(schema).map((key) => {
     dynamicStruct[key] = MoveToStruct[schema[key]];
   });
 
   return object(dynamicStruct);
 }
 
-// function serializeBcs(bcs: BCS, dataType: string, data: SupportedType): number[] {
-//   return Array.from(bcs.ser(dataType, data).toBytes());
-// }
+function ser<T>(bcs: BCS, value: any, key: string): number[] {
+  return Array.from(bcs.ser(key, value).toBytes());
+}
 
-// function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Record<string, string> {
-//   return bcs.de(dataType, byteArray);
-// }
+function serializeBcs(
+  bcs: BCS,
+  dataType: string,
+  data: Record<string, string>
+): number[] {
+  return ser(bcs, data, dataType);
+}
+
+function deserializeBcs(
+  bcs: BCS,
+  dataType: string,
+  byteArray: Uint8Array
+): Record<string, string> {
+  return bcs.de(dataType, byteArray);
+}
 
 /**
  * Serializes data into an array of arrays of bytes using the provided BCS, schema, and optionally a list of onlyKeys.
@@ -235,25 +221,25 @@ function moveStructValidator(
  * @param {string[]} [onlyKeys] - an optional list of keys to be serialized.
  * @returns {number[][]} - an array of arrays of bytes representing the serialized data.
  */
-function serializeByField(
+function serializeByField<T>(
   bcs: BCS,
-  data: Record<string, SupportedType>,
+  data: GenericType,
   schema: Record<string, string>,
   onlyKeys?: string[]
-): Uint8Array[] {
-  const serializedData: Uint8Array[] = [];
+): number[][] {
+  const serializedData: number[][] = [];
   if (!onlyKeys) {
     for (const [key, keyType] of Object.entries(schema)) {
-      const bytesArray = bcs.ser(keyType, data[key]).toBytes();
+      const bytesArray = ser(bcs, data[key], keyType);
       serializedData.push(bytesArray);
     }
   } else {
-    onlyKeys.forEach(key => {
-      const bytesArray = bcs.ser(schema[key], data[key]).toBytes();
+    onlyKeys.forEach((key) => {
+      const bytesArray = ser(bcs, data[key], schema[key]);
       serializedData.push(bytesArray);
     });
   }
-
+  console.log(serializedData);
   return serializedData;
 }
 
@@ -274,7 +260,9 @@ function deserializeByField<T>(
 ): Record<string, string> | null {
   let deserializedData: Record<string, string> = {};
   if (keys && bytesArray.length !== keys?.length) {
-    throw Error('Number of keys to deserialize must be equal to bytesArray length.');
+    throw Error(
+      "Number of keys to deserialize must be equal to bytesArray length."
+    );
   }
   const iterable = keys || Object.keys(schema);
   iterable.forEach((key, index) => {
@@ -301,8 +289,8 @@ export {
   bcs,
   serializeByField,
   deserializeByField,
-  // serializeBcs,
-  // deserializeBcs,
+  serializeBcs,
+  deserializeBcs,
   parseViewResults,
-  moveStructValidator
+  moveStructValidator,
 };
