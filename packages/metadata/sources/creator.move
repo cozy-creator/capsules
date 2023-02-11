@@ -1,76 +1,60 @@
 module metadata::creator {
-    use std::ascii::{Self, String};
+    use std::ascii::String;
+    use std::vector;
 
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-    use sui::dynamic_field;
+    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID, ID};
     use sui::transfer;
-    use sui::types::is_one_time_witness;
 
     use metadata::publish_receipt::{Self, PublishReceipt};
+    use metadata::metadata;
+    use metadata::schema::Schema;
     
     use ownership::ownership;
     use ownership::tx_authority;
+
+    use transfer_system::simple_transfer::Witness;
 
     use sui_utils::ascii2;
 
     // Error enums
     const EBAD_WITNESS: u64 = 0;
     const ECREATOR_ALREADY_DEFINED: u64 = 1;
+    const ESENDER_UNAUTHORIZED: u64 = 2;
 
     struct Creator has key, store {
         id: UID,
-        name: String,
-        logo: String,
-        description: String,
-        website_url: String
+        packages: vector<ID>
     }
     
     struct Key has store, copy, drop { 
         slot: String
     }
 
-    public fun define<W: drop>(witness: &W, receipt: &mut PublishReceipt, _name: vector<u8>, _description: vector<u8>,  _logo: vector<u8>, _website_url: vector<u8>, ctx: &mut TxContext) {
-        assert!(is_one_time_witness(witness), EBAD_WITNESS);
+    public fun define(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+        let creator = Creator { 
+            id: object::new(ctx),
+            packages: vector::empty()
+        };
 
-        let (name, description, logo, website_url) = (ascii::string(_name), ascii::string(_description), ascii::string(_logo), ascii::string(_website_url));
-        let creator = define_(receipt, name, description, logo, website_url, ctx);
-
-        setup_ownership_and_capability<W>(witness, &mut creator, ctx);
-
+        setup_ownership_and_metadata(&mut creator, schema, data, ctx);
         transfer::share_object(creator);
     }
 
-    fun define_(receipt: &mut PublishReceipt, name: String, description: String, logo: String, website_url: String, ctx: &mut TxContext): Creator {
-        let creator = Creator { 
-            id: object::new(ctx),
-            name,
-            logo, 
-            description,
-            website_url
-        };
+    fun setup_ownership_and_metadata(creator: &mut Creator, schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
+        let proof = ownership::setup(creator);
+        let auth = tx_authority::begin(ctx);
 
-        let key = get_key(receipt);
-        let receipt_uid = publish_receipt::extend(receipt);
-
-        assert!(!dynamic_field::exists_(receipt_uid, key), ECREATOR_ALREADY_DEFINED);
-        dynamic_field::add(receipt_uid, key, true);
-
-        creator
+        ownership::initialize(&mut creator.id, proof, &auth);
+        metadata::define(&mut creator.id, schema, data, &auth);
+        ownership::initialize_owner_and_transfer_authority<Witness>(&mut creator.id, tx_context::sender(ctx), &auth);
     }
 
-    fun get_key(receipt: &PublishReceipt): Key {
+    fun key(receipt: &PublishReceipt): Key {
         let id_address = object::id_to_address(&publish_receipt::into_package_id(receipt));
 
         Key { 
             slot: ascii2::addr_into_string(&id_address) 
         }
-    }
-
-    fun setup_ownership_and_capability<W: drop>(witness: &W, creator: &mut Creator, ctx: &mut TxContext) {
-        let proof = ownership::setup(creator);
-        let auth = tx_authority::add_capability_type<W>(witness, &tx_authority::begin(ctx));
-
-        ownership::initialize(&mut creator.id, proof, &auth);
     }
 }
