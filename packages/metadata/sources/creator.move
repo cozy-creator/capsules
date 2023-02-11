@@ -4,6 +4,7 @@ module metadata::creator {
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
+    use sui::dynamic_field;
     use sui::transfer;
 
     use metadata::publish_receipt::{Self, PublishReceipt};
@@ -19,7 +20,7 @@ module metadata::creator {
 
     // Error enums
     const EBAD_WITNESS: u64 = 0;
-    const ECREATOR_ALREADY_DEFINED: u64 = 1;
+    const ECREATOR_ALREADY_LINKED: u64 = 1;
     const ESENDER_UNAUTHORIZED: u64 = 2;
 
     struct Creator has key, store {
@@ -56,5 +57,19 @@ module metadata::creator {
         Key { 
             slot: ascii2::addr_into_string(&id_address) 
         }
+    }
+
+    public entry fun link_package(receipt: &mut PublishReceipt, creator: &mut Creator, ctx: &mut TxContext) {
+        assert!(ownership::is_authorized_by_owner(&creator.id, &tx_authority::begin(ctx)), ESENDER_UNAUTHORIZED);
+
+        let key = key(receipt);
+        let package_id = publish_receipt::into_package_id(receipt);
+        let receipt_uid = publish_receipt::extend(receipt);
+
+        assert!(!vector::contains(&creator.packages, &package_id), ECREATOR_ALREADY_LINKED);
+        assert!(!dynamic_field::exists_(receipt_uid, key), ECREATOR_ALREADY_LINKED);
+
+        vector::push_back(&mut creator.packages, package_id);
+        dynamic_field::add(receipt_uid, key, true);
     }
 }
