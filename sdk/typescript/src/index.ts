@@ -196,6 +196,10 @@ function ser<T>(bcs: BCS, value: any, key: string): number[] {
   return Array.from(bcs.ser(key, value).toBytes());
 }
 
+// function deserializeBcs(bcs: BCS, dataType: string, byteArray: Uint8Array): Record<string, string> {
+//   return bcs.de(dataType, byteArray);
+// }
+
 function serializeBcs(
   bcs: BCS,
   dataType: string,
@@ -211,31 +215,31 @@ function deserializeBcs(
 ): Record<string, string> {
   return bcs.de(dataType, byteArray);
 }
-
 /**
  * Serializes data into an array of arrays of bytes using the provided BCS, schema, and optionally a list of onlyKeys.
  *
- * @param {BCS} bcs - the Byte Conversion Service to be used for serialization.
  * @param {any} data - the data to be serialized.
  * @param {Record<string, string>} schema - an object that maps keys of data to their data types.
  * @param {string[]} [onlyKeys] - an optional list of keys to be serialized.
+ * @param {BCS} serializer - the Byte Conversion Service to be used for serialization.
  * @returns {number[][]} - an array of arrays of bytes representing the serialized data.
  */
 function serializeByField<T>(
-  bcs: BCS,
   data: GenericType,
   schema: Record<string, string>,
-  onlyKeys?: string[]
+  onlyKeys?: string[],
+  serializer?: BCS,
 ): number[][] {
   const serializedData: number[][] = [];
+  const baseSerializer = serializer || bcs;
   if (!onlyKeys) {
     for (const [key, keyType] of Object.entries(schema)) {
-      const bytesArray = ser(bcs, data[key], keyType);
+      const bytesArray = ser(baseSerializer, data[key], keyType);
       serializedData.push(bytesArray);
     }
   } else {
     onlyKeys.forEach((key) => {
-      const bytesArray = ser(bcs, data[key], schema[key]);
+      const bytesArray = ser(baseSerializer, data[key], schema[key]);
       serializedData.push(bytesArray);
     });
   }
@@ -246,19 +250,20 @@ function serializeByField<T>(
 /**
  * Deserializes an array of arrays of bytes into a Record of key-value pairs using the provided BCS and schema.
  *
- * @param {BCS} bcs - the Byte Conversion Service to be used for deserialization.
  * @param {Uint8Array[]} bytesArray - the array of arrays of bytes to be deserialized.
  * @param {Record<string, string>} schema - an object that maps keys of data to their data types.
  * @param {string[]} [keys] - an optional list of keys to be deserialized.
+ * @param {BCS} serializer - the Byte Conversion Service to be used for deserialization.
  * @returns {Record<string, string> | null} - a Record of key-value pairs representing the deserialized data, or null if the number of keys and bytesArray length do not match.
  */
 function deserializeByField<T>(
-  bcs: BCS,
   bytesArray: Uint8Array[],
   schema: Record<string, string>,
-  keys?: string[]
+  keys?: string[],
+  serializer?: BCS,
 ): Record<string, string> | null {
   let deserializedData: Record<string, string> = {};
+  const baseSerializer = serializer || bcs
   if (keys && bytesArray.length !== keys?.length) {
     throw Error(
       "Number of keys to deserialize must be equal to bytesArray length."
