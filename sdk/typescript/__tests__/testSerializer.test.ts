@@ -41,7 +41,12 @@ describe("serializeByField", () => {
 
   it('should serialize an address', () => {});
 
-  it('should serialize a bool', () => {});
+  it('should serialize a bool', () => {
+    const data = {flag: true}
+    const schema = {flag: "bool"}
+    const result = serializeByField(data, schema);
+    expect(result).toEqual([[1]]);
+  });
 
   it('should serialize a u8 ', () => {});
 
@@ -55,12 +60,19 @@ describe("serializeByField", () => {
 
   it('should serialize a u256 ', () => {});
 
-  it('should serialize a string ', () => {});
+  it('should serialize a string ', () => {
+    const data = {flag: "george"}
+    const schema = {flag: "string"}
+    const result = serializeByField(data, schema);
+    console.log(result)
+    expect(result).toEqual([[6, 103, 101,111, 114, 103,101]]);
+  });
 
   it('should serialize a VecMap', () => {
-
-    // const data = {"name": "george"};
-
+    const data = {meta: { name: 'John Doe', age: 30, city: 'San Francisco' }};
+    const schema = {flag: "VecMap"};
+    // const result = serializeByField(data, schema);
+    // console.log(result)
     // const output = [1, 4,34,43,34, 6,43,34,123,234]
   });
 

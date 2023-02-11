@@ -145,6 +145,7 @@ type GenericType = Record<
   | number[]
   | { none: null }
   | { some: string }
+  | {}
 >;
 
 const MoveToStruct: Record<string, Struct<any, any>> = {
