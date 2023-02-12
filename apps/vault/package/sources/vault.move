@@ -21,6 +21,7 @@ module vault::vault {
     }
 
     struct VAULT has drop { }
+    struct Witness has drop { }
 
     const ENOT_VAULT_OWNER: u64 = 0;
     const EINVALID_KEY: u64 = 1;
@@ -34,7 +35,7 @@ module vault::vault {
         let vault = Vault { id: object::new(ctx) };
 
         let proof = ownership::setup(&vault);
-        let auth = tx_authority::begin(ctx);
+        let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
 
         ownership::initialize(&mut vault.id, proof, &auth);
         ownership::initialize_owner_and_transfer_authority<SimpleTransferWitness>(&mut vault.id, tx_context::sender(ctx), &auth);
