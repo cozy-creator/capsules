@@ -1,3 +1,4 @@
+import { truncate0x } from "../utils";
 import { HeaderButtons } from "./HeaderButtons";
 
 export function Header(context: Context) {
@@ -7,7 +8,13 @@ export function Header(context: Context) {
             ${
               context.isConnected
                 ? `<span>
-                        <strong>Wallet</strong>: ${context.account}
+                        <strong>Wallet</strong>: 
+                        <a 
+                            class="text-decoration-none" 
+                            target="_blank" 
+                            href="https://explorer.sui.io/address/${context.account}">
+                                ${truncate0x(context.account)}
+                        </a>
                     </span>`
                 : `<span>
                         Wallet not connected
