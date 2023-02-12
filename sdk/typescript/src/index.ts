@@ -6,6 +6,7 @@ import {
   BcsReader,
 } from "@mysten/bcs";
 import { DevInspectResults } from "@mysten/sui.js";
+import { write } from "fs";
 import {
   object,
   integer,
@@ -60,7 +61,7 @@ let bcsConfig: BcsConfig = {
   vectorType: "vector",
   addressLength: 20,
   addressEncoding: "hex",
-  types: { enums },
+  // types: { enums },
   withPrimitives: true,
 };
 
@@ -68,19 +69,19 @@ let bcs = new BCS(bcsConfig);
 
 // ===== Register ascii and utf8 as custom primitive types =====
 
-bcs.registerType(
-  "string",
-  (writer: BcsWriter, data: string) => {
-    let bytes = new TextEncoder().encode(data);
-    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-    return writer;
-  },
-  (reader: BcsReader) => {
-    let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder("utf8").decode(bytes);
-  },
-  (value) => typeof value == "string"
-);
+// bcs.registerType(
+//   "string",
+//   (writer: BcsWriter, data: string) => {
+//     let bytes = new TextEncoder().encode(data);
+//     writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+//     return writer;
+//   },
+//   (reader: BcsReader) => {
+//     let bytes = reader.readBytes(reader.readULEB());
+//     return new TextDecoder("utf8").decode(bytes);
+//   },
+//   (value) => typeof value == "string"
+// );
 
 type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
   -readonly [K in keyof T]: MoveToJSTypes[T[K]];

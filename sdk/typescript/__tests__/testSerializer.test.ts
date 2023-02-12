@@ -68,6 +68,16 @@ describe("serializeByField", () => {
     expect(result).toEqual([[6, 103, 101,111, 114, 103,101]]);
   });
 
+
+  it('should serialize a null string type', () => {
+    const data = {flag: null};
+    const schema = {flag: "string"};
+    const result = serializeByField(data, schema);
+    console.log(result)
+
+  })
+
+
   it('should serialize a VecMap', () => {
     const data = {meta: { name: 'John Doe', age: 30, city: 'San Francisco' }};
     const schema = {flag: "VecMap"};
