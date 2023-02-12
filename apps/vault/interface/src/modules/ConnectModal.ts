@@ -11,12 +11,10 @@ export function ConnectModal({ wallets }: { wallets: { name: string; icon: strin
                 ${wallets
                   .map((wallet) => {
                     return `
-                        <btn id="${wallet.name.replaceAll(
-                          " ",
-                          "-"
-                        )}" class="btn my-2 btn-light d-flex justify-content-between align-items-center">
-                            <span>${wallet.name}</span>
-                            <img src="${wallet.icon}" class="ms-auto" width="30px" />
+                        <btn id="${wallet.name.replace(/ /g, "")}" 
+                            class="btn my-2 btn-light d-flex justify-content-between align-items-center">
+                                <span>${wallet.name}</span>
+                                <img src="${wallet.icon}" class="ms-auto" width="30px" />
                         </btn>
                     `;
                   })
