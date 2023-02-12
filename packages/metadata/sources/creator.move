@@ -14,7 +14,7 @@ module metadata::creator {
     use ownership::ownership;
     use ownership::tx_authority;
 
-    use transfer_system::simple_transfer::Witness;
+    use transfer_system::simple_transfer::Witness as SimpleTransferWitness;
 
     use sui_utils::ascii2;
 
@@ -32,6 +32,8 @@ module metadata::creator {
         slot: String
     }
 
+    struct Witness has drop { }
+
     public entry fun create(schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let creator = Creator { 
             id: object::new(ctx),
@@ -44,11 +46,11 @@ module metadata::creator {
 
     fun setup_ownership_and_metadata(creator: &mut Creator, schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let proof = ownership::setup(creator);
-        let auth = tx_authority::begin(ctx);
+        let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
 
         ownership::initialize(&mut creator.id, proof, &auth);
         metadata::define(&mut creator.id, schema, data, &auth);
-        ownership::initialize_owner_and_transfer_authority<Witness>(&mut creator.id, tx_context::sender(ctx), &auth);
+        ownership::initialize_owner_and_transfer_authority<SimpleTransferWitness>(&mut creator.id, tx_context::sender(ctx), &auth);
     }
 
     fun key(receipt: &PublishReceipt): Key {
