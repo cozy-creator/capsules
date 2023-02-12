@@ -1,4 +1,3 @@
-import { ConnectButton } from "./ConnectButton";
 import { ConnectModal } from "./ConnectModal";
 import { Header } from "./Header";
 
