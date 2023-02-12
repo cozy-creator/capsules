@@ -1,4 +1,4 @@
-import { ConnectButton } from "./ConnectButton";
+import { HeaderButtons } from "./HeaderButtons";
 
 export function Header(context: Context) {
   return `
@@ -15,8 +15,8 @@ export function Header(context: Context) {
                 `
             }   
             </div>
-
-            ${ConnectButton(context)}
+        
+            ${HeaderButtons(context)}
         </div>
     `;
 }
