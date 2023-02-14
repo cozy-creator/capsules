@@ -74,4 +74,10 @@ module metadata::creator {
         vector::push_back(&mut creator.packages, package_id);
         dynamic_field::add(receipt_uid, key, true);
     }
+
+    public fun extend(creator: &mut Creator, ctx: &mut TxContext): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&creator.id, &tx_authority::begin(ctx)), ESENDER_UNAUTHORIZED);
+
+        &mut creator.id
+    }
 }
