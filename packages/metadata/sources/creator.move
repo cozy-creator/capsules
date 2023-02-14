@@ -61,7 +61,7 @@ module metadata::creator {
         }
     }
 
-    public entry fun link_package(receipt: &mut PublishReceipt, creator: &mut Creator, ctx: &mut TxContext) {
+    public entry fun link_package(creator: &mut Creator, receipt: &mut PublishReceipt, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&creator.id, &tx_authority::begin(ctx)), ESENDER_UNAUTHORIZED);
 
         let key = key(receipt);
