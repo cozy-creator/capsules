@@ -31,7 +31,7 @@ module metadata::package {
         };
 
         setup_ownership_and_metadata(&mut package, schema, data, ctx);
-        creator::link_package(creator, receipt, ctx);
+        creator::claim_package(creator, receipt, ctx);
 
         transfer::share_object(package);
     }
