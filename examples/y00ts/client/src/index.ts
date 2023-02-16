@@ -31,7 +31,7 @@ const y00t: NFT = {
     Background: 'White',
     Fur: 'Paradise Green',
     Face: 'Wholesome',
-    Clotthes: 'Summer Shirt',
+    Clothes: 'Summer Shirt',
     Head: 'Beanie (blackout)',
     Eyewear: 'Melrose Bricks',
     '1/1': 'None'

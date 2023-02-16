@@ -212,6 +212,8 @@ After serializing these, they turn out to be:
 
 Notice that took a little longer? But still <6 seconds to edit. That's because our Outlaw is a _shared object_, which means it needs to go through full consensus, which takes longer than it does for _owned objects_.
 
+Also note that all of the metadata describing out Outlaw, the name, image url, and attributes, amount to only about 180 bytes of data. That's not bad!
+
 ### Step 7: Atomic Updates
 
 ---
