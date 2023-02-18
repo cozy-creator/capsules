@@ -29,7 +29,7 @@ module metadata::type {
     const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 2;
     const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 3;
 
-    // Singleton, root-level owned object
+    // Singleton, Owned root-level object. Cannot be destroyed.
     struct Type<phantom T> has key {
         id: UID,
         // <metadata::SchemaVersion { }> : ID

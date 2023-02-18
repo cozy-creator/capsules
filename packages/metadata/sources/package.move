@@ -1,53 +1,91 @@
 module metadata::package {
-    use sui::tx_context::{Self, TxContext};
+    use std::ascii;
+    use sui::tx_context::TxContext;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
 
-    use metadata::publish_receipt::PublishReceipt;
     use metadata::metadata;
     use metadata::schema::Schema;
-    use metadata::creator::{Self, Creator};
     
     use ownership::ownership;
     use ownership::tx_authority;
 
-    use transfer_system::simple_transfer::Witness as SimpleTransferWitness;
+    friend metadata::creator;
 
     // Error enums
     const EBAD_WITNESS: u64 = 0;
     const ESENDER_UNAUTHORIZED: u64 = 1;
 
-    struct Package has key, store {
-        id: UID,
-        receipt_id: ID
-    }
-
     struct Witness has drop {}
 
-    public entry fun create(creator: &mut Creator, receipt: &mut PublishReceipt, schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
-        let package = Package { 
-            id: object::new(ctx),
-            receipt_id: object::id(receipt)
-        };
-
-        setup_ownership_and_metadata(&mut package, schema, data, ctx);
-        creator::claim_package(creator, receipt, ctx);
-
-        transfer::share_object(package);
+    // Owned, root-level object. Cannot be destroyed. Unique by package ID.
+    struct Package has key {
+        id: UID,
+        package: ID,
+        creator: ID // this is denormalized data; makes it more convenient to find creators
     }
 
-    fun setup_ownership_and_metadata(package: &mut Package, schema: &Schema, data: vector<vector<u8>>, ctx: &mut TxContext) {
-        let proof = ownership::setup(package);
-        let auth = tx_authority::add_capability_type(&Witness { }, &tx_authority::begin(ctx));
+    // Only metadata::creator can create Package Metadata
+    public(friend) fun define(package: ID, creator: ID, ctx: &mut TxContext): Package {
+        let package = Package { id: object::new(ctx), package, creator };
 
-        ownership::initialize(&mut package.id, proof, &auth);
-        metadata::define(&mut package.id, schema, data, &auth);
-        ownership::initialize_owner_and_transfer_authority<SimpleTransferWitness>(&mut package.id, tx_context::sender(ctx), &auth);
+        // Renounce control of this asset so that the owner can attach metadata independently of us
+        let auth = tx_authority::begin_with_type(&Witness { });
+        let proof = ownership::setup(&package);
+        ownership::initialize_without_module_authority(&mut package.id, proof, &auth);
+
+        package
     }
 
-    public fun extend(package: &mut Package, ctx: &mut TxContext): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&package.id, &tx_authority::begin(ctx)), ESENDER_UNAUTHORIZED);
+    // ======== Metadata Module API =====
+    // For convenience, we replicate the Metadata Module API here to make it easier to access Package's UID.
 
+    public entry fun attach(package: &mut Package, data: vector<vector<u8>>, schema: &Schema) {
+        metadata::attach(&mut package.id, data, schema, &tx_authority::empty());
+    }
+
+    public entry fun update(
+        package: &mut Package,
+        keys: vector<ascii::String>,
+        data: vector<vector<u8>>,
+        schema: &Schema,
+        overwrite_existing: bool
+    ) {
+        metadata::update(&mut package.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
+    }
+
+    public entry fun delete_optional(package: &mut Package, keys: vector<ascii::String>, schema: &Schema) {
+        metadata::delete_optional(&mut package.id, keys, schema, &tx_authority::empty());
+    }
+
+    public entry fun delete_all(package: &mut Package, schema: &Schema) {
+        metadata::delete_all(&mut package.id, schema, &tx_authority::empty());
+    }
+
+    public entry fun migrate(
+        package: &mut Package,
+        old_schema: &Schema,
+        new_schema: &Schema,
+        keys: vector<ascii::String>,
+        data: vector<vector<u8>>
+    ) {
+        metadata::migrate(&mut package.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+    }
+
+    // ======== For Owners =====
+
+    // Makes the metadata immutable. This cannot be undone
+    public entry fun freeze_(package: Package) {
+        transfer::freeze_object(package);
+    }
+
+    // Because Package lacks `store`, polymorphic transfer does not work outside of this module
+    public entry fun transfer(package: Package, new_owner: address) {
+        transfer::transfer(package, new_owner);
+    }
+
+    // Owned object; no need for an ownership check
+    public fun extend(package: &mut Package): &mut UID {
         &mut package.id
     }
 }
