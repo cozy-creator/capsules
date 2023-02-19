@@ -23,19 +23,16 @@ module metadata::metadata {
 
     // Error enums
     const EINCORRECT_DATA_LENGTH: u64 = 0;
-    const EMISSING_OPTION_BYTE: u64 = 1;
-    const EUNRECOGNIZED_TYPE: u64 = 2;
-    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 3;
-    const EINCOMPATIBLE_READER_SCHEMA: u64 = 4;
-    const EINCOMPATIBLE_MIGRATION_SCHEMA: u64 = 5;
-    const ENO_MODULE_AUTHORITY: u64 = 6;
-    const ENO_OWNER_AUTHORITY: u64 = 7;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 8;
-    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 9;
-    const EKEY_IS_NOT_OPTIONAL: u64 = 10;
-    const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 11;
-    const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 12;
-    const EVALUE_UNDEFINED: u64 = 13;
+    const EUNRECOGNIZED_TYPE: u64 = 1;
+    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 2;
+    const EINCOMPATIBLE_READER_SCHEMA: u64 = 3;
+    const EINCOMPATIBLE_FALLBACK: u64 = 4;
+    const ENO_MODULE_AUTHORITY: u64 = 5;
+    const ENO_OWNER_AUTHORITY: u64 = 6;
+    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 7;
+    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 8;
+    const EKEY_IS_NOT_OPTIONAL: u64 = 9;
+    const EVALUE_UNDEFINED: u64 = 10;
 
     struct SchemaID has store, copy, drop { }
     struct Key has store, copy, drop { slot: ascii::String }
@@ -284,7 +281,7 @@ module metadata::metadata {
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
-        assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_READER_SCHEMA);
+        assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_FALLBACK);
         assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
         assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
 

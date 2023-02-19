@@ -23,11 +23,15 @@ module metadata::type {
     use metadata::schema::Schema;
     use metadata::publish_receipt::{Self, PublishReceipt};
 
+    friend metadata::abstract_type;
+
     // error enums
     const EINVALID_PUBLISH_RECEIPT: u64 = 0;
     const ETYPE_ALREADY_DEFINED: u64 = 1;
-    const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 2;
-    const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 3;
+    const ETYPE_DOES_NOT_MATCH_UID_OBJECT: u64 = 2;
+    const ETYPE_IS_NOT_CONCRETE: u64 = 3;
+
+    // ========= Concrete Type =========
 
     // Singleton, Owned root-level object. Cannot be destroyed.
     struct Type<phantom T> has key {
@@ -41,6 +45,7 @@ module metadata::type {
 
     // ========= Create Type Metadata =========
 
+    // Convenience entry function
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
@@ -51,6 +56,9 @@ module metadata::type {
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
+    // `T` must not contain any generics. If it does, you must first use `define_abstract()` to create
+    // an AbstractType object, which is then used with `define_from_abstract()` to define a concrete type
+    // per instance of its generics.
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
@@ -58,13 +66,19 @@ module metadata::type {
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
+        assert!(!encode::contains_generics<T>(), ETYPE_IS_NOT_CONCRETE);
 
+        // Ensures that this concrete type can only ever be created once
         let key = Key { slot: encode::module_and_struct_names<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
 
-        dynamic_field::add(uid, key, true); 
+        dynamic_field::add(uid, key, true);
 
+        define_internal<T>(data, schema, ctx)
+    }
+
+    public(friend) fun define_internal<T>(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext): Type<T> {
         let type = Type { id: object::new(ctx) };
         let auth = tx_authority::begin_with_type(&Witness { });
         let proof = ownership::setup(&type);
@@ -114,26 +128,24 @@ module metadata::type {
         fallback_schema: &Schema,
     ): vector<u8> {
         let object_type = option::destroy_some(ownership::type(uid));
-        let generic_type = option::destroy_some(encode::type_of_generic<Type<T>>());
-        assert!(object_type == generic_type, ETYPE_METADATA_IS_INVALID_FALLBACK);
-        assert!(encode::type_name<T>() == object_type, EINCORRECT_TYPE_SPECIFIED_FOR_UID);
+        assert!(encode::type_name<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
 
         metadata::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }
 
-    // ======== For Owners =====
+    // ======== For Owners ========
+    // Because Type lacks the `store` ability, polymorphic transfer and freeze do not work outside of this module
+
+    public entry fun transfer<T>(type: Type<T>, new_owner: address) {
+        transfer::transfer(type, new_owner);
+    }
 
     // Makes the metadata immutable. This cannot be undone
     public entry fun freeze_<T>(type: Type<T>) {
         transfer::freeze_object(type);
     }
 
-    // Because Type lacks `store`, polymorphic transfer does not work outside of this module
-    public entry fun transfer<T>(type: Type<T>, new_owner: address) {
-        transfer::transfer(type, new_owner);
-    }
-
-    // Owned object, so no need for an ownership check
+    // `Type` is an owned object, so no need for an ownership check
     public fun extend<T>(type: &mut Type<T>): &mut UID {
         &mut type.id
     }

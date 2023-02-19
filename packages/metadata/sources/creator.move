@@ -94,7 +94,7 @@ module metadata::creator {
     public entry fun transfer_package(
         old_creator: &mut Creator,
         new_creator: &mut Creator,
-        package: ID,
+        package: &mut Package,
         ctx: &mut TxContext
     ) {
         transfer_package_(old_creator, new_creator, package, &tx_authority::begin(ctx));
@@ -103,7 +103,7 @@ module metadata::creator {
     public fun transfer_package_(
         old_creator: &mut Creator,
         new_creator: &mut Creator,
-        package: ID,
+        package: &mut Package,
         auth: &TxAuthority
     ) {
         assert!(ownership::is_authorized_by_owner(&old_creator.id, auth), ESENDER_UNAUTHORIZED);

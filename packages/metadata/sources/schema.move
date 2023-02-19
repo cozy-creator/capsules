@@ -28,6 +28,11 @@ module metadata::schema {
 
     // Schema is defined like [ [name, type], [name, type], ... ]
     public entry fun create(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
+        let schema = create_(schema_fields, ctx);
+        transfer::freeze(schema);
+    }
+
+    public fun create_(schema_fields: vector<vector<String>>, ctx: &mut TxContext): Schema {
         let len = vector::length(&schema_fields);
 
         let (i, schema) = (0, vector::empty<Item>());
@@ -48,10 +53,11 @@ module metadata::schema {
             i = i + 1;
         };
 
-        transfer::freeze_object(Schema {
-            id: object::new(ctx),
-            schema
-        });
+        Schema { id: object::new(ctx), schema }
+    }
+
+    public fun freeze(schema: Schema) {
+        transfer::freeze(schema);
     }
 
     // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
