@@ -12,7 +12,7 @@ module metadata::metadata {
     use std::vector;
     use sui::bcs::{Self};
     use sui::dynamic_field;
-    use sui::object::{Self, UID, ID};
+    use sui::object::{UID, ID};
     use sui::vec_map::VecMap;
     use metadata::schema::{Self, Schema};
     use sui_utils::encode;
@@ -23,21 +23,18 @@ module metadata::metadata {
 
     // Error enums
     const EINCORRECT_DATA_LENGTH: u64 = 0;
-    const EMISSING_OPTION_BYTE: u64 = 1;
-    const EUNRECOGNIZED_TYPE: u64 = 2;
-    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 3;
-    const EINCOMPATIBLE_READER_SCHEMA: u64 = 4;
-    const EINCOMPATIBLE_MIGRATION_SCHEMA: u64 = 5;
-    const ENO_MODULE_AUTHORITY: u64 = 6;
-    const ENO_OWNER_AUTHORITY: u64 = 7;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 8;
-    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 9;
-    const EKEY_IS_NOT_OPTIONAL: u64 = 10;
-    const ETYPE_METADATA_IS_INVALID_FALLBACK: u64 = 11;
-    const EINCORRECT_TYPE_SPECIFIED_FOR_UID: u64 = 12;
-    const EVALUE_UNDEFINED: u64 = 13;
+    const EUNRECOGNIZED_TYPE: u64 = 1;
+    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 2;
+    const EINCOMPATIBLE_READER_SCHEMA: u64 = 3;
+    const EINCOMPATIBLE_FALLBACK: u64 = 4;
+    const ENO_MODULE_AUTHORITY: u64 = 5;
+    const ENO_OWNER_AUTHORITY: u64 = 6;
+    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 7;
+    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 8;
+    const EKEY_IS_NOT_OPTIONAL: u64 = 9;
+    const EVALUE_UNDEFINED: u64 = 10;
 
-    struct SchemaID has store, copy, drop { }
+    struct SchemaID has store, copy, drop { } // vector<u8>
     struct Key has store, copy, drop { slot: ascii::String }
 
     // `data` is an array of BCS-serialized values. Such as [ [3, 0, 0, 0], [2, 99, 100] ]
@@ -58,7 +55,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field::add(uid, SchemaID { }, object::id(schema));
+        dynamic_field::add(uid, SchemaID { }, schema::into_schema_id(schema));
     }
 
     // If `overwrite_existing` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
@@ -145,7 +142,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field2::drop<SchemaID, ID>(uid, SchemaID { });
+        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
     }
 
     // Moves from old-schema -> new-schema.
@@ -186,7 +183,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field2::set(uid, SchemaID { }, object::id(new_schema));
+        dynamic_field2::set(uid, SchemaID { }, schema::into_schema_id(new_schema));
 
         // Fill-in all the newly supplied values
         update(uid, keys, data, new_schema, false, auth);
@@ -212,7 +209,7 @@ module metadata::metadata {
     // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
     // corresponding keys that were queried in order to deserialize the results.
     public fun view(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<u8> {
-        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
@@ -262,7 +259,7 @@ module metadata::metadata {
         object_schema: &Schema
     ): vector<u8> {
         assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
-        assert!(object::id(object_schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(object_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<ascii::String>());
 
@@ -275,6 +272,15 @@ module metadata::metadata {
         view(uid, keys, object_schema)
     }
 
+    public fun view_all_with_default(
+        uid: &UID,
+        fallback: &UID,
+        schema: &Schema,
+        fallback_schema: &Schema,
+    ): vector<u8> {
+        view_with_default(uid, fallback, schema::into_keys(schema), schema, fallback_schema)
+    }
+
     // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
     // really only need to have the same types for the keys being used here
     public fun view_with_default(
@@ -284,9 +290,9 @@ module metadata::metadata {
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
-        assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_READER_SCHEMA);
-        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
-        assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_FALLBACK);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(fallback_schema, schema_id(fallback)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
@@ -304,8 +310,8 @@ module metadata::metadata {
         response
     }
 
-    public fun schema_id(uid: &UID): ID {
-        *dynamic_field::borrow<SchemaID, ID>(uid, SchemaID { } )
+    public fun schema_id(uid: &UID): vector<u8> {
+        *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
     }
 
     // ============ (de)serializes objects ============ 
@@ -594,7 +600,7 @@ module metadata::metadata {
     public fun assert_valid_ownership_and_schema(uid: &UID, schema: &Schema, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(schema_id(uid) == object::id(schema), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
     }
 }
 

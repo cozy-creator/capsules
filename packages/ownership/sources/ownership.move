@@ -17,7 +17,7 @@ module ownership::ownership {
     const ETRANSFER_ALREADY_EXISTS: u64 = 6;
     const EOWNER_ALREADY_EXISTS: u64 = 7;
     const EOWNER_ALREADY_INITIALIZED: u64 = 8;
-    const ETHIS_ASSET_CANNOT_BE_OWNED: u64 = 9;
+    // const ETHIS_ASSET_CANNOT_BE_OWNED: u64 = 9;
 
     // Dynamic field keys
     struct Module has store, copy, drop { } // address
@@ -111,7 +111,8 @@ module ownership::ownership {
     ) {
         let (owner_maybe, transfer_maybe) = (owner(uid), transfer_authority(uid));
         assert!(option::is_none(&owner_maybe) && option::is_none(&transfer_maybe), EOWNER_ALREADY_INITIALIZED);
-        assert!(option::is_some(&module_authority(uid)), ETHIS_ASSET_CANNOT_BE_OWNED);
+        assert!(is_initialized(uid), EOBJECT_NOT_INITIALIZED);
+        // assert!(option::is_some(&module_authority(uid)), ETHIS_ASSET_CANNOT_BE_OWNED);
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
 
         if (option::is_some(&owner)) {

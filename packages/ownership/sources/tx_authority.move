@@ -128,7 +128,7 @@ module ownership::tx_authority {
     }
 
     public fun witness_string_(type: String): String {
-        let (module_addr, _) = encode::decompose_type_name(type);
+        let module_addr = encode::package_id_and_module_name_(type);
         encode::append_struct_name_(module_addr, ascii::string(WITNESS_STRUCT))
     }
 

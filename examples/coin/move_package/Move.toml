@@ -1,6 +1,6 @@
 [package]
-name = "OutlawSky"
-version = "0.2.0"
+name = "Coin2"
+version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
@@ -8,7 +8,6 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 SuiUtils = { local = "../../../packages/sui_utils" }
 Ownership = { local = "../../../packages/ownership" }
 SuiMetadata = { local = "../../../packages/metadata" }
-TransferSystem = { local = "../../../packages/transfer_system" }
 
 [addresses]
-outlaw_sky = "0x973a1fc252d367ac06c66ee01c23cc8c713c5491"
+sui_examples = "0x0"

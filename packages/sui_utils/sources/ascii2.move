@@ -143,6 +143,17 @@ module sui_utils::ascii2 {
             vector::push_back(&mut ascii_strings, ascii::string(*vector::borrow(&bytes, i)));
             i = i + 1;
         };
+
+        ascii_strings
+    }
+
+    public fun vec_bytes_to_vec_strings(bytes: vector<vector<vector<u8>>>): vector<vector<String>> {
+        let (ascii_strings, i) = (vector::empty<vector<String>>(), 0);
+        while (i < vector::length(&bytes)) {
+            vector::push_back(&mut ascii_strings, bytes_to_strings(*vector::borrow(&bytes, i)));
+            i = i + 1;
+        };
+
         ascii_strings
     }
 }

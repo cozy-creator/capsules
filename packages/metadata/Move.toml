@@ -1,12 +1,13 @@
 [package]
 name = "SuiMetadata"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
+TransferSystem = { local = "../transfer_system" }
 
 [addresses]
 metadata =  "0xeb85c3c33d99df932bcb26ef59c963cae67fb1d1"
