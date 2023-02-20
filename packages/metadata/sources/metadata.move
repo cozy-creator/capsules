@@ -12,7 +12,7 @@ module metadata::metadata {
     use std::vector;
     use sui::bcs::{Self};
     use sui::dynamic_field;
-    use sui::object::{Self, UID, ID};
+    use sui::object::{UID, ID};
     use sui::vec_map::VecMap;
     use metadata::schema::{Self, Schema};
     use sui_utils::encode;
@@ -34,7 +34,7 @@ module metadata::metadata {
     const EKEY_IS_NOT_OPTIONAL: u64 = 9;
     const EVALUE_UNDEFINED: u64 = 10;
 
-    struct SchemaID has store, copy, drop { }
+    struct SchemaID has store, copy, drop { } // vector<u8>
     struct Key has store, copy, drop { slot: ascii::String }
 
     // `data` is an array of BCS-serialized values. Such as [ [3, 0, 0, 0], [2, 99, 100] ]
@@ -55,7 +55,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field::add(uid, SchemaID { }, object::id(schema));
+        dynamic_field::add(uid, SchemaID { }, schema::into_schema_id(schema));
     }
 
     // If `overwrite_existing` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
@@ -142,7 +142,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field2::drop<SchemaID, ID>(uid, SchemaID { });
+        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
     }
 
     // Moves from old-schema -> new-schema.
@@ -183,7 +183,7 @@ module metadata::metadata {
             i = i + 1;
         };
 
-        dynamic_field2::set(uid, SchemaID { }, object::id(new_schema));
+        dynamic_field2::set(uid, SchemaID { }, schema::into_schema_id(new_schema));
 
         // Fill-in all the newly supplied values
         update(uid, keys, data, new_schema, false, auth);
@@ -209,7 +209,7 @@ module metadata::metadata {
     // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
     // corresponding keys that were queried in order to deserialize the results.
     public fun view(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<u8> {
-        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
@@ -259,7 +259,7 @@ module metadata::metadata {
         object_schema: &Schema
     ): vector<u8> {
         assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
-        assert!(object::id(object_schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(object_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<ascii::String>());
 
@@ -282,8 +282,8 @@ module metadata::metadata {
         fallback_schema: &Schema,
     ): vector<u8> {
         assert!(schema::is_compatible(schema, fallback_schema), EINCOMPATIBLE_FALLBACK);
-        assert!(object::id(schema) == schema_id(uid), EINCORRECT_SCHEMA_SUPPLIED);
-        assert!(object::id(fallback_schema) == schema_id(fallback), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(fallback_schema, schema_id(fallback)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
@@ -301,8 +301,8 @@ module metadata::metadata {
         response
     }
 
-    public fun schema_id(uid: &UID): ID {
-        *dynamic_field::borrow<SchemaID, ID>(uid, SchemaID { } )
+    public fun schema_id(uid: &UID): vector<u8> {
+        *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
     }
 
     // ============ (de)serializes objects ============ 
@@ -591,7 +591,7 @@ module metadata::metadata {
     public fun assert_valid_ownership_and_schema(uid: &UID, schema: &Schema, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(schema_id(uid) == object::id(schema), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
     }
 }
 

@@ -1,7 +1,9 @@
 module metadata::schema {
     use std::ascii::{Self, String};
+    use std::hash;
     use std::option::{Self, Option};
     use std::vector;
+    use sui::bcs;
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
@@ -17,7 +19,8 @@ module metadata::schema {
     // Immutable root-level object
     struct Schema has key {
         id: UID,
-        schema: vector<Item>
+        schema: vector<Item>,
+        schema_id: vector<u8>
     }
 
     struct Item has store, copy, drop {
@@ -29,10 +32,23 @@ module metadata::schema {
     // Schema is defined like [ [name, type], [name, type], ... ]
     public entry fun create(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
         let schema = create_(schema_fields, ctx);
-        transfer::freeze(schema);
+        transfer::freeze_object(schema);
     }
 
+    // It's safe to return a schema here; the caller will eventually have to return the schema
+    // before the end of the transaction because schemas only have `key`, so we can guarantee this
+    // schema will be frozen
     public fun create_(schema_fields: vector<vector<String>>, ctx: &mut TxContext): Schema {
+        let schema = from_fields(schema_fields);
+
+        Schema { 
+            id: object::new(ctx), 
+            schema, 
+            schema_id: compute_schema_id(&schema) 
+        }
+    }
+
+    public fun from_fields(schema_fields: vector<vector<String>>): vector<Item> {
         let len = vector::length(&schema_fields);
 
         let (i, schema) = (0, vector::empty<Item>());
@@ -46,6 +62,9 @@ module metadata::schema {
                 (type_parsed, true)
             };
 
+            // In case the client-app accidentally included a space in the type name
+            if (ascii::into_bytes(copy type) == b"VecMap<String, String>")
+                type = ascii::string(b"VecMap<String,String>");
             assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
             let key = *vector::borrow(tuple, 0);
@@ -53,11 +72,11 @@ module metadata::schema {
             i = i + 1;
         };
 
-        Schema { id: object::new(ctx), schema }
+        schema
     }
 
-    public fun freeze(schema: Schema) {
-        transfer::freeze(schema);
+    public fun return_and_freeze(schema: Schema) {
+        transfer::freeze_object(schema);
     }
 
     // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
@@ -78,7 +97,7 @@ module metadata::schema {
 
     // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
     public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
-        if (schema1 == schema2) return true;
+        if (equals(schema1, schema2)) return true;
 
         let items1 = into_items(schema1);
         let i = 0;
@@ -154,5 +173,30 @@ module metadata::schema {
         };
 
         (option::none(), option::none())
+    }
+
+    // ======= Schema Hash ID =======
+    // We use the hash of a schema's fields to uniquely identify a schema, rather than its object-id.
+
+    public fun equals(schema1: &Schema, schema2: &Schema): bool {
+        (schema1.schema_id == schema2.schema_id)
+    }
+
+    public fun equals_(schema: &Schema, schema_id: vector<u8>): bool {
+        (schema.schema_id == schema_id)
+    }
+
+    public fun compute_schema_id(schema: &vector<Item>): vector<u8> {
+        let bytes = bcs::to_bytes(schema);
+        hash::sha3_256(bytes)
+    }
+
+    public fun compute_schema_id_(schema_fields: vector<vector<String>>): vector<u8> {
+        let schema = from_fields(schema_fields);
+        compute_schema_id(&schema)
+    }
+
+    public fun into_schema_id(schema: &Schema): vector<u8> {
+        schema.schema_id
     }
 }

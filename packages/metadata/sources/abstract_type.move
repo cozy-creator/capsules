@@ -4,17 +4,21 @@
 
 module metadata::abstract_type {
     use std::ascii;
-    use std::option;
+    use std::option::{Self, Option};
+    use std::vector;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
     use sui_utils::encode;
+    use sui_utils::struct_tag::{Self, StructTag};
     use ownership::ownership;
-    use ownership::tx_authority;
+    use ownership::tx_authority::{Self, TxAuthority};
     use metadata::metadata;
-    use metadata::schema::Schema;
     use metadata::publish_receipt::{Self, PublishReceipt};
+    use metadata::schema::{Self, Schema};
+    use metadata::type::{Self, Type};
+    use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
@@ -22,42 +26,83 @@ module metadata::abstract_type {
     const ETYPE_IS_NOT_ABSTRACT: u64 = 2;
     const ETYPE_ALREADY_DEFINED: u64 = 3;
     const EINCORRECT_SCHEMA_SUPPLIED: u64 = 4;
+    const EINVALID_SCHEMA_ID: u64 = 5;
+    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 6;
 
     // Singleton, shared root-level object. Cannot be destroyed. Unique on its `type` field.
     struct AbstractType has key {
         id: UID,
-        type: StructTag
+        type: StructTag,
+        // hash-id of the schema that can be used to define concrete type instances of this abstract type
+        schema_id: vector<u8>
     }
 
-    struct Key has store, copy, drop { slot: vector<String> }
+    struct Key has store, copy, drop { slot: ascii::String }
+    struct KeyGenerics has store, copy, drop { slot: vector<ascii::String> }
+    struct Witness has drop { }
 
+    // When create an abstract type like `Coin<E>`, the `E` can be filled in as anything for the
+    // type argument. Note that we are merely creating the abstract type here, not defining it, which would
+    // involve attaching metadata as well.
+    public entry fun create<T>(
+        publisher: &mut PublishReceipt,
+        owner: Option<address>,
+        schema_id_for_concrete_type: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        let abstract_type = create_<T>(publisher, schema_id_for_concrete_type, ctx);
+        return_and_share(abstract_type, owner, ctx);
+    }
+
+    public fun create_<T>(
+        publisher: &mut PublishReceipt,
+        schema_id_for_concrete_type: vector<u8>,
+        ctx: &mut TxContext
+    ): AbstractType {
+        assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
+        assert!(encode::has_generics<T>(), ETYPE_IS_NOT_ABSTRACT);
+        assert!(vector::length(&schema_id_for_concrete_type) == 32, EINVALID_SCHEMA_ID);
+
+        let key = Key { slot: encode::module_and_struct_name<T>() };
+        let uid = publish_receipt::extend(publisher);
+        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+
+        dynamic_field::add(uid, key, true);
+
+        let abstract_type = AbstractType { 
+            id: object::new(ctx),
+            type: struct_tag::create_abstract<T>(),
+            schema_id: schema_id_for_concrete_type
+        };
+        let auth = tx_authority::begin_with_type(&Witness { });
+        let proof = ownership::setup(&abstract_type);
+        ownership::initialize_without_module_authority(&mut abstract_type.id, proof, &auth);
+
+        abstract_type
+    }
+
+    public fun return_and_share(abstract_type: AbstractType, owner: Option<address>, ctx: &TxContext) {
+        let owner = if (option::is_some(&owner)) { option::destroy_some(owner) }
+            else { tx_context::sender(ctx) };
+        let auth = tx_authority::empty();
+        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut abstract_type.id, owner, &auth);
+
+        transfer::share_object(abstract_type);
+    }
+
+    // `define` combines both `create` and `attach` into a single entry function for convenience
+    // Note that the transaction sender must be 
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         owner: Option<address>,
+        schema_id_for_concrete_type: vector<u8>,
         data: vector<vector<u8>>,
         schema: &Schema,
         ctx: &mut TxContext
     ) {
-        assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
-        assert!(encode::contains_generics<T>(), ETYPE_IS_NOT_ABSTRACT);
-
-        let key = Key { slot: encode::module_and_struct_names<T>() };
-        let uid = publish_receipt::extend(publisher);
-        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
-
-        dynamic_field::add(uid, key, true); 
-
-        let owner = if (option::is_some(owner)) { option::destroy_some(owner) }
-            else { tx_context::sender(ctx) };
-
-        let abstract_type = AbstractType { id: uid, struct_tag: encode::abstract_struct_tag<T>() };
-        let auth = tx_authority::begin_with_type(&Witness { });
-        let proof = ownership::setup(&abstract_type);
-        ownership::initialize_without_module_authority(&mut type.id, proof, &auth);
-        metadata::attach(&mut type.id, data, schema, &tx_authority::empty());
-        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut abstract_type.id, owner, &auth);
-        
-        transfer::share_object(abstract_type);
+        let abstract_type = create_<T>(publisher, schema_id_for_concrete_type, ctx);
+        metadata::attach(&mut abstract_type.id, data, schema, &tx_authority::begin(ctx));
+        return_and_share(abstract_type, owner, ctx);
     }
 
     // Convenience entry function
@@ -68,13 +113,13 @@ module metadata::abstract_type {
         ctx: &mut TxContext
     ) {
         let type = define_from_abstract_<T>(abstract_type, data, schema, &tx_authority::begin(ctx), ctx);
-        transfer::transfer(type, tx_context::sender(ctx));
+        type::transfer(type, tx_context::sender(ctx));
     }
 
     // Returns a concrete type based on an abstract type, like Type<Coin<0x2::sui::SUI>> from
     // AbstractType Coin<T>
     // The schema supplied will be used to define the concrete type's metadata, and must be the same 
-    // schema as was used with the abstract type
+    // schema specified in the abstract type's `schema_id` field
     public fun define_from_abstract_<T>(
         abstract: &mut AbstractType,
         data: vector<vector<u8>>,
@@ -85,11 +130,11 @@ module metadata::abstract_type {
         let struct_tag = struct_tag::create<T>();
         assert!(struct_tag::is_same_abstract_type(&abstract.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
         assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
-        assert!(object::id(schema) == metadata::schema_id(&abstract.id), EINCORRECT_SCHEMA_SUPPLIED);
+        assert!(schema::equals_(schema, abstract.schema_id), EINCORRECT_SCHEMA_SUPPLIED);
 
         // Ensures that this concrete type can only ever be created once
-        let generics = encode::generics(&struct_tag);
-        let key = Key { slot: generics };
+        let generics = struct_tag::generics(&struct_tag);
+        let key = KeyGenerics { slot: generics };
         assert!(!dynamic_field::exists_(&abstract.id, key), ETYPE_ALREADY_DEFINED);
 
         dynamic_field::add(&mut abstract.id, key, true);
@@ -98,7 +143,11 @@ module metadata::abstract_type {
     }
 
     // ======== Metadata Module's API =====
-    // These can be removed once Sui supports programmable transactions that can return mutable references
+    // These can be removed once Sui supports programmable transactions that support mutable references
+
+    public entry fun attach(abstract_type: &mut AbstractType, data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
+        metadata::attach(&mut abstract_type.id, data, schema, &tx_authority::begin(ctx));
+    }
 
     public entry fun update<T>(abstract_type: &mut AbstractType, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, overwrite_existing: bool, ctx: &mut TxContext) {
         metadata::update(&mut abstract_type.id, keys, data, schema, overwrite_existing, &tx_authority::begin(ctx));
@@ -133,18 +182,25 @@ module metadata::abstract_type {
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
-        let struct_tag = option::destroy_some(ownership::type(uid));
-        assert!(struct_tag::is_same_abstract_type(&fallback_type.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
+        // TO DO: Enable these lines after we transition ownership to support strut tags
+        // let struct_tag = option::destroy_some(ownership::type(uid));
+        // assert!(struct_tag::is_same_abstract_type(&fallback_type.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
 
         metadata::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }
 
     // ======== For Owners ========
 
-    // Public extend
-    public fun extend<T: store>(abstract: &mut AbstractType, auth: &TxAuthority): (&mut UID) {
+    public fun extend<T: store>(abstract: &mut AbstractType, auth: &TxAuthority): &mut UID {
         assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut abstract.id
+    }
+
+    public fun update_schema_id(abstract: &mut AbstractType, new_schema_id: vector<u8>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(vector::length(&new_schema_id) == 32, EINVALID_SCHEMA_ID);
+
+        abstract.schema_id = new_schema_id;
     }
 }

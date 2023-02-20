@@ -66,10 +66,10 @@ module metadata::type {
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
-        assert!(!encode::contains_generics<T>(), ETYPE_IS_NOT_CONCRETE);
+        assert!(!encode::has_generics<T>(), ETYPE_IS_NOT_CONCRETE);
 
         // Ensures that this concrete type can only ever be created once
-        let key = Key { slot: encode::module_and_struct_names<T>() };
+        let key = Key { slot: encode::module_and_struct_name<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
 
