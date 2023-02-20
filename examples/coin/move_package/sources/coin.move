@@ -14,6 +14,7 @@ module sui_examples::coin {
     use sui::transfer;
     use std::vector;
     use sui::event;
+    use ownership::ownership;
     use ownership::tx_authority;
     use metadata::abstract_type::{Self, AbstractType};
     use metadata::metadata;
@@ -103,6 +104,36 @@ module sui_examples::coin {
 
         abstract_type::create<Coin<Witness>>(&mut receipt, option::some(owner), schema_id, ctx);
         transfer::transfer(receipt, tx_context::sender(ctx));
+    }
+
+    // The schema is statically embedded into this package here
+    const INDIVIDUAL_METADATA_SCHEMA: vector<vector<vector<u8>>> = vector[ 
+        vector[b"icon_url", b"Option<String>"],
+        vector[b"memo", b"String"]
+    ];
+
+    // This shows how metadata can be attached to individual coins, in addition to the Type generally.
+    // In this case, our schema is statically embedded into this package
+    public entry fun attach_metadata<T>(coin: &mut Coin<T>, data: vector<vector<u8>>, ctx: &mut TxContext) {
+        let auth = tx_authority::begin_with_type(&Witness {});
+        let proof = ownership::setup(coin);
+        let schema_fields = ascii2::vec_bytes_to_vec_strings(INDIVIDUAL_METADATA_SCHEMA);
+        let schema = schema::create_(schema_fields, ctx);
+
+        ownership::initialize(&mut coin.id, proof, &auth);
+        metadata::attach(&mut coin.id, data, &schema, &auth);
+
+        schema::return_and_destroy(schema);
+    }
+
+    // This shows how we can view coins. This is not really needed; we can just call metadata::view(uid)
+    // directly
+    public fun view<T>(coin: &Coin<T>, schema: &Schema): vector<u8> {
+        metadata::view_all(&coin.id, schema)
+    }
+
+    public fun extend<T>(coin: &mut Coin<T>): &mut UID {
+        &mut coin.id
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===

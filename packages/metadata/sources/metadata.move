@@ -272,6 +272,15 @@ module metadata::metadata {
         view(uid, keys, object_schema)
     }
 
+    public fun view_all_with_default(
+        uid: &UID,
+        fallback: &UID,
+        schema: &Schema,
+        fallback_schema: &Schema,
+    ): vector<u8> {
+        view_with_default(uid, fallback, schema::into_keys(schema), schema, fallback_schema)
+    }
+
     // Asserting that both the object and the fallback object have compatible schemas is a bit extreme; they
     // really only need to have the same types for the keys being used here
     public fun view_with_default(

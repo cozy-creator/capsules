@@ -63,7 +63,7 @@ module metadata::schema {
             };
 
             // In case the client-app accidentally included a space in the type name
-            if (ascii::into_bytes(copy type) == b"VecMap<String, String>")
+            if (ascii::into_bytes(type) == b"VecMap<String, String>")
                 type = ascii::string(b"VecMap<String,String>");
             assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
@@ -77,6 +77,11 @@ module metadata::schema {
 
     public fun return_and_freeze(schema: Schema) {
         transfer::freeze_object(schema);
+    }
+
+    public fun return_and_destroy(schema: Schema) {
+        let Schema { id, schema: _, schema_id: _ } = schema;
+        object::delete(id);
     }
 
     // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
