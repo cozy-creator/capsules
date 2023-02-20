@@ -15,7 +15,6 @@ module dispenser::dispenser {
     use sui::address;
     use sui::hex;
     use sui::transfer;
-    use sui::dynamic_field;
 
     use dispenser::schema::{Self, Schema};
 
@@ -24,6 +23,7 @@ module dispenser::dispenser {
         module_id: ID,
         balance: Balance<SUI>,
         total_dispensed: u64,
+        items: vector<vector<u8>>,
         config: Config,
     }
 
@@ -75,6 +75,7 @@ module dispenser::dispenser {
             id: object::new(ctx),
             balance: balance::zero(),
             total_dispensed: 0,
+            items: vector::empty(),
             module_id,
             config: Config {
                 payment,
@@ -117,8 +118,7 @@ module dispenser::dispenser {
                 abort ESchemaNotFound
             };
 
-            let key = Key { slot: i };
-            dynamic_field::add<Key, vector<u8>>(&mut self.id, key, value);
+            vector::push_back(&mut self.items, value);
 
             i = i + 1;
         };
@@ -130,16 +130,14 @@ module dispenser::dispenser {
         let payment = collect_payment(coins, self.config.payment, ctx);
         balance::join(&mut self.balance, coin::into_balance(payment));
 
-        let key = Key { slot: self.total_dispensed };
         self.total_dispensed = self.total_dispensed + 1;
 
         if(self.config.is_sequential) {
-            dynamic_field::remove<Key, vector<u8>>(&mut self.id,  key)
+            vector::pop_back(&mut self.items)
         } else {
             // TODO: randomly dispense; use sequential for now
-            dynamic_field::remove<Key, vector<u8>>(&mut self.id,  key)
+            vector::pop_back(&mut self.items)
         }
-
     }
 
     public fun withdraw_payment(self: &mut Dispenser, admin_cap: &AdminCap, amount: u64, recipient: Option<address>, ctx: &mut TxContext) {
