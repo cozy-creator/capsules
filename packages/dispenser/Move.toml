@@ -7,4 +7,4 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 SuiUtils = { local = "../sui_utils" }
 
 [addresses]
-dispenser =  "0xc4e71dc0b3ecb50263c5934635c4303422fecc02"
+dispenser =  "0xd3b2e0994d2adc24f585edfb6e84fe9b81f4586c"

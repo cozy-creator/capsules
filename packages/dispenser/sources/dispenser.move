@@ -15,6 +15,7 @@ module dispenser::dispenser {
     use sui::address;
     use sui::hex;
     use sui::transfer;
+    use sui::randomness::{Self, Randomness};
 
     use dispenser::schema::{Self, Schema};
 
@@ -25,6 +26,7 @@ module dispenser::dispenser {
         total_dispensed: u64,
         items: vector<vector<u8>>,
         config: Config,
+        randomness_id: Option<ID>
     }
 
     struct Config has store {
@@ -38,21 +40,28 @@ module dispenser::dispenser {
         id: UID,
         dispenser_id: ID,
     }
-    
-    struct Key has store, copy, drop {
-        slot: u64
+
+    struct Key has store, drop {
+        slot: vector<u8>
     }
     
+    struct RANDOMNESS_WITNESS has drop {}
+
     const EDispenserMismatch: u64 = 0;
     const ELoadEmptyItems: u64 = 1;
     const EDispenserAlreadLoaded: u64 = 2;
     const EInvalidItemsCount: u64 = 3;
     const EInvalidData: u64 = 5;
     const ESchemaNotFound: u64 = 6;
+    const EDispenserEmpty: u64 = 7;
 
     public fun initialize<W: drop>(_: W, admin: Option<address>, payment: u64, total_dispensable: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
         let module_id = extract_module_id<W>();
         let (dispenser, admin_cap) = initialize_(module_id, payment, total_dispensable, is_sequential, schema, ctx);
+
+        if(!is_sequential) {
+            fill_randomness(&mut dispenser, ctx);
+        };
 
         if(option::is_some(&admin)) {
             transfer::transfer(admin_cap, option::extract(&mut admin));
@@ -76,6 +85,7 @@ module dispenser::dispenser {
             balance: balance::zero(),
             total_dispensed: 0,
             items: vector::empty(),
+            randomness_id: option::none(),
             module_id,
             config: Config {
                 payment,
@@ -106,8 +116,6 @@ module dispenser::dispenser {
         let (i, len) = (0, vector::length(&data));
         assert!(len == self.config.total_dispensable, EInvalidItemsCount);
 
-        vector::reverse(&mut data);
-
         while (i < len) {
             let value = vector::pop_back(&mut data);
 
@@ -126,18 +134,39 @@ module dispenser::dispenser {
         vector::destroy_empty(data);
     }
 
-    public fun dispense(self: &mut Dispenser, coins: vector<Coin<SUI>>, ctx: &mut TxContext): vector<u8> {
+    public fun random_dispense(self: &mut Dispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, sig: vector<u8>, ctx: &mut TxContext): vector<u8> {
+        assert!(!self.config.is_sequential, 229);
+        assert!(option::is_some(&self.randomness_id), 230);
+        assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), 231);
+
         let payment = collect_payment(coins, self.config.payment, ctx);
         balance::join(&mut self.balance, coin::into_balance(payment));
 
+        let available = self.config.total_dispensable - self.total_dispensed;
+        assert!(available != 0, EDispenserEmpty);
+
+        randomness::set(randomness, sig);
+        let random_bytes = option::borrow(randomness::value(randomness));
+        let index = randomness::safe_selection((available), random_bytes);
+
         self.total_dispensed = self.total_dispensed + 1;
 
-        if(self.config.is_sequential) {
-            vector::pop_back(&mut self.items)
-        } else {
-            // TODO: randomly dispense; use sequential for now
-            vector::pop_back(&mut self.items)
-        }
+        refill_randomness(self, ctx);
+
+        vector::swap_remove(&mut self.items, index)
+    }
+
+    public fun sequential_dispense(self: &mut Dispenser, coins: vector<Coin<SUI>>, ctx: &mut TxContext): vector<u8> {
+        assert!(self.config.is_sequential, 228);
+
+        let payment = collect_payment(coins, self.config.payment, ctx);
+        balance::join(&mut self.balance, coin::into_balance(payment));
+
+        let available = self.config.total_dispensable - self.total_dispensed;
+        assert!(available != 0, EDispenserEmpty);
+
+        self.total_dispensed = self.total_dispensed + 1;
+        vector::pop_back(&mut self.items)
     }
 
     public fun withdraw_payment(self: &mut Dispenser, admin_cap: &AdminCap, amount: u64, recipient: Option<address>, ctx: &mut TxContext) {
@@ -162,6 +191,19 @@ module dispenser::dispenser {
         assert!(object::id(self) == admin_cap.dispenser_id, EDispenserMismatch);
 
         &mut self.id
+    }
+
+    fun fill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
+        let randomness = randomness::new(RANDOMNESS_WITNESS {}, ctx);
+        let randomness_id = object::id(&randomness);
+
+        option::fill(&mut self.randomness_id, randomness_id);
+        randomness::share_object(randomness);
+    }
+
+    fun refill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
+        option::extract(&mut self.randomness_id);
+        fill_randomness(self, ctx);
     }
 
     fun extract_module_id<W: drop>(): ID {
