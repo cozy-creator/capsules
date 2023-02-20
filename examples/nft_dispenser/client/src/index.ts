@@ -1,5 +1,13 @@
 import { BCS, toHEX, getSuiMoveConfig } from "@mysten/bcs";
-import { adminCapId, dispenserObjectId, dispenserPackageId, nftData, signer } from "./config";
+import { getObjectFields } from "@mysten/sui.js";
+import { adminCapId, dispenserObjectId, dispenserPackageId, nftData, provider, signer } from "./config";
+
+async function getRandomnessSignature(randomnessObjectId: string) {
+  const res = await provider.call("sui_tblsSignRandomnessObject", [randomnessObjectId, "ConsensusCommitted"]);
+  return res as {
+    signature: string;
+  };
+}
 
 async function loadData() {
   const data = serializeNFTsData(nftData);
@@ -16,16 +24,30 @@ async function loadData() {
 }
 
 async function dispense() {
-  const res = await signer.executeMoveCall({
-    typeArguments: [],
-    arguments: [dispenserObjectId, ["0x7762aabd32826fec88a17ecf95d04b83be694aa4"]],
-    function: "dispense",
-    module: "nft_dispenser",
-    packageObjectId: dispenserPackageId,
-    gasBudget: 30000,
-  });
+  const dispenserObject = await provider.getObject(dispenserObjectId);
 
-  return res;
+  if (dispenserObject.status == "Exists") {
+    const { randomness_id: randomnessObjectId } = getObjectFields(dispenserObject) || {};
+    const signature = await getRandomnessSignature(randomnessObjectId);
+
+    const res = await signer.executeMoveCall({
+      typeArguments: [],
+      arguments: [
+        dispenserObjectId,
+        randomnessObjectId,
+        ["0x7762aabd32826fec88a17ecf95d04b83be694aa4"],
+        "0x" + toHEX(Buffer.from(signature.signature, "base64")),
+      ],
+      function: "dispense",
+      module: "nft_dispenser",
+      packageObjectId: dispenserPackageId,
+      gasBudget: 30000,
+    });
+
+    return res;
+  } else {
+    throw new Error("Invalid dispenser object");
+  }
 }
 
 function serializeNFTsData(rawData: { name: string; description: string; url: string }[]) {
@@ -56,3 +78,4 @@ function serializeNFTsData(rawData: { name: string; description: string; url: st
 
 // loadData().then(console.log).catch(console.log);
 dispense().then(console.log).catch(console.log);
+// getRandomnessSignature().then(console.log).catch(console.log);
