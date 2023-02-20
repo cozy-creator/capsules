@@ -1,9 +1,10 @@
 [package]
-name = "SuiUtils"
-version = "0.11.0"
+name = "Dispenser"
+version = "0.0.1"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../sui_utils" }
 
 [addresses]
-sui_utils =  "0xbad8236800c10e77fdcb87c1dcd28d46fb05349d"
+dispenser =  "0xc4e71dc0b3ecb50263c5934635c4303422fecc02"
