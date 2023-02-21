@@ -254,7 +254,7 @@ module sui_utils::encode_test {
         let _ctx = test_scenario::ctx(&mut scenario);
         {
             let name = encode::type_name<Coin<SUI>>();
-            let (module_addr, struct_name) = encode::decompose_type_name(name);
+            let (_, module_addr, struct_name, _) = encode::decompose_type_name(name);
             assert!(ascii::string(b"0000000000000000000000000000000000000002::coin") == module_addr, 0);
             assert!(ascii::string(b"Coin<0000000000000000000000000000000000000002::sui::SUI>") == struct_name, 0);
         };
@@ -277,7 +277,7 @@ module sui_utils::encode_test {
     public fun invalid_string() {
         let scenario = test_scenario::begin(@0x69);
         {
-            let (_addr, _type) = encode::decompose_type_name(ascii::string(b"1234567890"));
+            let (_, _addr, _type, _) = encode::decompose_type_name(ascii::string(b"1234567890"));
         };
         test_scenario::end(scenario);
     }
