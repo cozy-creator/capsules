@@ -155,10 +155,11 @@ module dispenser::dispenser {
         randomness::set(randomness, signature);
         let random_bytes = option::borrow(randomness::value(randomness));
 
-        // select a random number based on the number items available. the selected random number is the index of the item to be dispensed
+        // select a random number based on the number items available. 
+        // the selected random number is the index of the item to be dispensed
         let index = randomness::safe_selection((self.items_available), random_bytes);
 
-        // randomness objects can only be set and consumed once, so we extract the previous randomess and refill it with a new one
+        // randomness objects can only be set and consumed once, so we extract the previous randomess and fill it with a new one
         refill_randomness(self, ctx);
 
         self.items_available = self.items_available - 1;
