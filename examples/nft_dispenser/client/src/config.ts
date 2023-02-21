@@ -13,7 +13,6 @@ export const signer = new RawSigner(keypair, provider);
 export const publicKey = "0xed2c39b73e055240323cf806a7d8fe46ced1cabb";
 export const dispenserPackageId = "0xaef57ad95f23b2eb5c0bb8366606fc6888bea329";
 export const dispenserObjectId = "0x5a2ffae755c682756c70ea4c5efdd290c49a002e";
-export const adminCapId = "0x0234a1929baabf341ba826a03eb40e31fd5e2bf1";
 
 export const nftData = [
   {

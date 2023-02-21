@@ -1,6 +1,6 @@
 import { BCS, toHEX, getSuiMoveConfig } from "@mysten/bcs";
 import { getObjectFields } from "@mysten/sui.js";
-import { adminCapId, dispenserObjectId, dispenserPackageId, nftData, provider, signer } from "./config";
+import { dispenserObjectId, dispenserPackageId, nftData, provider, signer } from "./config";
 
 async function getRandomnessSignature(randomnessObjectId: string) {
   const res = await provider.call("sui_tblsSignRandomnessObject", [randomnessObjectId, "ConsensusCommitted"]);
@@ -13,7 +13,7 @@ async function loadData() {
   const data = serializeNFTsData(nftData);
   const res = await signer.executeMoveCall({
     typeArguments: [],
-    arguments: [dispenserObjectId, adminCapId, [...data]],
+    arguments: [dispenserObjectId, [...data]],
     function: "load",
     module: "nft_dispenser",
     packageObjectId: dispenserPackageId,
