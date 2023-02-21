@@ -86,11 +86,14 @@ module sui_utils::encode {
     }
 
     public fun package_id_and_module_name_(s1: String): String {
-        let s2 = ascii2::sub_string(&s1, address::length() * 2, ascii::length(&s1));
-        let j = ascii2::index_of(&s2, &ascii::string(b"::"));
+        let delimiter = ascii::string(b"::");
+        let s2 = ascii2::sub_string(&s1, (address::length() * 2) + 2, ascii::length(&s1));
+        let j = ascii2::index_of(&s2, &delimiter);
+
         assert!(ascii::length(&s2) > j, EINVALID_TYPE_NAME);
 
-        ascii2::sub_string(&s1, 0, j)
+        let i = (address::length() * 2) + 2 + j;
+        ascii2::sub_string(&s1, 0, i)
     }
 
     // Returns the module_name + struct_name, without any generics, such as `my_module::CoolStruct`
@@ -255,8 +258,8 @@ module sui_utils::encode_test {
         {
             let name = encode::type_name<Coin<SUI>>();
             let (_, module_addr, struct_name, _) = encode::decompose_type_name(name);
-            assert!(ascii::string(b"0000000000000000000000000000000000000002::coin") == module_addr, 0);
-            assert!(ascii::string(b"Coin<0000000000000000000000000000000000000002::sui::SUI>") == struct_name, 0);
+            assert!(ascii::string(b"coin") == module_addr, 0);
+            assert!(ascii::string(b"Coin") == struct_name, 0);
         };
         test_scenario::end(scenario);
     }
