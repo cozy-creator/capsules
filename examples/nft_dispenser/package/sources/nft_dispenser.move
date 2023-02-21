@@ -9,7 +9,7 @@ module nft_dispenser::nft_dispenser {
     use sui::randomness::{Randomness};
     use sui::coin::{Coin};
 
-    use dispenser::dispenser::{Self, RANDOMNESS_WITNESS, Dispenser};
+    use dispenser::data_dispenser::{Self as dispenser, RANDOMNESS_WITNESS, DataDispenser};
 
     fun init(ctx: &mut TxContext) {
         // Our NFT schema - name: string, description: string, url: string
@@ -20,11 +20,11 @@ module nft_dispenser::nft_dispenser {
         dispenser::publish(dispenser);
     }
 
-    public entry fun load(dispenser: &mut Dispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun load(dispenser: &mut DataDispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
         dispenser::load(dispenser, data, ctx);
     }
 
-    public entry fun dispense(dispenser: &mut Dispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext) {
+    public entry fun dispense(dispenser: &mut DataDispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext) {
         let data = dispenser::random_dispense(dispenser, randomness, coins, signature, ctx);
         let bcs = bcs::new(data);
 
