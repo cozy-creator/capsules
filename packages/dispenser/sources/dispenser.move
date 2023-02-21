@@ -44,11 +44,13 @@ module dispenser::dispenser {
     const EDispenserAlreadLoaded: u64 = 2;
     const EAvailableCapacityExceeded: u64 = 3;
     const EInvalidData: u64 = 5;
-    const ESchemaNotFound: u64 = 6;
+    const ESchemaNotSet: u64 = 6;
     const EDispenserEmpty: u64 = 7;
     const EInvalidDispenserType: u64 = 8;
     const ERandomnessMismatch: u64 = 9;
     const EMissingRandomness: u64 = 10;
+    const EDispenserAlreadyLoaded: u64 = 11;
+    const ESchemaAlreadySet: u64 = 12;
 
     fun new(payment: u64, capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): Dispenser {
          Dispenser {
@@ -94,8 +96,8 @@ module dispenser::dispenser {
 
     public fun set_schema(self: &mut Dispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-        assert!(vector::is_empty(&self.items), 89);
-        assert!(option::is_none(&self.config.schema), 90);
+        assert!(vector::is_empty(&self.items), EDispenserAlreadyLoaded);
+        assert!(option::is_none(&self.config.schema), ESchemaAlreadySet);
 
         option::fill(&mut self.config.schema, schema::create(schema));
     }
@@ -116,7 +118,7 @@ module dispenser::dispenser {
                 let schema = option::borrow(&self.config.schema);
                 schema::validate(schema, value);
             } else {
-                abort ESchemaNotFound
+                abort ESchemaNotSet
             };
 
             vector::push_back(&mut self.items, value);
