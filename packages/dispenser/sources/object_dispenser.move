@@ -3,11 +3,8 @@ module dispenser::object_dispenser {
     use std::option::{Self, Option};
 
     use sui::object::{Self,UID, ID};
-    use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
-    use sui::sui::SUI;
     use sui::dynamic_object_field as dof;
-    use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::randomness::{Self, Randomness};
 
@@ -15,7 +12,6 @@ module dispenser::object_dispenser {
     use ownership::tx_authority;
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
-
 
     const EInvalidAuth: u64 = 0;
     const ELoadEmptyItems: u64 = 1;
@@ -30,15 +26,13 @@ module dispenser::object_dispenser {
 
     struct ObjectDispenser<phantom T: key + store> has key {
         id: UID,
-        items_available: u64, 
-        balance: Balance<SUI>,
+        items_available: u64,
         items: vector<ID>, 
         randomness_id: Option<ID>,
         config: Config,
     }
 
     struct Config has store {
-        payment: u64,
         capacity: u64,
         is_sequential: bool
     }
@@ -50,15 +44,13 @@ module dispenser::object_dispenser {
     struct RANDOMNESS_WITNESS has drop {}
     struct Witness has drop {}
 
-     fun new<T: key + store>(payment: u64, capacity: u64, is_sequential: bool, ctx: &mut TxContext): ObjectDispenser<T> {
+     fun new<T: key + store>(capacity: u64, is_sequential: bool, ctx: &mut TxContext): ObjectDispenser<T> {
          ObjectDispenser<T> {
             id: object::new(ctx),
-            balance: balance::zero(),
             items_available: 0, 
             items: vector::empty(),
             randomness_id: option::none(),
             config: Config {
-                payment,
                 is_sequential,
                 capacity
             }
@@ -66,8 +58,8 @@ module dispenser::object_dispenser {
     }
 
     /// Initializes the dispenser and returns it by value
-    public fun initialize<T: key + store>(owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, ctx: &mut TxContext): ObjectDispenser<T> {
-        let dispenser = new<T>(payment, capacity, is_sequential, ctx);
+    public fun initialize<T: key + store>(owner: Option<address>, capacity: u64, is_sequential: bool, ctx: &mut TxContext): ObjectDispenser<T> {
+        let dispenser = new<T>(capacity, is_sequential, ctx);
 
         // declare dispenser owner, uses the transaction sender if it's not passed in an argument
         let owner = if(option::is_some(&owner)) {
@@ -113,27 +105,24 @@ module dispenser::object_dispenser {
         self.items_available = self.items_available + len;
     }
 
-    public fun random_dispense<T: store + key>(self: &mut ObjectDispenser<T>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext) {
-        let object = random_dispense_<T>(self, randomness, coins, signature, ctx);
+    public fun random_dispense<T: store + key>(self: &mut ObjectDispenser<T>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
+        let object = random_dispense_<T>(self, randomness, signature, ctx);
         transfer::transfer(object, tx_context::sender(ctx));
     }
 
-    public fun sequential_dispense<T: key + store>(self: &mut ObjectDispenser<T>, coins: vector<Coin<SUI>>, ctx: &mut TxContext) {
-        let object = sequential_dispense_<T>(self, coins, ctx);
+    public fun sequential_dispense<T: key + store>(self: &mut ObjectDispenser<T>, ctx: &mut TxContext) {
+        let object = sequential_dispense_<T>(self);
         transfer::transfer(object, tx_context::sender(ctx));
     }
 
 
     /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
     /// It uses the Sui randomness module to generate the random value
-    public fun random_dispense_<T: store + key>(self: &mut ObjectDispenser<T>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext): T {
+    public fun random_dispense_<T: store + key>(self: &mut ObjectDispenser<T>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext): T {
         assert!(!self.config.is_sequential, EInvalidDispenserType);
         assert!(option::is_some(&self.randomness_id), EMissingRandomness);
         assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), ERandomnessMismatch);
         assert!(self.items_available != 0, EDispenserEmpty);
-
-        let payment = collect_payment(coins, self.config.payment, ctx);
-        balance::join(&mut self.balance, coin::into_balance(payment));
 
         // set the randomness signature which is generated from the client
         randomness::set(randomness, signature);
@@ -158,12 +147,9 @@ module dispenser::object_dispenser {
     }
 
     /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
-    public fun sequential_dispense_<T: key + store>(self: &mut ObjectDispenser<T>, coins: vector<Coin<SUI>>, ctx: &mut TxContext): T {
+    public fun sequential_dispense_<T: key + store>(self: &mut ObjectDispenser<T>): T {
         assert!(self.config.is_sequential, EInvalidDispenserType);
         assert!(self.items_available != 0, EDispenserEmpty);
-
-        let payment = collect_payment(coins, self.config.payment, ctx);
-        balance::join(&mut self.balance, coin::into_balance(payment));
 
         self.items_available = self.items_available - 1;
 
@@ -172,20 +158,6 @@ module dispenser::object_dispenser {
         let key = Key { slot: object_id };
 
         dof::remove<Key, T>(&mut self.id, key)
-    }
-
-    /// Takes an amount from payment made to the dispenser and transfers it to the recipient
-    /// If recipient is not provided, it's transfered to the transaction sender
-    public fun withdraw<T: key + store>(self: &mut ObjectDispenser<T>, amount: u64, recipient: Option<address>, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-
-        let coin = coin::take(&mut self.balance, amount, ctx);
-
-        let recipient = if (option::is_some(&recipient)) 
-            option::extract(&mut recipient)  
-            else  tx_context::sender(ctx);
-
-        transfer::transfer(coin, recipient);
     }
 
     /// Makes the dispenser a shared object
@@ -213,26 +185,5 @@ module dispenser::object_dispenser {
     fun refill_randomness<T: key + store>(self: &mut ObjectDispenser<T>, ctx: &mut TxContext) {
         option::extract(&mut self.randomness_id);
         fill_randomness(self, ctx);
-    }
-
-    fun collect_payment(coins: vector<Coin<SUI>>, amount: u64, ctx: &mut TxContext): Coin<SUI> {
-        let coin = vector::pop_back(&mut coins);
-
-        let (i, len) = (0, vector::length(&coins));
-        while(i < len) {
-            coin::join(&mut coin, vector::pop_back(&mut coins));
-            i = i + 1;
-        };
-        vector::destroy_empty(coins);
-
-        let payment = coin::split(&mut coin, amount, ctx);
-
-        if(coin::value(&coin) == 0) {
-            coin::destroy_zero(coin);
-        } else {
-            transfer::transfer(coin, tx_context::sender(ctx));
-        };
-
-        payment
     }
 }
