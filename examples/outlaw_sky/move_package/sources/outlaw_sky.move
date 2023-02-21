@@ -1,6 +1,7 @@
 module outlaw_sky::outlaw_sky {
     use std::ascii::{Self};
     use std::string::String;
+    use sui::bcs;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -80,7 +81,7 @@ module outlaw_sky::outlaw_sky {
     // This is an overwrite-update, which means that the entire metadata field is replaced
     public entry fun rename(outlaw: &mut Outlaw, new_name: ascii::String, schema: &Schema, ctx: &TxContext) {
         let keys = vector[ascii::string(b"name")];
-        let data = vector[ascii::into_bytes(new_name)];
+        let data = vector[bcs::to_bytes(&new_name)];
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
 
         metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
@@ -111,8 +112,8 @@ module outlaw_sky::outlaw_sky {
 
 #[test_only]
 module outlaw_sky::tests {
-    use std::debug;
-    use std::ascii::{Self, String};
+    use std::string::{Self, String};
+    use std::ascii::Self;
     use sui::test_scenario;
     use metadata::schema;
     use metadata::metadata;
@@ -130,7 +131,6 @@ module outlaw_sky::tests {
         {
             let ctx = test_scenario::ctx(&mut scenario);
             
-            debug::print(&schema_fields);
             let schema = schema::create_(schema_fields, ctx);
             outlaw_sky::create(DATA, &schema, ctx);
             schema::return_and_freeze(schema);
@@ -146,7 +146,7 @@ module outlaw_sky::tests {
             let auth = tx_authority::begin(ctx);
             let uid = outlaw_sky::extend(&mut outlaw, &auth);
             let name = metadata::borrow<String>(uid, ascii::string(b"name"));
-            assert!(*name == ascii::string(b"New Name"), 0);
+            assert!(*name == string::utf8(b"New Name"), 0);
 
             test_scenario::return_shared(outlaw);
             test_scenario::return_immutable(schema);
