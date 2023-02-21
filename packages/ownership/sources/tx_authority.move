@@ -144,17 +144,42 @@ module ownership::tx_authority {
 #[test_only]
 module ownership::tx_authority_test {
     use sui::test_scenario;
+    use sui::sui::SUI;
     use ownership::tx_authority;
+    use sui_utils::encode;
 
+    const SENDER1: address = @0x69;
+    const SENDER2: address = @0x420;
+
+    struct SomethingElse has drop {}
     struct Witness has drop {}
 
     #[test]
-    public fun test1() {
-        let scenario = test_scenario::begin(@0x69);
+    public fun signer_authority() {
+        let scenario = test_scenario::begin(SENDER1);
         let ctx = test_scenario::ctx(&mut scenario);
         {
             let auth = tx_authority::begin(ctx);
-            tx_authority::add_type_capability(&Witness {}, &auth);
+            assert!(tx_authority::is_signed_by(SENDER1, &auth), 0);
+            assert!(!tx_authority::is_signed_by(SENDER2, &auth), 0);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun module_authority() {
+        let scenario = test_scenario::begin(@0x69);
+        let _ctx = test_scenario::ctx(&mut scenario);
+        {
+            let auth = tx_authority::begin_with_type<Witness>(&Witness {});
+            let type = encode::type_name<SomethingElse>();
+            assert!(tx_authority::is_signed_by_module_(type, &auth), 0);
+
+            let type = encode::type_name<SUI>();
+            assert!(!tx_authority::is_signed_by_module_(type, &auth), 0);
+
+            assert!(tx_authority::is_signed_by_module<SomethingElse>(&auth), 0);
+            assert!(!tx_authority::is_signed_by_module<SUI>(&auth), 0);
         };
         test_scenario::end(scenario);
     }

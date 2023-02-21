@@ -121,7 +121,7 @@ module sui_utils::ascii2 {
         let (bytes, i) = (ascii::into_bytes(string), 0);
         while (i < vector::length(&bytes)) {
             let byte = vector::borrow_mut(&mut bytes, i);
-            if (*byte <= 97 && *byte <= 122) *byte = *byte - 32u8;
+            if (*byte >= 97u8 && *byte <= 122u8) *byte = *byte - 32u8;
             i = i + 1;
         };
         ascii::string(bytes)
@@ -131,7 +131,7 @@ module sui_utils::ascii2 {
         let (bytes, i) = (ascii::into_bytes(string), 0);
         while (i < vector::length(&bytes)) {
             let byte = vector::borrow_mut(&mut bytes, i);
-            if (*byte <= 65 && *byte <= 90) *byte = *byte + 32u8;
+            if (*byte >= 65u8 && *byte <= 90u8) *byte = *byte + 32u8;
             i = i + 1;
         };
         ascii::string(bytes)
@@ -160,6 +160,7 @@ module sui_utils::ascii2 {
 
 #[test_only]
 module sui_utils::ascii_test {
+    use std::ascii;
     use std::ascii::{string, length};
     use sui::test_scenario;
     use sui_utils::ascii2;
@@ -202,5 +203,15 @@ module sui_utils::ascii_test {
             assert!(string(b"000000000000000000000000000000000000023a") == string, 0);
         };
         test_scenario::end(scenario);
+    }
+    
+    #[test]
+    public fun change_case() {
+        let string = ascii::string(b"HeLLo WorLd");
+        let lower = ascii2::to_lower_case(string);
+        let upper = ascii2::to_upper_case(string);
+        
+        assert!(lower == ascii::string(b"hello world"), 0);
+        assert!(upper == ascii::string(b"HELLO WORLD"), 0);
     }
 }

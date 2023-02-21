@@ -146,6 +146,7 @@ module metadata::schema {
 
     // ============ Helper Function ============
 
+    // Note that type strings are case-sensitive; we could change this potentially
     public fun is_supported_type(type: String): bool {
         if (vector::contains(&SUPPORTED_TYPES, &ascii::into_bytes(type))) true
         else {
