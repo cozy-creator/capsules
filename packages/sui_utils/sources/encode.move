@@ -38,6 +38,7 @@ module sui_utils::encode {
     public fun decompose_type_name(s1: String): (ID, String, String, vector<String>) {
         let delimiter = ascii::string(b"::");
         let len = address::length();
+        assert!(ascii::length(&s1) > len, EINVALID_TYPE_NAME);
         assert!(ascii2::sub_string(&s1, len * 2, len * 2 + 2) == delimiter, EINVALID_TYPE_NAME);
 
         let s2 = ascii2::sub_string(&s1, len * 2 + 2, ascii::length(&s1));
