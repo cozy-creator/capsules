@@ -1,7 +1,7 @@
-// Capsule dispenser module
-// Dispenser for objects creation and distribution on the Sui network.
+// Data dispenser module
+// Dispenser for data creation and distribution on the Sui network.
 
-module dispenser::dispenser {
+module dispenser::data_dispenser {
     use std::vector;
     use std::option::{Self, Option};
 
@@ -20,7 +20,7 @@ module dispenser::dispenser {
 
     use dispenser::schema::{Self, Schema};
 
-    struct Dispenser has key {
+    struct DataDispenser has key {
         id: UID,
         items_available: u64, // the number of items available
         balance: Balance<SUI>,
@@ -52,8 +52,8 @@ module dispenser::dispenser {
     const EDispenserAlreadyLoaded: u64 = 11;
     const ESchemaAlreadySet: u64 = 12;
 
-    fun new(payment: u64, capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): Dispenser {
-         Dispenser {
+    fun new(payment: u64, capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): DataDispenser {
+         DataDispenser {
             id: object::new(ctx),
             balance: balance::zero(),
             items_available: 0, 
@@ -69,7 +69,7 @@ module dispenser::dispenser {
     }
 
     /// Initializes the dispenser and returns it by value
-    public fun initialize(owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
+    public fun initialize(owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): DataDispenser {
         let dispenser = new(payment, capacity, is_sequential, option::none(), ctx);
 
         // declare dispenser owner, uses the transaction sender if it's not passed in an argument
@@ -100,7 +100,7 @@ module dispenser::dispenser {
     }
 
     /// Sets the schema of the dispenser item. aborts if schema is already set
-    public fun set_schema(self: &mut Dispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
+    public fun set_schema(self: &mut DataDispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
         assert!(vector::is_empty(&self.items), EDispenserAlreadyLoaded);
         assert!(option::is_none(&self.config.schema), ESchemaAlreadySet);
@@ -109,7 +109,7 @@ module dispenser::dispenser {
     }
 
     /// Loads items or data into the dispenser
-    public fun load(self: &mut Dispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public fun load(self: &mut DataDispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
         assert!(!vector::is_empty(&data), ELoadEmptyItems);
 
@@ -142,7 +142,7 @@ module dispenser::dispenser {
 
     /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
     /// It uses the Sui randomness module to generate the random value
-    public fun random_dispense(self: &mut Dispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext): vector<u8> {
+    public fun random_dispense(self: &mut DataDispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, coins: vector<Coin<SUI>>, signature: vector<u8>, ctx: &mut TxContext): vector<u8> {
         assert!(!self.config.is_sequential, EInvalidDispenserType);
         assert!(option::is_some(&self.randomness_id), EMissingRandomness);
         assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), ERandomnessMismatch);
@@ -170,7 +170,7 @@ module dispenser::dispenser {
     }
 
     /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
-    public fun sequential_dispense(self: &mut Dispenser, coins: vector<Coin<SUI>>, ctx: &mut TxContext): vector<u8> {
+    public fun sequential_dispense(self: &mut DataDispenser, coins: vector<Coin<SUI>>, ctx: &mut TxContext): vector<u8> {
         assert!(self.config.is_sequential, EInvalidDispenserType);
         assert!(self.items_available != 0, EDispenserEmpty);
 
@@ -185,7 +185,7 @@ module dispenser::dispenser {
 
     /// Takes an amount from payment made to the dispenser and transfers it to the recipient
     /// If recipient is not provided, it's transfered to the transaction sender
-    public fun withdraw(self: &mut Dispenser, amount: u64, recipient: Option<address>, ctx: &mut TxContext) {
+    public fun withdraw(self: &mut DataDispenser, amount: u64, recipient: Option<address>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
 
         let coin = coin::take(&mut self.balance, amount, ctx);
@@ -198,12 +198,12 @@ module dispenser::dispenser {
     }
 
     /// Makes the dispenser a shared object
-    public fun publish(self: Dispenser) {
+    public fun publish(self: DataDispenser) {
         transfer::share_object(self);
     }
 
     /// Returns the mutable reference of the dispenser id
-    public fun extend(self: &mut Dispenser, ctx: &mut TxContext): &mut UID {
+    public fun extend(self: &mut DataDispenser, ctx: &mut TxContext): &mut UID {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
 
         &mut self.id
@@ -211,7 +211,7 @@ module dispenser::dispenser {
 
     // ========== Helper Functions ==========
 
-    fun fill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
+    fun fill_randomness(self: &mut DataDispenser, ctx: &mut TxContext) {
         let randomness = randomness::new(RANDOMNESS_WITNESS {}, ctx);
         let randomness_id = object::id(&randomness);
 
@@ -219,7 +219,7 @@ module dispenser::dispenser {
         randomness::share_object(randomness);
     }
 
-    fun refill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
+    fun refill_randomness(self: &mut DataDispenser, ctx: &mut TxContext) {
         option::extract(&mut self.randomness_id);
         fill_randomness(self, ctx);
     }
