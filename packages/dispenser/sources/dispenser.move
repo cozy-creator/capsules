@@ -37,6 +37,7 @@ module dispenser::dispenser {
     }
 
     struct RANDOMNESS_WITNESS has drop {}
+    struct Witness has drop {}
 
     const EInvalidAuth: u64 = 0;
     const ELoadEmptyItems: u64 = 1;
@@ -65,14 +66,16 @@ module dispenser::dispenser {
         }
     }
 
-    public fun initialize<W: drop>(witness: W, owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
+    public fun initialize<W: drop>(_: W, owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
         let dispenser = new(payment, capacity, is_sequential, option::none(), ctx);
 
-        let owner = if(option::is_some(&owner)) 
+        let owner = if(option::is_some(&owner)) {
             option::extract(&mut owner) 
-            else tx_context::sender(ctx);
+        } else {
+            tx_context::sender(ctx)
+        };
 
-        let auth = tx_authority::add_type_capability(&witness, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         let proof = ownership::setup(&dispenser);
 
         ownership::initialize(&mut dispenser.id, proof, &auth);
