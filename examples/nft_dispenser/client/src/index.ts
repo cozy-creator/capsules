@@ -77,5 +77,5 @@ function serializeNFTsData(rawData: { name: string; description: string; url: st
 }
 
 // loadData().then(console.log).catch(console.log);
-dispense().then(console.log).catch(console.log);
+// dispense().then(console.log).catch(console.log);
 // getRandomnessSignature().then(console.log).catch(console.log);
