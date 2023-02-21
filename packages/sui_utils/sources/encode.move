@@ -322,4 +322,14 @@ module sui_utils::encode_test {
         assert!(value2 == ascii::string(b"vector<vector<u8>>"), 0);
         assert!(value3 == ascii2::empty(), 0);
     }
+
+    #[test]
+    public fun test_append_struct_name() {
+        let module_name1 = ascii::string(b"0x2::sui");
+        let struct1 = encode::append_struct_name_(module_name1, ascii::string(b"SUI"));
+        assert!(struct1 == ascii::string(b"0x2::sui::SUI"), 0);
+
+        let struct2 = encode::append_struct_name<SUI>(ascii::string(b"Cap"));
+        assert!(struct2 == ascii::string(b"0000000000000000000000000000000000000002::sui::Cap"), 0);
+    }
 }
