@@ -22,16 +22,16 @@ module dispenser::dispenser {
 
     struct Dispenser has key {
         id: UID,
-        items_available: u64,
+        items_available: u64, // the number of items available
         balance: Balance<SUI>,
-        items: vector<vector<u8>>,
-        randomness_id: Option<ID>,
+        items: vector<vector<u8>>, 
+        randomness_id: Option<ID>, // id of the randomness object which will be used to select item for non sequential dispenser
         config: Config,
     }
 
     struct Config has store {
-        payment: u64,
-        capacity: u64,
+        payment: u64,   // payment required to dispense an item
+        capacity: u64, // capacity of the dispenser, i.e max number of items
         is_sequential: bool,
         schema: Option<Schema>
     }
@@ -56,7 +56,7 @@ module dispenser::dispenser {
          Dispenser {
             id: object::new(ctx),
             balance: balance::zero(),
-            items_available: 0,
+            items_available: 0, 
             items: vector::empty(),
             randomness_id: option::none(),
             config: Config {
