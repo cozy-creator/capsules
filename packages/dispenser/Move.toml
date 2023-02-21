@@ -5,6 +5,8 @@ version = "0.0.1"
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
+Ownership = { local = "../ownership" }
+TransferSystem = { local = "../transfer_system" }
 
 [addresses]
 dispenser =  "0xd3b2e0994d2adc24f585edfb6e84fe9b81f4586c"
