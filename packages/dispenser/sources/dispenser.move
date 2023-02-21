@@ -68,7 +68,7 @@ module dispenser::dispenser {
         }
     }
 
-    public fun initialize<W: drop>(_: W, owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
+    public fun initialize(owner: Option<address>, payment: u64, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
         let dispenser = new(payment, capacity, is_sequential, option::none(), ctx);
 
         let owner = if(option::is_some(&owner)) {

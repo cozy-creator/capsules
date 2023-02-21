@@ -11,14 +11,12 @@ module nft_dispenser::nft_dispenser {
 
     use dispenser::dispenser::{Self, RANDOMNESS_WITNESS, Dispenser};
 
-    struct NFT_DISPENSER has drop {}
-
-    fun init(w: NFT_DISPENSER, ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext) {
         // Our NFT schema - name: string, description: string, url: string
         let schema: vector<vector<u8>> = vector[b"String", b"String", b"String"];
         let admin = address::from_bytes(x"ed2c39b73e055240323cf806a7d8fe46ced1cabb");
 
-        let dispenser = dispenser::initialize<NFT_DISPENSER>(w, option::some(admin), 1000, 5, false, option::some(schema), ctx);
+        let dispenser = dispenser::initialize(option::some(admin), 1000, 5, false, option::some(schema), ctx);
         dispenser::publish(dispenser);
     }
 
