@@ -32,12 +32,7 @@ async function dispense() {
 
     const res = await signer.executeMoveCall({
       typeArguments: [],
-      arguments: [
-        dispenserObjectId,
-        randomnessObjectId,
-        ["0x7762aabd32826fec88a17ecf95d04b83be694aa4"],
-        "0x" + toHEX(Buffer.from(signature.signature, "base64")),
-      ],
+      arguments: [dispenserObjectId, randomnessObjectId, "0x" + toHEX(Buffer.from(signature.signature, "base64"))],
       function: "dispense",
       module: "nft_dispenser",
       packageObjectId: dispenserPackageId,
