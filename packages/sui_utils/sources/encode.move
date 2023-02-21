@@ -14,7 +14,7 @@ module sui_utils::encode {
     use std::type_name;
     use std::vector;
     use sui::address;
-    use sui::object::ID;
+    use sui::object::{Self, ID};
     use sui_utils::vector2;
     use sui_utils::ascii2;
 
@@ -30,28 +30,36 @@ module sui_utils::encode {
         decompose_type_name(type_name<T>())
     }
 
-    // Accepts a full-qualified type-name strings and decomposes it into its components:
-    // (package_id, module_name, struct name, generics).
-    // Aborts if the string does not conform to the `address::module::type` format
+    // Accepts any valid type-name strings and decomposes it into its components:
+    // (package_id, module_name, struct name, generics). Supports both structs and primitive types.
+    // Primitive types are considered to have an ID of 0x0 and a module name of "".
     // Example output:
     // (0000000000000000000000000000000000000002, devnet_nft, DevnetNFT, [])
+    // ("0000000000000000000000000000000000000000", "", vector, ["0000000000000000000000000000000000000002::devnet_nft::DevnetNFT"])
     public fun decompose_type_name(s1: String): (ID, String, String, vector<String>) {
         let delimiter = ascii::string(b"::");
         let len = address::length();
-        assert!(ascii2::sub_string(&s1, len * 2, len * 2 + 2) == delimiter, EINVALID_TYPE_NAME);
 
-        let s2 = ascii2::sub_string(&s1, len * 2 + 2, ascii::length(&s1));
-        let j = ascii2::index_of(&s2, &delimiter);
-        assert!(ascii::length(&s2) > j, EINVALID_TYPE_NAME);
+        if ((ascii::length(&s1) > len * 2 + 2) && (ascii2::sub_string(&s1, len * 2, len * 2 + 2) == delimiter)) {
+            // This is a fully qualified type, like <package-id>::<module-name>::<struct-name>
+            let s2 = ascii2::sub_string(&s1, len * 2 + 2, ascii::length(&s1));
+            let j = ascii2::index_of(&s2, &delimiter);
+            assert!(ascii::length(&s2) > j, EINVALID_TYPE_NAME);
 
-        let package_id_str = ascii2::sub_string(&s1, 0, len * 2);
-        let module_name = ascii2::sub_string(&s2, 0, j);
-        let struct_name_and_generics = ascii2::sub_string(&s2, j + 2, ascii::length(&s2));
+            let package_id_str = ascii2::sub_string(&s1, 0, len * 2);
+            let module_name = ascii2::sub_string(&s2, 0, j);
+            let struct_name_and_generics = ascii2::sub_string(&s2, j + 2, ascii::length(&s2));
 
-        let package_id = ascii2::ascii_bytes_into_id(ascii::into_bytes(package_id_str));
-        let (struct_name, generics) = decompose_struct_name(struct_name_and_generics);
+            let package_id = ascii2::ascii_bytes_into_id(ascii::into_bytes(package_id_str));
+            let (struct_name, generics) = decompose_struct_name(struct_name_and_generics);
 
-        (package_id, module_name, struct_name, generics)
+            (package_id, module_name, struct_name, generics)
+        } else {
+            // This is a primitive type, like vector<u64>
+            let (struct_name, generics) = decompose_struct_name(s1);
+            
+            (object::id_from_address(@0x0), ascii2::empty(), struct_name, generics)
+        }
     }
 
     // Takes a struct-name like `MyStruct<T, G>` and returns (MyStruct, [T, G])
@@ -86,11 +94,14 @@ module sui_utils::encode {
     }
 
     public fun package_id_and_module_name_(s1: String): String {
-        let s2 = ascii2::sub_string(&s1, address::length() * 2, ascii::length(&s1));
-        let j = ascii2::index_of(&s2, &ascii::string(b"::"));
+        let delimiter = ascii::string(b"::");
+        let s2 = ascii2::sub_string(&s1, (address::length() * 2) + 2, ascii::length(&s1));
+        let j = ascii2::index_of(&s2, &delimiter);
+
         assert!(ascii::length(&s2) > j, EINVALID_TYPE_NAME);
 
-        ascii2::sub_string(&s1, 0, j)
+        let i = (address::length() * 2) + 2 + j;
+        ascii2::sub_string(&s1, 0, i)
     }
 
     // Returns the module_name + struct_name, without any generics, such as `my_module::CoolStruct`
@@ -175,6 +186,9 @@ module sui_utils::encode {
                         j = i + 1;
                     };
                 } else j = i + 1;
+            } else if (i == len - 1) { // We've reached the end of the string
+                let s = ascii2::sub_string(&str, j, len);
+                vector::push_back(&mut result, s);
             };
 
             i = i + 1;
@@ -219,9 +233,10 @@ module sui_utils::encode {
 #[test_only]
 module sui_utils::encode_test {
     use std::debug;
-    use sui::test_scenario;
     use std::ascii;
-    use std::string;
+    use std::string::{Self, EINVALID_UTF8};
+    use std::vector;
+    use sui::test_scenario;
     use sui::object;
     use sui::bcs;
     use sui::coin::{Self, Coin};
@@ -232,9 +247,11 @@ module sui_utils::encode_test {
     // test failure codes
     const EID_DOES_NOT_MATCH: u64 = 1;
 
+    struct SillyStruct<phantom A, phantom B, phantom C> has drop { }
+
     // bcs bytes != utf8 bytes
     #[test]
-    #[expected_failure]
+    #[expected_failure(abort_code = EINVALID_UTF8)]
     public fun bcs_is_not_utf8() {
         let scenario = test_scenario::begin(@0x5);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -254,15 +271,15 @@ module sui_utils::encode_test {
         let _ctx = test_scenario::ctx(&mut scenario);
         {
             let name = encode::type_name<Coin<SUI>>();
-            let (module_addr, struct_name) = encode::decompose_type_name(name);
-            assert!(ascii::string(b"0000000000000000000000000000000000000002::coin") == module_addr, 0);
-            assert!(ascii::string(b"Coin<0000000000000000000000000000000000000002::sui::SUI>") == struct_name, 0);
+            let (_, module_addr, struct_name, _) = encode::decompose_type_name(name);
+            assert!(ascii::string(b"coin") == module_addr, 0);
+            assert!(ascii::string(b"Coin") == struct_name, 0);
         };
         test_scenario::end(scenario);
     }
 
     #[test]
-    public fun match_modules() {
+    public fun is_same_module() {
         let scenario = test_scenario::begin(@0x420);
         let _ctx = test_scenario::ctx(&mut scenario);
         {
@@ -277,13 +294,13 @@ module sui_utils::encode_test {
     public fun invalid_string() {
         let scenario = test_scenario::begin(@0x69);
         {
-            let (_addr, _type) = encode::decompose_type_name(ascii::string(b"1234567890"));
+            let (_, _addr, _type, _) = encode::decompose_type_name(ascii::string(b"0000000000000000000000000000000000000000::gotcha_bitch"));
         };
         test_scenario::end(scenario);
     }
 
     #[test]
-    public fun package_id_test() {
+    public fun package_id() {
         let scenario = test_scenario::begin(@0x79);
         let _ctx = test_scenario::ctx(&mut scenario);
         {
@@ -291,17 +308,6 @@ module sui_utils::encode_test {
         };
         test_scenario::end(scenario);
     }
-
-    // #[test]
-    // public fun test_type_name_with_generic() {
-    //     let (type, generic) = encode::type_name_with_generic<Coin<SUI>>();
-    //     assert!(ascii::string(b"0000000000000000000000000000000000000002::coin::Coin") == type, 0);
-    //     assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == generic, 0);
-
-    //     let (type, generic) = encode::type_name_with_generic<SUI>();
-    //     assert!(ascii::string(b"0000000000000000000000000000000000000002::sui::SUI") == type, 0);
-    //     assert!(ascii2::empty() == generic, 0);
-    // }
 
     #[test]
     public fun test_parse_option() {
@@ -317,5 +323,58 @@ module sui_utils::encode_test {
         assert!(value1 == ascii2::empty(), 0);
         assert!(value2 == ascii::string(b"vector<vector<u8>>"), 0);
         assert!(value3 == ascii2::empty(), 0);
+    }
+
+    #[test]
+    public fun test_append_struct_name() {
+        let module_addr1 = encode::package_id_and_module_name<SUI>();
+        let struct1 = encode::append_struct_name_(module_addr1, ascii::string(b"Witness"));
+        assert!(struct1 == ascii::string(b"0000000000000000000000000000000000000002::sui::Witness"), 0);
+
+        let module_addr2 = encode::package_id_and_module_name_(encode::type_name<SUI>());
+        assert!(module_addr1 == module_addr2, 0);
+
+        let struct2 = encode::append_struct_name<SUI>(ascii::string(b"Witness"));
+        assert!(struct1 == struct2, 0);
+    }
+
+    #[test]
+    public fun parse_comma_delimited_list() {
+        let string = ascii::string(b"Paul, George, John, Ringo");
+        let parsed_vec = encode::parse_comma_delimited_list(string);
+        assert!(vector::length(&parsed_vec) == 4, 0);
+        assert!(*vector::borrow(&parsed_vec, 0) == ascii::string(b"Paul"), 0);
+        assert!(*vector::borrow(&parsed_vec, 1) == ascii::string(b"George"), 0);
+        assert!(*vector::borrow(&parsed_vec, 2) == ascii::string(b"John"), 0);
+        assert!(*vector::borrow(&parsed_vec, 3) == ascii::string(b"Ringo"), 0);
+    }
+
+    #[test]
+    public fun is_vector() {
+        let type_name = encode::type_name<SUI>();
+        let (_, _, struct_name, _) = encode::decompose_type_name(type_name);
+        assert!(!encode::is_vector(struct_name), 0);
+
+        let type_name = encode::type_name<vector<SUI>>();
+        assert!(encode::is_vector(type_name), 0);
+
+        let (_, _, struct_name, _) = encode::decompose_type_name(type_name);
+        assert!(struct_name == ascii::string(b"vector"), 0);
+    }
+
+    // There is currently a bug in Move core that prevents this from working. We'll bring this back
+    // once it's fixed.
+    #[test]
+    public fun generics() {
+        // let (_, _, struct_name, generics) = encode::type_name_decomposed<SillyStruct<SUI, u64, vector<u8>>>();
+        // debug::print(&generics);
+
+        // debug::print(&encode::type_name<SillyStruct<SUI, u64, vector<u8>>>());
+
+        // assert!(struct_name == ascii::string(b"SillyStruct"), 0);
+        // assert!(vector::length(&generics) == 3, 0);
+        // assert!(*vector::borrow(&generics, 0) == ascii::string(b"0000000000000000000000000000000000000002::sui::SUI"), 0);
+        // assert!(*vector::borrow(&generics, 1) == ascii::string(b"u64"), 0);
+        // assert!(*vector::borrow(&generics, 2) == ascii::string(b"vector<u8>"), 0);
     }
 }

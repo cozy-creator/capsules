@@ -10,4 +10,4 @@ Ownership = { local = "../ownership" }
 TransferSystem = { local = "../transfer_system" }
 
 [addresses]
-metadata =  "0xeb85c3c33d99df932bcb26ef59c963cae67fb1d1"
+metadata =  "0x12c7feeb5ca9a9c5950b3800f7156b152e9fb079"
