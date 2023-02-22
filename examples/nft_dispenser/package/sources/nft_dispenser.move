@@ -51,4 +51,12 @@ module nft_dispenser::nft_dispenser {
         payment_guard::collect<Witness, SUI>(guard, coins, ctx);
         devnet_nft::mint(name, description, url, ctx);
     }
+
+    /// withdraws a specified amount from the collected payment
+    public entry fun withdraw(dispenser: &mut DataDispenser, guard: &mut Guard<Witness>, amount: u64) {
+        // the payment guard already validates that the transaction sender is the same as the taker,
+        // so we do not need to validate the sender here. 
+        // However, in some other case we might want to do some other validation before proceeding.
+        payment_guard::take<Witness, SUI>(guard, amount)
+    }
 }
