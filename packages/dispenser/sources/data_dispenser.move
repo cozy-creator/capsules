@@ -411,7 +411,9 @@ module dispenser::data_dispenser_test {
                 i = i + 1;
             };
 
+            // dispenser would be emty here, so this should error
             sequential_dispense(&mut dispenser);
+
             test_scenario::return_shared(dispenser);
         };
 
