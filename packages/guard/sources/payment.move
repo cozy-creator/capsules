@@ -235,4 +235,35 @@ module guard::payment_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    fun test_take_payment() {
+        let (amount, sender) = (1000, @0xEFAE);
+        let scenario = initialize_scenario(amount, sender);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+
+            assert!(payment::balance_value<Witness, SUI>(&guard) == amount, 0);
+
+            test_scenario::return_shared(guard);
+            test_scenario::next_tx(&mut scenario, sender)
+        };
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            let coin = payment::take<Witness, SUI>(&mut guard, 500, test_scenario::ctx(&mut scenario));
+
+            assert!(payment::balance_value<Witness, SUI>(&guard) == 500, 0);
+
+            destroy_test_coins(vector[coin]);
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
 }
