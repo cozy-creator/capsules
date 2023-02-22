@@ -16,12 +16,18 @@ module guard::guard {
         slot: u64
     }
 
-    public entry fun initialize<T>(ctx: &mut TxContext) {
-        let guard = Guard<T> {
+    public fun initialize<T>(ctx: &mut TxContext): Guard<T> {
+        Guard<T> {
             id: object::new(ctx)
-        };
+        }
+    }
 
-        transfer::transfer(guard, tx_context::sender(ctx));
+    public fun transfer<T>(guard: Guard<T>, ctx: &mut TxContext) {
+        transfer::transfer(guard, tx_context::sender(ctx))
+    }
+
+    public fun share_object<T>(guard: Guard<T>) {
+        transfer::share_object(guard)
     }
 
     public(friend) fun key(slot: u64): Key {
