@@ -10,6 +10,9 @@ module guard::sender {
 
     const SENDER_GUARD_ID: u64 = 2;
 
+    const EKeyNotSet: u64 = 0;
+    const EInvalidSender: u64 = 1;
+
     public fun create<T>(guard: &mut Guard<T>, value: address) {
         let sender =  Sender { 
             value 
@@ -25,9 +28,9 @@ module guard::sender {
         let key = guard::key(SENDER_GUARD_ID);
         let uid = guard::uid(guard);
 
-        assert!(dynamic_field::exists_with_type<Key, Sender>(uid, key), 0);
+        assert!(dynamic_field::exists_with_type<Key, Sender>(uid, key), EKeyNotSet);
         let sender = dynamic_field::borrow<Key, Sender>(uid, key);
 
-        assert!(sender.value == tx_context::sender(ctx), 0)
+        assert!(sender.value == tx_context::sender(ctx), EInvalidSender)
     }  
 }

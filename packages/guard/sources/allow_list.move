@@ -11,6 +11,9 @@ module guard::allow_list {
 
     const ALLOW_LIST_GUARD_ID: u64 = 1;
 
+    const EKeyNotSet: u64 = 0;
+    const EAddressNotAllowed: u64 = 1;
+
     public fun empty<T>(guard: &mut Guard<T>) {
         create(guard, vector::empty<address>());
     }
@@ -23,16 +26,16 @@ module guard::allow_list {
         let key = guard::key(ALLOW_LIST_GUARD_ID);
         let uid = guard::extend(guard);
 
-        dynamic_field::add<Key, AllowList>(uid, key, allow_list);
+        dynamic_field::add<Key, AllowList>(uid, key, allow_list)
     }
 
     public fun validate<T>(guard: &Guard<T>, addr: address) {
         let key = guard::key(ALLOW_LIST_GUARD_ID);
         let uid = guard::uid(guard);
 
-        assert!(dynamic_field::exists_with_type<Key, AllowList>(uid, key), 0);
+        assert!(dynamic_field::exists_with_type<Key, AllowList>(uid, key), EKeyNotSet);
         let allow_list = dynamic_field::borrow<Key, AllowList>(uid, key);
 
-        assert!(vector::contains(&allow_list.addresses, &addr), 0)
+        assert!(vector::contains(&allow_list.addresses, &addr), EAddressNotAllowed)
     }  
 }
