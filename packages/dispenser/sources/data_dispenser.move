@@ -83,6 +83,7 @@ module dispenser::data_dispenser {
         };
         
         ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut dispenser.id, owner, &auth);
+
         dispenser
     }
 
