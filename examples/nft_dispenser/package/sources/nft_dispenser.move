@@ -23,10 +23,12 @@ module nft_dispenser::nft_dispenser {
 
         let dispenser = dispenser::initialize(option::some(admin), 5, false, option::some(schema), ctx);
         
+        // initialize the guard
         let guard = guard::initialize(&Witness {}, ctx);
+
+        // create the payment guard, amount: 10000 and the taker is the same as the admin
         payment_guard::create<Witness, SUI>(&mut guard, 10000, admin);
         guard::share_object(guard);
-
         dispenser::publish(dispenser);
     }
 
@@ -35,6 +37,7 @@ module nft_dispenser::nft_dispenser {
     }
 
     public entry fun dispense(dispenser: &mut DataDispenser, guard: &mut Guard<Witness>, coins: vector<Coin<SUI>>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
+        // validates the the incoming spayment
         payment_guard::validate<Witness, SUI>(guard, &coins);
 
         let data = dispenser::random_dispense(dispenser, randomness, signature, ctx);
@@ -44,6 +47,7 @@ module nft_dispenser::nft_dispenser {
         let description = bcs::peel_vec_u8(&mut bcs);
         let url = bcs::peel_vec_u8(&mut bcs);
 
+        // collects the the incoming spayment
         payment_guard::collect<Witness, SUI>(guard, coins, ctx);
         devnet_nft::mint(name, description, url, ctx);
     }
