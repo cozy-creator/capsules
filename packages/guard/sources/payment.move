@@ -173,4 +173,23 @@ module guard::payment_test {
         destroy_test_coins(coins);
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = guard::payment::EInvalidPayment)]
+    fun test_validate_payment_failure() {
+        let (amount, sender) = (1000, @0xEFAE);
+        let scenario = initialize_scenario(amount, sender);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        let coins = mint_test_coins<SUI>(&mut scenario, 200, 3);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::validate<Witness, SUI>(&mut guard, &coins);
+            test_scenario::return_shared(guard);
+        };
+
+        destroy_test_coins(coins);
+        test_scenario::end(scenario);
+    }
 }
