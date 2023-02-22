@@ -196,7 +196,7 @@ module dispenser::data_dispenser {
 
 #[test_only]
 module dispenser::data_dispenser_test {
-    use std::option;
+    use std::option::{Self, Option};
     use std::vector;
 
     use sui::test_scenario::{Self, Scenario};
@@ -206,16 +206,26 @@ module dispenser::data_dispenser_test {
 
     const ADMIN: address = @0xFAEC;
 
-    fun initialize_scenario(): Scenario {
+    fun initialize_scenario(schema: Option<vector<vector<u8>>>): Scenario {
         let scenario = test_scenario::begin(ADMIN);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        let dispenser = data_dispenser::initialize(option::none(), 5, true, option::some(vector[b"String"]), ctx);
+        let dispenser = data_dispenser::initialize(option::none(), 5, true, schema, ctx);
 
         data_dispenser::publish(dispenser);
         test_scenario::next_tx(&mut scenario, ADMIN);
 
         scenario
+    }
+
+    fun get_dispenser_test_data(): vector<vector<u8>> {
+        vector[
+            bcs::to_bytes(&b"Sui"), 
+            bcs::to_bytes(&b"Move"), 
+            bcs::to_bytes(&b"Capsule"), 
+            bcs::to_bytes(&b"Object"), 
+            bcs::to_bytes(&b"Metadata")
+        ]
     }
 
     fun load_dispenser(scenario: &mut Scenario, dispenser: &mut DataDispenser, data: vector<vector<u8>>) {
@@ -228,15 +238,8 @@ module dispenser::data_dispenser_test {
 
     #[test]
     fun test_sequential_data_dispenser() {
-        let data = vector[
-            bcs::to_bytes(&b"Sui"), 
-            bcs::to_bytes(&b"Move"), 
-            bcs::to_bytes(&b"Capsule"), 
-            bcs::to_bytes(&b"Object"), 
-            bcs::to_bytes(&b"Metadata")
-        ];
-
-        let scenario = initialize_scenario();
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
+        let data = get_dispenser_test_data();
 
         {
             let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
@@ -266,12 +269,29 @@ module dispenser::data_dispenser_test {
     #[test]
     #[expected_failure(abort_code = dispenser::data_dispenser::ELoadEmptyItems)]
     fun test_empty_dispenser_data_failure() {
-        let scenario = initialize_scenario();
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
 
         {
             let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
 
             load_dispenser(&mut scenario, &mut dispenser, vector::empty());
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::ESchemaNotSet)]
+    fun test_unset_dispenser_schema_failure() {
+        let scenario = initialize_scenario(option::none());
+        let data = get_dispenser_test_data();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
             test_scenario::return_shared(dispenser);
             test_scenario::next_tx(&mut scenario, ADMIN);
         } ;
