@@ -283,6 +283,23 @@ module dispenser::data_dispenser_test {
     }
 
     #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::EInvalidAuth)]
+    fun test_invalid_dispenser_owner_failure() {
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
+        let data = get_dispenser_test_data();
+
+        test_scenario::next_tx(&mut scenario, @0xABCE);
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
     #[expected_failure(abort_code = dispenser::data_dispenser::ESchemaNotSet)]
     fun test_unset_dispenser_schema_failure() {
         let scenario = initialize_scenario(option::none());
