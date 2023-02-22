@@ -318,4 +318,21 @@ module dispenser::data_dispenser_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::schema::EUnspportedType)]
+    fun test_dispenser_unsupported_type_failure() {
+        let scenario = initialize_scenario(option::some(vector[b"int8"]));
+        let data = get_dispenser_test_data();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        test_scenario::end(scenario);
+    }
 }
