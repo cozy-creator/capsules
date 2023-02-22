@@ -29,7 +29,7 @@ module guard::guard {
         }
     }
 
-    public fun key(slot: u64): Key {
+    public(friend) fun key(slot: u64): Key {
         Key { slot }
     }
 
