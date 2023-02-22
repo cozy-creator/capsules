@@ -218,4 +218,21 @@ module guard::payment_test {
         test_scenario::end(scenario);
     }
 
+    #[test]
+    #[expected_failure(abort_code = sui::balance::ENotEnough)]
+    fun test_collect_payment_not_enough_failure() {
+        let (amount, sender) = (1000, @0xEFAE);
+        let scenario = initialize_scenario(amount, sender);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        let coins = mint_test_coins<SUI>(&mut scenario, 200, 3);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
 }
