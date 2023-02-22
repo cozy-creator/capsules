@@ -276,7 +276,6 @@ module dispenser::data_dispenser_test {
 
             load_dispenser(&mut scenario, &mut dispenser, vector::empty());
             test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
         } ;
 
         test_scenario::end(scenario);
@@ -310,7 +309,6 @@ module dispenser::data_dispenser_test {
 
             load_dispenser(&mut scenario, &mut dispenser, data);
             test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
         } ;
 
         test_scenario::end(scenario);
@@ -330,7 +328,6 @@ module dispenser::data_dispenser_test {
 
             load_dispenser(&mut scenario, &mut dispenser, data);
             test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
         } ;
 
         test_scenario::end(scenario);
@@ -347,7 +344,6 @@ module dispenser::data_dispenser_test {
 
             load_dispenser(&mut scenario, &mut dispenser, data);
             test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
         } ;
 
         test_scenario::end(scenario);
