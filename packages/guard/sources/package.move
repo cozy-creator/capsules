@@ -11,7 +11,7 @@ module guard::package {
         value: ID
     }
 
-    const PACKAGE_LIST_GUARD_ID: u64 = 3;
+    const PACKAGE_GUARD_ID: u64 = 3;
 
     fun new(value: ID): Package {
         Package { value }
