@@ -10,20 +10,19 @@ module guard::sender {
 
     const SENDER_GUARD_ID: u64 = 2;
 
-    fun new(value: address): Sender {
-        Sender { value }
-    }
+    public fun create(guard: &mut Guard, value: address) {
+        let sender =  Sender { 
+            value 
+        };
 
-    public fun set(guard: &mut Guard, value: address) {
-        let sender =  new(value);
-        let key = guard::key(SENDER_LIST_GUARD_ID);
+        let key = guard::key(SENDER_GUARD_ID);
         let uid = guard::extend(guard);
 
         dynamic_field::add<Key, Sender>(uid, key, sender);
     }
 
     public fun validate(guard: &Guard, ctx: &TxContext) {
-        let key = guard::key(SENDER_LIST_GUARD_ID);
+        let key = guard::key(SENDER_GUARD_ID);
         let uid = guard::uid(guard);
 
         assert!(dynamic_field::exists_with_type<Key, Sender>(uid, key), 0);

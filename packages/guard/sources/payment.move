@@ -16,15 +16,12 @@ module guard::payment {
 
     const PAYMENT_GUARD_ID: u64 = 0;
 
-    fun new<T>(amount: u64): Payment<T> {
-        Payment {
+    public fun create<T>(guard: &mut Guard, amount: u64) {
+        let payment =  Payment<T> {
             balance: balance::zero(),
             amount
-        }
-    }
+        };
 
-    public fun set<T>(guard: &mut Guard, amount: u64) {
-        let payment =  new<T>(amount);
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
 
