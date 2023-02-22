@@ -4,7 +4,7 @@ module guard::guard {
     use sui::object::{Self, UID};
 
     friend guard::payment;
-    friend guard::allow_list;
+    friend guard::allowlist;
     friend guard::sender;
     friend guard::package;
 
