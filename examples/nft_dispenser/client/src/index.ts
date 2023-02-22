@@ -1,6 +1,8 @@
 import { BCS, toHEX, getSuiMoveConfig } from "@mysten/bcs";
 import { getObjectFields } from "@mysten/sui.js";
-import { dispenserObjectId, dispenserPackageId, nftData, provider, signer } from "./config";
+import { dispenserObjectId, dispenserPackageId, guardObjectId, nftData, provider, signer } from "./config";
+
+const paymentCoinObjectIds = ["0x7762aabd32826fec88a17ecf95d04b83be694aa4"];
 
 async function getRandomnessSignature(randomnessObjectId: string) {
   const res = await provider.call("sui_tblsSignRandomnessObject", [randomnessObjectId, "ConsensusCommitted"]);
@@ -32,7 +34,13 @@ async function dispense() {
 
     const res = await signer.executeMoveCall({
       typeArguments: [],
-      arguments: [dispenserObjectId, randomnessObjectId, "0x" + toHEX(Buffer.from(signature.signature, "base64"))],
+      arguments: [
+        dispenserObjectId,
+        guardObjectId,
+        paymentCoinObjectIds,
+        randomnessObjectId,
+        "0x" + toHEX(Buffer.from(signature.signature, "base64")),
+      ],
       function: "dispense",
       module: "nft_dispenser",
       packageObjectId: dispenserPackageId,
@@ -43,6 +51,19 @@ async function dispense() {
   } else {
     throw new Error("Invalid dispenser object");
   }
+}
+
+async function withdraw(amount: bigint) {
+  const res = await signer.executeMoveCall({
+    typeArguments: [],
+    arguments: [guardObjectId, String(amount)],
+    function: "withdraw",
+    module: "nft_dispenser",
+    packageObjectId: dispenserPackageId,
+    gasBudget: 30000,
+  });
+
+  return res;
 }
 
 function serializeNFTsData(rawData: { name: string; description: string; url: string }[]) {
@@ -73,4 +94,5 @@ function serializeNFTsData(rawData: { name: string; description: string; url: st
 
 // loadData().then(console.log).catch(console.log);
 // dispense().then(console.log).catch(console.log);
+// withdraw(BigInt(1500)).then(console.log).catch(console.log);
 // getRandomnessSignature().then(console.log).catch(console.log);
