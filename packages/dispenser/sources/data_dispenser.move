@@ -236,6 +236,10 @@ module dispenser::data_dispenser_test {
        data_dispenser::sequential_dispense(dispenser)
     }
 
+    fun set_dispenser_schema(scenario: &mut Scenario, dispenser: &mut DataDispenser, schema: vector<vector<u8>>) {
+       data_dispenser::set_schema(dispenser, schema, test_scenario::ctx(scenario))
+    }
+
     #[test]
     fun test_sequential_data_dispenser() {
         let scenario = initialize_scenario(option::some(vector[b"String"]));
@@ -343,6 +347,24 @@ module dispenser::data_dispenser_test {
             let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
 
             load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::EDispenserAlreadyLoaded)]
+    fun test_set_schema_already_loaded_failure() {
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
+        let data = get_dispenser_test_data();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            set_dispenser_schema(&mut scenario, &mut dispenser, vector[b"String"]);
+
             test_scenario::return_shared(dispenser);
         } ;
 
