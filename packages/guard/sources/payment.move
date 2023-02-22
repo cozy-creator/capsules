@@ -11,18 +11,21 @@ module guard::payment {
 
     struct Payment<phantom C> has store {
         balance: Balance<C>,
-        amount: u64
+        amount: u64,
+        taker: address
     }
 
     const PAYMENT_GUARD_ID: u64 = 0;
 
     const EKeyNotSet: u64 = 0;
     const EInvalidPayment: u64 = 1;
+    const EInvalidTaker: u64 = 2;
 
-    public fun create<T, C>(guard: &mut Guard<T>, amount: u64) {
+    public fun create<T, C>(guard: &mut Guard<T>, amount: u64, taker: address) {
         let payment =  Payment<C> {
             balance: balance::zero(),
-            amount
+            amount,
+            taker
         };
 
         let key = guard::key(PAYMENT_GUARD_ID);
@@ -84,7 +87,9 @@ module guard::payment {
         assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
         let payment = dynamic_field::borrow_mut<Key, Payment<C>>(uid, key);
 
+        assert!(tx_context::sender(ctx) == payment.taker, EInvalidTaker);
+
         let coin = coin::take(&mut payment.balance, amount, ctx);
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::transfer(coin, payment.taker);
     }
 }
