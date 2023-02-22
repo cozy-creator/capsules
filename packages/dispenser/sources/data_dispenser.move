@@ -192,3 +192,74 @@ module dispenser::data_dispenser {
         fill_randomness(self, ctx);
     }
 }
+
+
+#[test_only]
+module dispenser::data_dispenser_test {
+    use std::option;
+    use std::vector;
+
+    use sui::test_scenario::{Self, Scenario};
+    use sui::bcs;
+
+    use dispenser::data_dispenser::{Self, DataDispenser};
+
+    const ADMIN: address = @0xFAEC;
+
+    fun initialize_scenario(): Scenario {
+        let scenario = test_scenario::begin(ADMIN);
+
+        let ctx = test_scenario::ctx(&mut scenario);
+        let dispenser = data_dispenser::initialize(option::none(), 5, true, option::some(vector[b"String"]), ctx);
+
+        data_dispenser::publish(dispenser);
+        test_scenario::next_tx(&mut scenario, ADMIN);
+
+        scenario
+    }
+
+    fun load_dispenser(scenario: &mut Scenario, dispenser: &mut DataDispenser, data: vector<vector<u8>>) {
+        data_dispenser::load(dispenser, data, test_scenario::ctx(scenario));
+    }
+
+    fun sequential_dispense(dispenser: &mut DataDispenser): vector<u8> {
+       data_dispenser::sequential_dispense(dispenser)
+    }
+
+    #[test]
+    fun test_sequential_data_dispenser() {
+        let data = vector[
+            bcs::to_bytes(&b"Sui"), 
+            bcs::to_bytes(&b"Move"), 
+            bcs::to_bytes(&b"Capsule"), 
+            bcs::to_bytes(&b"Object"), 
+            bcs::to_bytes(&b"Metadata")
+        ];
+
+        let scenario = initialize_scenario();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+            let (i, len) = (0, vector::length(&data));
+
+            while (i < len) {
+                let item = sequential_dispense(&mut dispenser);
+                assert!(&item == vector::borrow(&data, i), 0);
+
+                i = i + 1;
+            };
+
+            test_scenario::return_shared(dispenser);
+        };
+
+        test_scenario::end(scenario);
+    }
+}
