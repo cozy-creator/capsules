@@ -3,6 +3,7 @@ module guard::guard {
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
 
+    friend guard::payment;
 
     struct Guard has key {
         id: UID,
