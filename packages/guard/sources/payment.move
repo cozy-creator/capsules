@@ -296,5 +296,4 @@ module guard::payment_test {
 
         test_scenario::end(scenario);
     }
-
 }
