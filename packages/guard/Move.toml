@@ -1,0 +1,9 @@
+[package]
+name = "Guard"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+guard =  "0x0"
