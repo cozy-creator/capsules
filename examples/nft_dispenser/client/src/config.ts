@@ -11,8 +11,9 @@ const keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
 export const signer = new RawSigner(keypair, provider);
 
 export const publicKey = "0xed2c39b73e055240323cf806a7d8fe46ced1cabb";
-export const dispenserPackageId = "0xd1bb91fdb46184c3783046419daec38d173a0da5";
-export const dispenserObjectId = "0x4ace280b7a25f665de4feb567d842a51c4722168";
+export const dispenserPackageId = "0xdf8961056a253d59d1be310467eb86d5e9a7009f";
+export const dispenserObjectId = "0x47042d32aca74533dcdaf04e0799efdeb3e2f220";
+export const guardObjectId = "0x124e73128c3f64b07685f68826ba8d003dff0937";
 
 export const nftData = [
   {
