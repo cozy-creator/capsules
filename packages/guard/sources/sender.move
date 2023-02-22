@@ -10,7 +10,7 @@ module guard::sender {
 
     const SENDER_GUARD_ID: u64 = 2;
 
-    public fun create(guard: &mut Guard, value: address) {
+    public fun create<T>(guard: &mut Guard<T>, value: address) {
         let sender =  Sender { 
             value 
         };
@@ -21,7 +21,7 @@ module guard::sender {
         dynamic_field::add<Key, Sender>(uid, key, sender);
     }
 
-    public fun validate(guard: &Guard, ctx: &TxContext) {
+    public fun validate<T>(guard: &Guard<T>, ctx: &TxContext) {
         let key = guard::key(SENDER_GUARD_ID);
         let uid = guard::uid(guard);
 

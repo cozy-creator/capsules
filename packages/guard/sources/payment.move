@@ -9,15 +9,15 @@ module guard::payment {
 
     use guard::guard::{Self, Key, Guard};
 
-    struct Payment<phantom T> has store {
-        balance: Balance<T>,
+    struct Payment<phantom C> has store {
+        balance: Balance<C>,
         amount: u64
     }
 
     const PAYMENT_GUARD_ID: u64 = 0;
 
-    public fun create<T>(guard: &mut Guard, amount: u64) {
-        let payment =  Payment<T> {
+    public fun create<T, C>(guard: &mut Guard<T>, amount: u64) {
+        let payment =  Payment<C> {
             balance: balance::zero(),
             amount
         };
@@ -25,15 +25,15 @@ module guard::payment {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
 
-        dynamic_field::add<Key, Payment<T>>(uid, key, payment);
+        dynamic_field::add<Key, Payment<C>>(uid, key, payment);
     }
 
-    public fun validate<T>(guard: &Guard, coins: &vector<Coin<T>>) {
+    public fun validate<T, C>(guard: &Guard<T>, coins: &vector<Coin<C>>) {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::uid(guard);
 
-        assert!(dynamic_field::exists_with_type<Key, Payment<T>>(uid, key), 0);
-        let payment = dynamic_field::borrow<Key, Payment<T>>(uid, key);
+        assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
+        let payment = dynamic_field::borrow<Key, Payment<C>>(uid, key);
 
         let (i, total, len) = (0, 0, vector::length(coins));
 
@@ -47,12 +47,12 @@ module guard::payment {
         assert!(total >= payment.amount, 1)
     }
 
-    public fun collect<T>(guard: &mut Guard, coins: vector<Coin<T>>, ctx: &mut TxContext) {
+    public fun collect<T, C>(guard: &mut Guard<T>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
 
-        assert!(dynamic_field::exists_with_type<Key, Payment<T>>(uid, key), 0);
-        let payment = dynamic_field::borrow_mut<Key, Payment<T>>(uid, key);
+        assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
+        let payment = dynamic_field::borrow_mut<Key, Payment<C>>(uid, key);
 
         let coin = vector::pop_back(&mut coins);
         let (i, len) = (0, vector::length(&coins));
@@ -74,12 +74,12 @@ module guard::payment {
         };
     }
 
-    public fun take<T>(guard: &mut Guard, amount: u64, ctx: &mut TxContext) {
+    public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext) {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
 
-        assert!(dynamic_field::exists_with_type<Key, Payment<T>>(uid, key), 0);
-        let payment = dynamic_field::borrow_mut<Key, Payment<T>>(uid, key);
+        assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
+        let payment = dynamic_field::borrow_mut<Key, Payment<C>>(uid, key);
 
         let coin = coin::take(&mut payment.balance, amount, ctx);
         transfer::transfer(coin, tx_context::sender(ctx));
