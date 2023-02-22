@@ -91,6 +91,16 @@ module guard::payment {
 
         coin::take(&mut payment.balance, amount, ctx)
     }
+
+    public fun balance_value<T, C>(guard: &Guard<T>): u64 {
+        let key = guard::key(PAYMENT_GUARD_ID);
+        let uid = guard::uid(guard);
+
+        assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
+        let payment = dynamic_field::borrow<Key, Payment<C>>(uid, key);
+
+        balance::value(&payment.balance)
+    }
 }
 
 
@@ -187,4 +197,25 @@ module guard::payment_test {
         destroy_test_coins(coins);
         test_scenario::end(scenario);
     }
+
+    #[test]
+    fun test_collect_payment() {
+        let (amount, sender) = (1000, @0xEFAE);
+        let scenario = initialize_scenario(amount, sender);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+
+            assert!(payment::balance_value<Witness, SUI>(&guard) == amount, 0);
+
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
+
 }
