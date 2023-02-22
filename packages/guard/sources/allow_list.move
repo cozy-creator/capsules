@@ -11,16 +11,15 @@ module guard::allow_list {
 
     const ALLOW_LIST_GUARD_ID: u64 = 1;
 
-    fun new(addresses: vector<address>): AllowList {
-        AllowList { addresses }
-    }
-
     public fun empty(guard: &mut Guard) {
-        set(guard, vector::empty<address>());
+        create(guard, vector::empty<address>());
     }
 
-    public fun set(guard: &mut Guard, addresses: vector<address>) {
-        let allow_list =  new(addresses);
+    public fun create(guard: &mut Guard, addresses: vector<address>) {
+        let allow_list =  AllowList { 
+            addresses 
+        };
+
         let key = guard::key(ALLOW_LIST_GUARD_ID);
         let uid = guard::extend(guard);
 
