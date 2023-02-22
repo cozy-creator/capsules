@@ -298,4 +298,24 @@ module dispenser::data_dispenser_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::EAvailableCapacityExceeded)]
+    fun test_dispenser_capacity_exceeded_failure() {
+        let scenario = initialize_scenario(option::none());
+        let data = get_dispenser_test_data();
+
+        // add more data to the test data
+        vector::push_back(&mut data, bcs::to_bytes(&b"Dispenser"));
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        test_scenario::end(scenario);
+    }
 }
