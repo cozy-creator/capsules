@@ -42,3 +42,17 @@ module guard::guard {
         &self.id
     }
 }
+
+#[test_only]
+module guard::guard_test {
+    use sui::test_scenario::{Self, Scenario};
+
+    use guard::guard;
+
+    public fun initialize_guard<T>(witness: &T, scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+
+        let guard = guard::initialize(witness, ctx);
+        guard::share_object(guard);
+    }
+}

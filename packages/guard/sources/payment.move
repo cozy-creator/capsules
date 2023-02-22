@@ -102,22 +102,17 @@ module guard::payment_test {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
 
-    use guard::guard::{Self, Guard};
+    use guard::guard::Guard;
     use guard::payment;
 
+    use guard::guard_test;
+
     struct Witness has drop {}
-
-    fun initialize_guard(scenario: &mut Scenario) {
-        let ctx = test_scenario::ctx(scenario);
-
-        let guard = guard::initialize(&Witness {}, ctx);
-        guard::share_object(guard);
-    }
 
     fun initialize_scenario(amount: u64, sender: address): Scenario {
         let scenario = test_scenario::begin(sender);
 
-        initialize_guard(&mut scenario);        
+        guard_test::initialize_guard(&Witness {}, &mut scenario);      
         test_scenario::next_tx(&mut scenario, sender);
         
         {
