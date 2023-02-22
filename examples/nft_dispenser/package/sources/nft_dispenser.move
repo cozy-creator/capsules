@@ -5,9 +5,16 @@ module nft_dispenser::nft_dispenser {
     use sui::tx_context::TxContext;
     use sui::address;
     use sui::bcs;
+    use sui::sui::SUI;
+    use sui::coin::Coin;
     use sui::randomness::{Randomness};
 
+    use guard::guard::{Self, Guard};
+    use guard::payment as payment_guard;
+
     use dispenser::data_dispenser::{Self as dispenser, RANDOMNESS_WITNESS, DataDispenser};
+    
+    struct Witness has drop {}
 
     fun init(ctx: &mut TxContext) {
         // Our NFT schema - name: string, description: string, url: string
@@ -15,6 +22,11 @@ module nft_dispenser::nft_dispenser {
         let admin = address::from_bytes(x"ed2c39b73e055240323cf806a7d8fe46ced1cabb");
 
         let dispenser = dispenser::initialize(option::some(admin), 5, false, option::some(schema), ctx);
+        
+        let guard = guard::initialize(&Witness {}, ctx);
+        payment_guard::create<Witness, SUI>(&mut guard, 10000, admin);
+        guard::share_object(guard);
+
         dispenser::publish(dispenser);
     }
 
@@ -22,7 +34,9 @@ module nft_dispenser::nft_dispenser {
         dispenser::load(dispenser, data, ctx);
     }
 
-    public entry fun dispense(dispenser: &mut DataDispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
+    public entry fun dispense(dispenser: &mut DataDispenser, guard: &mut Guard<Witness>, coins: vector<Coin<SUI>>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
+        payment_guard::validate<Witness, SUI>(guard, &coins);
+
         let data = dispenser::random_dispense(dispenser, randomness, signature, ctx);
         let bcs = bcs::new(data);
 
@@ -30,6 +44,7 @@ module nft_dispenser::nft_dispenser {
         let description = bcs::peel_vec_u8(&mut bcs);
         let url = bcs::peel_vec_u8(&mut bcs);
 
+        payment_guard::collect<Witness, SUI>(guard, coins, ctx);
         devnet_nft::mint(name, description, url, ctx);
     }
 }
