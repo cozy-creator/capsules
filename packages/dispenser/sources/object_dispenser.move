@@ -62,18 +62,18 @@ module dispenser::object_dispenser {
         let dispenser = new<T>(capacity, is_sequential, ctx);
 
         // declare dispenser owner, uses the transaction sender if it's not passed in an argument
-        let owner = if(option::is_some(&owner)) {
-            option::extract(&mut owner) 
-        } else {
-            tx_context::sender(ctx)
-        };
-
+        let owner = if(option::is_some(&owner)) option::extract(&mut owner) else tx_context::sender(ctx);
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         let proof = ownership::setup(&dispenser);
 
         // initialize the dispenser ownership, using the capsule standard
         ownership::initialize(&mut dispenser.id, proof, &auth);
         ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut dispenser.id, owner, &auth);
+
+        // fill randomness if the dispenser is not sequential
+        if(!is_sequential) { 
+            fill_randomness(&mut dispenser, ctx); 
+        };
 
         dispenser
     }
