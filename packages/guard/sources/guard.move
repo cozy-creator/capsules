@@ -16,7 +16,7 @@ module guard::guard {
         slot: u64
     }
 
-    public fun initialize<T>(_witness: T, ctx: &mut TxContext): Guard<T> {
+    public fun initialize<T>(_witness: &T, ctx: &mut TxContext): Guard<T> {
         Guard<T> {
             id: object::new(ctx)
         }
