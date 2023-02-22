@@ -80,7 +80,7 @@ module guard::payment {
         };
     }
 
-    public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext) {
+    public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext): Coin<C> {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
 
@@ -89,7 +89,88 @@ module guard::payment {
 
         assert!(tx_context::sender(ctx) == payment.taker, EInvalidTaker);
 
-        let coin = coin::take(&mut payment.balance, amount, ctx);
-        transfer::transfer(coin, payment.taker);
+        coin::take(&mut payment.balance, amount, ctx)
+    }
+}
+
+
+#[test_only]
+module guard::payment_test {
+    use std::vector;
+
+    use sui::test_scenario::{Self, Scenario};
+    use sui::coin::{Self, Coin};
+    use sui::sui::SUI;
+
+    use guard::guard::{Self, Guard};
+    use guard::payment;
+
+    struct Witness has drop {}
+
+    fun initialize_guard(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+
+        let guard = guard::initialize(&Witness {}, ctx);
+        guard::share_object(guard);
+    }
+
+    fun initialize_scenario(amount: u64, sender: address): Scenario {
+        let scenario = test_scenario::begin(sender);
+
+        initialize_guard(&mut scenario);        
+        test_scenario::next_tx(&mut scenario, sender);
+        
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::create<Witness, SUI>(&mut guard, amount, sender);
+            test_scenario::return_shared(guard);
+        };
+
+        scenario
+    }
+
+    fun mint_test_coins<C>(scenario: &mut Scenario, value: u64, count: u8): vector<Coin<C>> {
+        let ctx = test_scenario::ctx(scenario);
+        let (i, coins) =  (0, vector::empty<Coin<C>>());
+
+        while(i <= count) {
+            let coin = coin::mint_for_testing<C>(value, ctx);
+            vector::push_back(&mut coins, coin);
+
+            i = i + 1;
+        };
+
+        coins
+    }
+
+    fun destroy_test_coins<C>(coins: vector<Coin<C>>) {
+        let (i, len) =  (0, vector::length(&coins));
+
+        while(i < len) {
+            let coin = vector::pop_back(&mut coins);
+            coin::destroy_for_testing<C>(coin);
+
+            i = i + 1;
+        };
+
+        vector::destroy_empty(coins)
+    }
+
+    #[test]
+    fun test_validate_payment() {
+        let (amount, sender) = (1000, @0xEFAE);
+        let scenario = initialize_scenario(amount, sender);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            payment::validate<Witness, SUI>(&mut guard, &coins);
+            test_scenario::return_shared(guard);
+        };
+
+        destroy_test_coins(coins);
+        test_scenario::end(scenario);
     }
 }
