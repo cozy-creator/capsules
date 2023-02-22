@@ -8,7 +8,7 @@ module guard::sender {
         value: address
     }
 
-    const SENDER_LIST_GUARD_ID: u64 = 2;
+    const SENDER_GUARD_ID: u64 = 2;
 
     fun new(value: address): Sender {
         Sender { value }
