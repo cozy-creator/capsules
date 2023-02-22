@@ -385,4 +385,36 @@ module dispenser::data_dispenser_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::EDispenserEmpty)]
+    fun test_sequential_empty_data_dispenser_failure() {
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
+        let data = get_dispenser_test_data();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, data);
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+            let (i, len) = (0, vector::length(&data));
+
+            while (i < len) {
+                let item = sequential_dispense(&mut dispenser);
+                assert!(&item == vector::borrow(&data, i), 0);
+
+                i = i + 1;
+            };
+
+            sequential_dispense(&mut dispenser);
+            test_scenario::return_shared(dispenser);
+        };
+
+        test_scenario::end(scenario);
+    }
 }
