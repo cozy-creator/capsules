@@ -262,4 +262,20 @@ module dispenser::data_dispenser_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::data_dispenser::ELoadEmptyItems)]
+    fun test_empty_dispenser_data_failure() {
+        let scenario = initialize_scenario();
+
+        {
+            let dispenser = test_scenario::take_shared<DataDispenser>(&scenario);
+
+            load_dispenser(&mut scenario, &mut dispenser, vector::empty());
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        test_scenario::end(scenario);
+    }
 }
