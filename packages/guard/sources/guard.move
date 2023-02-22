@@ -6,6 +6,7 @@ module guard::guard {
     friend guard::payment;
     friend guard::allow_list;
     friend guard::sender;
+    friend guard::package;
 
     struct Guard has key {
         id: UID,
