@@ -1,43 +1,38 @@
 module guard::guard {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
 
     friend guard::payment;
     friend guard::allow_list;
     friend guard::sender;
     friend guard::package;
 
-    struct Guard has key {
-        id: UID,
-        object_id: ID
+    struct Guard<phantom T> has key {
+        id: UID
     }
 
     struct Key has copy, drop, store {
         slot: u64
     }
 
-    public entry fun initialize<T: key>(object: &T, ctx: &mut TxContext) {
-        let guard = initialize_(object, ctx);
-        transfer::transfer(guard, tx_context::sender(ctx));
-    }
+    public entry fun initialize<T>(ctx: &mut TxContext) {
+        let guard = Guard<T> {
+            id: object::new(ctx)
+        };
 
-    public fun initialize_<T: key>(object: &T, ctx: &mut TxContext): Guard {
-        Guard {
-            id: object::new(ctx),
-            object_id: object::id(object)
-        }
+        transfer::transfer(guard, tx_context::sender(ctx));
     }
 
     public(friend) fun key(slot: u64): Key {
         Key { slot }
     }
 
-    public(friend) fun extend(self: &mut Guard): &mut UID {
+    public(friend) fun extend<T>(self: &mut Guard<T>): &mut UID {
         &mut self.id
     }
 
-    public(friend) fun uid(self: &Guard): &UID {
+    public(friend) fun uid<T>(self: &Guard<T>): &UID {
         &self.id
     }
 }

@@ -13,14 +13,14 @@ module guard::package {
 
     const PACKAGE_GUARD_ID: u64 = 3;
 
-    public fun create<W: drop>(guard: &mut Guard) {
+    public fun create<T, W: drop>(guard: &mut Guard<T>) {
         let addr_string = type_name::get_address(&type_name::get<W>());
         let id = object::id_from_bytes(ascii::into_bytes(addr_string));
 
         create_(guard, id);
     }
 
-    public fun create_(guard: &mut Guard, id: ID) {
+    public fun create_<T>(guard: &mut Guard<T>, id: ID) {
         let package = Package {
             value: id
         };
@@ -31,7 +31,7 @@ module guard::package {
         dynamic_field::add<Key, Package>(uid, key, package);
     }
 
-    public fun validate<W: drop>(guard: &Guard) {
+    public fun validate<T, W: drop>(guard: &Guard<T>) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
 
