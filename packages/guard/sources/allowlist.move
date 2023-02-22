@@ -30,12 +30,30 @@ module guard::allowlist {
     }
 
     public fun validate<T>(guard: &Guard<T>, addr: address) {
+        assert!(is_allowed(guard, addr), EAddressNotAllowed)
+    }
+
+    public fun allow<T>(guard: &mut Guard<T>, addresses: vector<address>) {
+        let key = guard::key(ALLOWLIST_GUARD_ID);
+        let uid = guard::extend(guard);
+
+        assert!(dynamic_field::exists_with_type<Key, Allowlist>(uid, key), EKeyNotSet);
+        let allowlist = dynamic_field::borrow_mut<Key, Allowlist>(uid, key);
+
+        let (i, len) = (0, vector::length(&allowlist.addresses));
+        while(i < len) {
+            vector::push_back(&mut allowlist.addresses, vector::pop_back(&mut addresses))
+        }
+    }
+
+    public fun is_allowed<T>(guard: &Guard<T>, addr: address): bool {
         let key = guard::key(ALLOWLIST_GUARD_ID);
         let uid = guard::uid(guard);
 
         assert!(dynamic_field::exists_with_type<Key, Allowlist>(uid, key), EKeyNotSet);
-        let allow_list = dynamic_field::borrow<Key, Allowlist>(uid, key);
+        let allowlist = dynamic_field::borrow<Key, Allowlist>(uid, key);
 
-        assert!(vector::contains(&allow_list.addresses, &addr), EAddressNotAllowed)
-    }  
+        vector::contains(&allowlist.addresses, &addr)
+    }
+
 }
