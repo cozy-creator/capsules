@@ -4,6 +4,7 @@ module guard::guard {
     use sui::object::{Self, ID, UID};
 
     friend guard::payment;
+    friend guard::allow_list;
 
     struct Guard has key {
         id: UID,
