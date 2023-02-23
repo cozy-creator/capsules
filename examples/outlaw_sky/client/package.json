@@ -4,7 +4,8 @@
   "author": "Paul Fidika <paul@fidika.com>",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ./src/index.ts"
+    "start": "ts-node ./src/index.ts",
+    "create": "ts-node ./src/demo_factory.ts"
   },
   "devDependencies": {
     "@types/node": "^18.7.14",
@@ -12,7 +13,7 @@
     "typescript": "^4.8.2"
   },
   "dependencies": {
-    "@mysten/sui.js": "^0.26.1",
+    "@mysten/sui.js": "^0.28.0",
     "superstruct": "^1.0.3"
   }
 }
