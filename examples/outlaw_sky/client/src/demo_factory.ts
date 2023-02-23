@@ -38,11 +38,13 @@ async function create() {
     function: 'create',
     typeArguments: [],
     arguments: [],
-    gasBudget: 2000
+    gasBudget: 3000
   });
 
   // @ts-ignore
   console.log(moveCallTxn.effects.effects);
+  // @ts-ignore
+  console.log(moveCallTxn.effects.effects.created);
 }
 
 async function get(object_id: string) {
@@ -68,8 +70,8 @@ async function get(object_id: string) {
   console.log(outlaw);
 }
 
-create();
+// create();
 
-// get('0x36a07d85c73261174f0d4ff0d419f77ee7e8a13d');
+get('0x10365765e97a7ceca26ce528db5ecc9ff1f90a31');
 
 // https://explorer.sui.io/address/0xed2c39b73e055240323cf806a7d8fe46ced1cabb?module=devnet_nft
