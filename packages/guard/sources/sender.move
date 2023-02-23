@@ -24,6 +24,16 @@ module guard::sender {
         dynamic_field::add<Key, Sender>(uid, key, sender);
     }
 
+    public fun update<T>(guard: &mut Guard<T>, value: address) {
+        let key = guard::key(SENDER_GUARD_ID);
+        let uid = guard::extend(guard);
+
+        assert!(dynamic_field::exists_with_type<Key, Sender>(uid, key), EKeyNotSet);
+        let sender = dynamic_field::borrow_mut<Key, Sender>(uid, key);
+
+        sender.value = value;
+    }
+
     public fun validate<T>(guard: &Guard<T>, ctx: &TxContext) {
         let key = guard::key(SENDER_GUARD_ID);
         let uid = guard::uid(guard);
