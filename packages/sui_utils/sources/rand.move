@@ -46,11 +46,11 @@ module sui_utils::rand {
 }
 
 #[test_only]
-module utils::rand_tests {
+module sui_utils::rand_tests {
     use std::debug;
     use sui::test_scenario;
     use sui::tx_context::TxContext;
-    use utils::rand;
+    use sui_utils::rand;
 
     const EOUTSIDE_RANGE: u64 = 0;
     const EBAD_SINGLE_RANGE: u64 = 1;

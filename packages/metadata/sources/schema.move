@@ -14,7 +14,7 @@ module metadata::schema {
     const EUNSUPPORTED_TYPE: u64 = 1;
 
     // Every schema "type" must be included in this list. We do not support (de)serialization of arbitrary structs
-    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"VecMap<String,String>", b"vector<vector<u8>>"];
+    const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"VecMap", b"vector<vector<u8>>"];
 
     // Immutable root-level object
     struct Schema has key {
@@ -63,8 +63,8 @@ module metadata::schema {
             };
 
             // In case the client-app accidentally included a space in the type name
-            if (ascii::into_bytes(type) == b"VecMap<String, String>")
-                type = ascii::string(b"VecMap<String,String>");
+            // if (ascii::into_bytes(type) == b"VecMap<String, String>")
+            //     type = ascii::string(b"VecMap<String,String>");
             assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
             let key = *vector::borrow(tuple, 0);

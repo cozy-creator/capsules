@@ -1,7 +1,7 @@
 // This module takes vectors of bytes and deserializes them into primitive types. It's very similar to sui::bcs, but
 // without the BCS-encoding. I.e., an Option<u16> is simply encoded as none: [], some: [u8, u8], and strings
 // are simply stored as their raw bytes, without any prefix length encoding. We still use prefix-encoding
-// for vector<vector<u8>>, vector<String>, and VecMap<string,string>, i.e.
+// for vector<vector<u8>>, vector<String>, and VecMap, i.e.
 // [ ULEB128 bytes for length of item1, item1 bytes, ... ]
 // We don't add a ULEB128 length prefix for the total number of items, just the length of each individual item
 
@@ -233,7 +233,7 @@ module sui_utils::deserialize {
     }
 
     // Turns [ 2, 3, 75, 101, 121, 5, 86, 97, 108, 117, 101 ] into VecMap { contents: [ Entry { k: Key, v: Value } ] }
-    public fun vec_map_string_string(bytes: &vector<u8>, start: u64): (VecMap<String,String>, u64) {
+    public fun vec_map_string_string(bytes: &vector<u8>, start: u64): (VecMap<String, String>, u64) {
         let (len, start) = bcs2::uleb128_length(bytes, start);
         let (result, i) = (vec_map::empty<String,String>(), 0);
         while (i < len) {

@@ -319,7 +319,7 @@ module metadata::metadata {
     // Private function so that the schema cannot be bypassed
     // Aborts if the type is incorrect because the bcs deserialization will fail
     // Supported: address, bool, objectID, u8, u64, u128, String (utf8), + vectors of these types
-    // + VecMap<String,String>, vector<vector<u8>>
+    // + VecMap, vector<vector<u8>>
     // Not yet supported: u16, u32, u256 <--not included in sui::bcs
     fun set_field(
         uid: &mut UID,
@@ -337,7 +337,7 @@ module metadata::metadata {
                 drop_field(uid, key, type_string);
                 return
             // These types are allowed to be empty arrays and still count as being "defined"
-            } else if ( type == b"String" || type == b"VecMap<String,String>" || encode::is_vector(type_string) ) {
+            } else if ( type == b"String" || type == b"VecMap" || encode::is_vector(type_string) ) {
                 value = if (optional) { vector[1u8, 0u8] } else { vector[0u8] };
             } else { abort EKEY_IS_NOT_OPTIONAL };
         };
@@ -456,7 +456,7 @@ module metadata::metadata {
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, strings);
         }
-        else if (type == b"VecMap<String,String>") {
+        else if (type == b"VecMap") {
             let (vec_map, _) = deserialize::vec_map_string_string(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_map);
@@ -515,7 +515,7 @@ module metadata::metadata {
         else if (type == b"vector<String>") {
             dynamic_field2::drop<Key, vector<String>>(uid, key);
         }
-        else if (type == b"VecMap<String,String>") {
+        else if (type == b"VecMap") {
             dynamic_field2::drop<Key, VecMap<String, String>>(uid, key);
         }
         else {
@@ -586,7 +586,7 @@ module metadata::metadata {
             let vec = dynamic_field::borrow<Key, vector<String>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"VecMap<String,String>") {
+        else if (type == b"VecMap") {
             let vec_map = dynamic_field::borrow<Key, VecMap<String, String>>(uid, key);
             bcs::to_bytes(vec_map)
         }
@@ -707,7 +707,7 @@ module metadata::metadata_tests {
             vector[string(b"description"), string(b"Option<String>")], 
             vector[string(b"image"), string(b"String")], 
             vector[string(b"power_level"), string(b"u64")], 
-            vector[string(b"attributes"), string(b"VecMap<String,String>")] 
+            vector[string(b"attributes"), string(b"VecMap")] 
         ];
 
         let data = vector[ 
@@ -727,7 +727,7 @@ module metadata::metadata_tests {
             vector[string(b"name"), string(b"String")], 
             vector[string(b"description"), string(b"Option<String>")], 
             vector[string(b"image"), string(b"String")], 
-            vector[string(b"attributes"), string(b"VecMap<String,String>")] 
+            vector[string(b"attributes"), string(b"VecMap")] 
         ];
 
         let data = vector[ 

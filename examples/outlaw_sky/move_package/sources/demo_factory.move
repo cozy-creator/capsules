@@ -35,7 +35,7 @@ module outlaw_sky::demo_factory {
     // }
 
     struct OutlawMetadata has store, copy, drop {
-        attributes: VecMap<String,String>,
+        attributes: VecMap<String, String>,
         url: String
     }
 

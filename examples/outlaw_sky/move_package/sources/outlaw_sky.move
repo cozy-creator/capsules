@@ -90,13 +90,13 @@ module outlaw_sky::outlaw_sky {
     // This is a sample of how atomic updates work, versus overwrite-updates
     public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = metadata::borrow_mut<VecMap<String,String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        let attributes = metadata::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
         vec_map::insert(attributes, key, value);
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = metadata::borrow_mut<VecMap<String,String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        let attributes = metadata::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
         vec_map::remove(attributes, &key);
     }
 
@@ -125,7 +125,7 @@ module outlaw_sky::tests {
 
     #[test]
     public fun test_rename() {
-        let schema_fields = vector[ vector[ascii::string(b"name"), ascii::string(b"String")], vector[ascii::string(b"description"), ascii::string(b"String")], vector[ascii::string(b"image"), ascii::string(b"String")], vector[ascii::string(b"power_level"), ascii::string(b"u64")], vector[ascii::string(b"attributes"), ascii::string(b"VecMap<String,String>")] ];
+        let schema_fields = vector[ vector[ascii::string(b"name"), ascii::string(b"String")], vector[ascii::string(b"description"), ascii::string(b"String")], vector[ascii::string(b"image"), ascii::string(b"String")], vector[ascii::string(b"power_level"), ascii::string(b"u64")], vector[ascii::string(b"attributes"), ascii::string(b"VecMap")] ];
 
         let scenario = test_scenario::begin(@0x79);
         {
