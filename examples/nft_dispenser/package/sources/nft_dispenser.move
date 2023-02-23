@@ -12,7 +12,7 @@ module nft_dispenser::nft_dispenser {
     use guard::guard::{Self, Guard};
     use guard::payment as payment_guard;
 
-    use dispenser::data_dispenser::{Self as dispenser, RANDOMNESS_WITNESS, DataDispenser};
+    use dispenser::dispenser::{Self as dispenser, RANDOMNESS_WITNESS, Dispenser};
     
     struct Witness has drop {}
 
@@ -32,11 +32,11 @@ module nft_dispenser::nft_dispenser {
         dispenser::publish(dispenser);
     }
 
-    public entry fun load(dispenser: &mut DataDispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public entry fun load(dispenser: &mut Dispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
         dispenser::load(dispenser, data, ctx);
     }
 
-    public entry fun dispense(dispenser: &mut DataDispenser, guard: &mut Guard<Witness>, coins: vector<Coin<SUI>>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
+    public entry fun dispense(dispenser: &mut Dispenser, guard: &mut Guard<Witness>, coins: vector<Coin<SUI>>, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext) {
         // validates the the incoming spayment
         payment_guard::validate<Witness, SUI>(guard, &coins);
 
