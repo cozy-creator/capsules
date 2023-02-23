@@ -103,15 +103,11 @@ bcs.registerType(
     return writer;
   },
   reader => {
-    console.log('made it to the reader bro!');
     let data: Record<string, string> = {};
 
     reader.readVec(reader => {
-      console.log('new line');
       let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      console.log(key);
       let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      console.log(value);
       data[key] = value;
     });
 
