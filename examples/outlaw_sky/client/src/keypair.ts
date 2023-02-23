@@ -1,4 +1,4 @@
-import { Ed25519Keypair } from "@mysten/sui.js";
+import { Ed25519Keypair, normalizeSuiAddress } from "@mysten/sui.js";
 import { provider } from "./config";
 import crypto from "crypto";
 import path from "path";
@@ -26,8 +26,8 @@ async function loadEnv(): Promise<string> {
   });
 }
 
-async function persistEnv(privateKey: string): Promise<void> {
-  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n`;
+async function persistEnv(privateKey: string, existingEnv?: string): Promise<void> {
+  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n${existingEnv}`;
 
   return new Promise((resolve, reject) => {
     fs.writeFile(ENV_PATH, data, { encoding: "utf8" }, (err) => {
@@ -49,10 +49,10 @@ function getPrivateKeyFromEnv(env: string) {
   }
 }
 
-async function generateAndPersitKeypair() {
+async function generateAndPersitKeypair(existingEnv?: string) {
   const keypair = generateKeypair();
   const { privateKey } = keypair.export();
-  await persistEnv(privateKey);
+  await persistEnv(privateKey, existingEnv);
 
   return keypair;
 }
@@ -65,7 +65,8 @@ async function loadKeypair() {
     if (privateKey) {
       return Ed25519Keypair.fromSecretKey(Uint8Array.from(Buffer.from(privateKey, "base64")));
     }
-    return await generateAndPersitKeypair();
+
+    return await generateAndPersitKeypair(env);
   } catch (e: any) {
     if (e.code == "ENOENT") {
       return await generateAndPersitKeypair();
@@ -88,6 +89,13 @@ async function main() {
   if (coins.length < 1) {
     await faucetRequest(address);
   }
+
+  return address;
 }
 
-main().then(console.log).catch(console.log);
+main()
+  .then((address) => {
+    console.log("========== Keypair loaded ==========");
+    console.log("Address", normalizeSuiAddress(address));
+  })
+  .catch(console.log);
