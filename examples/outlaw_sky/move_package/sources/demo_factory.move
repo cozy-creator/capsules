@@ -3,7 +3,6 @@
 module outlaw_sky::demo_factory {
     use std::string::{Self, String};
     use std::vector;
-    use sui::bcs;
     use sui::dynamic_field;
     use sui::url::{Self, Url};
     use sui::object::{Self, UID};
@@ -87,10 +86,10 @@ module outlaw_sky::demo_factory {
         }
     }
 
-    // view function for client apps
-    public fun view(outlaw: &Outlaw): vector<u8> {
-        let metadata = dynamic_field::borrow<vector<u8>, OutlawMetadata>(&outlaw.id, b"metadata");
-        bcs::to_bytes(metadata)
+    // view function must be public for a client to call it. This is better than the other view function because
+    // it gets serialized automatically with useless prepended length bytes
+    public fun view(outlaw: &Outlaw): &OutlawMetadata {
+        dynamic_field::borrow<vector<u8>, OutlawMetadata>(&outlaw.id, b"metadata")
     }
 
     public fun select_random(item_list: vector<vector<u8>>, ctx: &mut TxContext): String {

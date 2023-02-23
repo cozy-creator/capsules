@@ -287,13 +287,16 @@ function deserializeByField<T>(
   return deserializedData;
 }
 
-function parseViewResults(result: DevInspectResults): Uint8Array {
-  // TO DO: we can't just remove the 0th byte; that will fail if there are more than 128 items
-  // in the response. Instead we need to parse the ULEB128 and remove that
+function parseViewResultsFromStruct(result: DevInspectResults): Uint8Array {
+  // @ts-ignore
+  return new Uint8Array(result.results.Ok[0][1].returnValues[0][0]);
+}
+
+// If the on-chain move function is returning a vector of bytes, a useless length vector will be prepended that we must
+// remove. The client must know what type of response to expect and use this or the above function
+function parseViewResultsFromVector(result: DevInspectResults): Uint8Array {
   // @ts-ignore
   const data = new Uint8Array(result.results.Ok[0][1].returnValues[0][0]);
-
-  // Delete the first tunnecessary ULEB128 length auto-added by the sui bcs view-function response
   let [_, dataCrop] = sliceULEB128(data);
   return dataCrop;
 }
@@ -329,7 +332,8 @@ export {
   deserializeByField,
   // serializeBcs,
   // deserializeBcs,
-  parseViewResults,
+  parseViewResultsFromStruct,
+  parseViewResultsFromVector,
   moveStructValidator,
   sliceULEB128
 };
