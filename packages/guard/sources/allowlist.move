@@ -105,4 +105,21 @@ module guard::allowlist_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = guard::allowlist::EAddressNotAllowed)]
+    fun test_validate_allowlist_failure() {
+        let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
+        let scenario = initialize_scenario(sender, addresses);
+
+        test_scenario::next_tx(&mut scenario, sender);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            allowlist::validate(&mut guard, vector[@0xAE5C]);
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
 }
