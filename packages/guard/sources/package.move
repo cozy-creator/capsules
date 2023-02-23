@@ -33,12 +33,9 @@ module guard::package {
     }
 
     public fun validate<T, W>(guard: &Guard<T>) {
-        validate_(guard, type_to_id<W>());
-    }
-
-    public fun validate_<T>(guard: &Guard<T>, id: ID) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
+        let id = type_to_id<W>();
 
         assert!(dynamic_field::exists_with_type<Key, Package>(uid, key), EKeyNotSet);
         let package = dynamic_field::borrow<Key, Package>(uid, key);
@@ -47,12 +44,9 @@ module guard::package {
     }
 
    public fun update<T, W>(guard: &mut Guard<T>) {
-        update_(guard, type_to_id<W>());
-    }
-
-    public fun update_<T>(guard: &mut Guard<T>, id: ID) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::extend(guard);
+        let id = type_to_id<W>();
 
         assert!(dynamic_field::exists_with_type<Key, Package>(uid, key), EKeyNotSet);
         let package = dynamic_field::borrow_mut<Key, Package>(uid, key);
