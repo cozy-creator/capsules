@@ -1,7 +1,7 @@
 // Data dispenser module
 // Dispenser for data creation and distribution on the Sui network.
 
-module dispenser::data_dispenser {
+module dispenser::dispenser {
     use std::vector;
     use std::option::{Self, Option};
 
@@ -17,7 +17,7 @@ module dispenser::data_dispenser {
 
     use dispenser::schema::{Self, Schema};
 
-    struct DataDispenser has key {
+    struct Dispenser has key {
         id: UID,
         items_available: u64, // the number of items available
         items: vector<vector<u8>>, 
@@ -47,8 +47,8 @@ module dispenser::data_dispenser {
     const EDispenserAlreadyLoaded: u64 = 11;
     const ESchemaAlreadySet: u64 = 12;
 
-    fun new(capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): DataDispenser {
-         DataDispenser {
+    fun new(capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): Dispenser {
+         Dispenser {
             id: object::new(ctx),
             items_available: 0, 
             items: vector::empty(),
@@ -62,7 +62,7 @@ module dispenser::data_dispenser {
     }
 
     /// Initializes the dispenser and returns it by value
-    public fun initialize(owner: Option<address>, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): DataDispenser {
+    public fun initialize(owner: Option<address>, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
         let dispenser = new(capacity, is_sequential, option::none(), ctx);
 
         let owner = if(option::is_some(&owner)) option::extract(&mut owner) else tx_context::sender(ctx);
@@ -88,7 +88,7 @@ module dispenser::data_dispenser {
     }
 
     /// Sets the schema of the dispenser item. aborts if schema is already set
-    public fun set_schema(self: &mut DataDispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
+    public fun set_schema(self: &mut Dispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
         assert!(vector::is_empty(&self.items), EDispenserAlreadyLoaded);
         assert!(option::is_none(&self.config.schema), ESchemaAlreadySet);
@@ -97,7 +97,7 @@ module dispenser::data_dispenser {
     }
 
     /// Loads items or data into the dispenser
-    public fun load(self: &mut DataDispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    public fun load(self: &mut Dispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
         assert!(!vector::is_empty(&data), ELoadEmptyItems);
 
@@ -130,7 +130,7 @@ module dispenser::data_dispenser {
 
     /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
     /// It uses the Sui randomness module to generate the random value
-    public fun random_dispense(self: &mut DataDispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext): vector<u8> {
+    public fun random_dispense(self: &mut Dispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext): vector<u8> {
         assert!(!self.config.is_sequential, EInvalidDispenserType);
         assert!(option::is_some(&self.randomness_id), EMissingRandomness);
         assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), ERandomnessMismatch);
@@ -155,7 +155,7 @@ module dispenser::data_dispenser {
     }
 
     /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
-    public fun sequential_dispense(self: &mut DataDispenser): vector<u8> {
+    public fun sequential_dispense(self: &mut Dispenser): vector<u8> {
         assert!(self.config.is_sequential, EInvalidDispenserType);
         assert!(self.items_available != 0, EDispenserEmpty);
 
@@ -166,12 +166,12 @@ module dispenser::data_dispenser {
     }
 
     /// Makes the dispenser a shared object
-    public fun publish(self: DataDispenser) {
+    public fun publish(self: Dispenser) {
         transfer::share_object(self);
     }
 
     /// Returns the mutable reference of the dispenser id
-    public fun extend(self: &mut DataDispenser, ctx: &mut TxContext): &mut UID {
+    public fun extend(self: &mut Dispenser, ctx: &mut TxContext): &mut UID {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
 
         &mut self.id
@@ -179,7 +179,7 @@ module dispenser::data_dispenser {
 
     // ========== Helper Functions ==========
 
-    fun fill_randomness(self: &mut DataDispenser, ctx: &mut TxContext) {
+    fun fill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
         let randomness = randomness::new(RANDOMNESS_WITNESS {}, ctx);
         let randomness_id = object::id(&randomness);
 
@@ -187,7 +187,7 @@ module dispenser::data_dispenser {
         randomness::share_object(randomness);
     }
 
-    fun refill_randomness(self: &mut DataDispenser, ctx: &mut TxContext) {
+    fun refill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
         option::extract(&mut self.randomness_id);
         fill_randomness(self, ctx);
     }
