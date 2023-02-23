@@ -66,3 +66,43 @@ module guard::allowlist {
         vector::contains(&allowlist.addresses, &addr)
     }
 }
+
+#[test_only]
+module guard::allowlist_test {
+    use sui::test_scenario::{Self, Scenario};
+
+    use guard::guard::Guard;
+    use guard::allowlist;
+
+    use guard::guard_test;
+
+    struct Witness has drop {}
+
+    fun initialize_scenario(sender: address, addresses: vector<address>): Scenario {
+       let scenario = guard_test::initialize_scenario(&Witness {}, sender);      
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            allowlist::create<Witness>(&mut guard, addresses);
+            test_scenario::return_shared(guard);
+        };
+
+        scenario
+    }
+
+    #[test]
+    fun test_validate_allowlist() {
+        let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
+        let scenario = initialize_scenario(sender, addresses);
+
+        test_scenario::next_tx(&mut scenario, sender);
+
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            allowlist::validate(&mut guard, addresses);
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
+}
