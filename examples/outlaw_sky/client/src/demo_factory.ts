@@ -25,7 +25,7 @@ import {
 
 // Step 1: Define your schema
 const metadataSchema = {
-  attributes: 'VecMap<String,String>',
+  attributes: 'VecMap',
   url: 'String'
 } as const; // Ensure the schema fields cannot be modified
 
@@ -61,7 +61,6 @@ async function get(object_id: string) {
   const data = parseViewResults(result);
   const outlaw = bcs.de('Outlaw', data);
 
-  console.log(data);
   console.log(outlaw);
 }
 
