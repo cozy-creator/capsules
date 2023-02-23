@@ -11,7 +11,7 @@ import {
   moveStructValidator,
   serializeByField,
   deserializeByField,
-  parseViewResults,
+  parseViewResultsFromStruct,
   bcs
 } from '../../../../sdk/typescript/src';
 import {
@@ -38,10 +38,11 @@ async function create() {
     function: 'create',
     typeArguments: [],
     arguments: [],
-    gasBudget: 12000
+    gasBudget: 2000
   });
 
-  console.log(moveCallTxn);
+  // @ts-ignore
+  console.log(moveCallTxn.effects.effects);
 }
 
 async function get(object_id: string) {
@@ -58,12 +59,17 @@ async function get(object_id: string) {
 
   let result = await provider.devInspectTransaction(publicKey, signableTxn);
 
-  const data = parseViewResults(result);
+  const data = parseViewResultsFromStruct(result);
+
+  console.log(data);
+
   const outlaw = bcs.de('Outlaw', data);
 
   console.log(outlaw);
 }
 
-get('0x7d0b60f910be9ab60ef5833b6cd8998cb7617f05');
+create();
+
+// get('0x36a07d85c73261174f0d4ff0d419f77ee7e8a13d');
 
 // https://explorer.sui.io/address/0xed2c39b73e055240323cf806a7d8fe46ced1cabb?module=devnet_nft

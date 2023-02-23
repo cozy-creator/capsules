@@ -5,7 +5,7 @@ import {
   moveStructValidator,
   serializeByField,
   deserializeByField,
-  parseViewResults,
+  parseViewResultsFromVector,
   bcs
 } from '../../../../sdk/typescript/src';
 import {
@@ -23,7 +23,7 @@ const outlawSchema = {
   description: 'Option<String>',
   image: 'String',
   power_level: 'u64',
-  attributes: 'VecMap<String,String>'
+  attributes: 'VecMap'
 } as const; // Ensure the schema fields cannot be modified
 
 // Create the schema validator
@@ -107,7 +107,7 @@ async function read(outlawObjectID: string, dataType: string): Promise<Record<st
   // });
 
   console.log('response is: ', result);
-  const data = parseViewResults(result);
+  const data = parseViewResultsFromVector(result);
   const outlaw = bcs.de(dataType, data);
   return outlaw;
 }
