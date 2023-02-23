@@ -28,7 +28,7 @@ let supportedTypes = [
   'u256',
   'String',
   'vector<u8>',
-  'VecMap<String,String>'
+  'VecMap'
 ];
 let enums: { [key: string]: EnumTypeDefinition } = {};
 
@@ -50,7 +50,7 @@ supportedTypes.forEach(typeName => {
   };
 
   // Option<vector<VecMap<String,String>>> is not supported
-  if (typeName == 'VecMap<String,String>') return;
+  if (typeName == 'VecMap') return;
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
@@ -151,7 +151,7 @@ type MoveToJSTypes = {
   'vector<u256>': BigInt[];
   'vector<String>': string[];
   'vector<vector<u8>>': Uint8Array[];
-  'VecMap<String,String>': Record<string, string>;
+  VecMap: Record<string, string>;
   'Option<address>': { none: null } | { some: Uint8Array };
   'Option<bool>': { none: null } | { some: boolean };
   'Option<id>': { none: null } | { some: Uint8Array };
@@ -173,7 +173,7 @@ type MoveToJSTypes = {
   'Option<vector<u256>>': { none: null } | { some: BigInt[] };
   'Option<vector<String>>': { none: null } | { some: string[] };
   'Option<vector<vector<u8>>>': { none: null } | { some: Uint8Array[] };
-  'Option<VecMap<String,String>>': { none: null } | { some: Record<string, string> };
+  'Option<VecMap>': { none: null } | { some: Record<string, string> };
 };
 
 const MoveToStruct: Record<string, Struct<any, any>> = {
@@ -194,7 +194,7 @@ Object.keys(MoveToStruct).map(field => {
 });
 
 MoveToStruct['vector<vector<u8>>'] = array(array(integer()));
-MoveToStruct['VecMap<String,String>'] = record(string(), string());
+MoveToStruct['VecMap'] = record(string(), string());
 
 Object.keys(MoveToStruct).map(field => {
   MoveToStruct[`Option<${field}>`] = union([
