@@ -27,7 +27,7 @@ async function loadEnv(): Promise<string> {
 }
 
 async function persistEnv(privateKey: string, existingEnv?: string): Promise<void> {
-  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n${existingEnv}`;
+  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n${existingEnv ? existingEnv : ""}`;
 
   return new Promise((resolve, reject) => {
     fs.writeFile(ENV_PATH, data, { encoding: "utf8" }, (err) => {
