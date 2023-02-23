@@ -47,10 +47,10 @@ module guard::allowlist {
         assert!(dynamic_field::exists_with_type<Key, Allowlist>(uid, key), EKeyNotSet);
         let allowlist = dynamic_field::borrow_mut<Key, Allowlist>(uid, key);
 
-        let (i, len) = (0, vector::length(&allowlist.addresses));
+        let (i, len) = (0, vector::length(&addresses));
         while(i < len) {
-            let addr = vector::pop_back(&mut addresses);
-            vector::push_back(&mut allowlist.addresses, addr);
+            let addr = vector::borrow(&mut addresses, i);
+            vector::push_back(&mut allowlist.addresses, *addr);
 
             i = i + 1;
         }
@@ -100,6 +100,30 @@ module guard::allowlist_test {
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
             allowlist::validate(&mut guard, addresses);
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_allow_allowlist() {
+        let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
+        let scenario = initialize_scenario(sender, addresses);
+
+        test_scenario::next_tx(&mut scenario, sender);
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+            
+            allowlist::allow(&mut guard, vector[@0xAE5C]);
+            test_scenario::return_shared(guard);
+        };
+
+        test_scenario::next_tx(&mut scenario, sender);
+        {
+            let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
+
+            allowlist::validate(&guard, vector[@0xAE5C, @0x1AFB]);
             test_scenario::return_shared(guard);
         };
 
