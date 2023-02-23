@@ -29,8 +29,15 @@ module guard::allowlist {
         dynamic_field::add<Key, Allowlist>(uid, key, allow_list)
     }
 
-    public fun validate<T>(guard: &Guard<T>, addr: address) {
-        assert!(is_allowed(guard, addr), EAddressNotAllowed)
+    public fun validate<T>(guard: &Guard<T>, addresses: vector<address>) {
+        let (i, len) = (0, vector::length(&addresses));
+
+        while(i < len) {
+            let addr = vector::pop_back(&mut addresses);
+            assert!(is_allowed(guard, addr), EAddressNotAllowed);
+
+            i = i + 1;
+        }
     }
 
     public fun allow<T>(guard: &mut Guard<T>, addresses: vector<address>) {
@@ -42,7 +49,10 @@ module guard::allowlist {
 
         let (i, len) = (0, vector::length(&allowlist.addresses));
         while(i < len) {
-            vector::push_back(&mut allowlist.addresses, vector::pop_back(&mut addresses))
+            let addr = vector::pop_back(&mut addresses);
+            vector::push_back(&mut allowlist.addresses, addr);
+
+            i = i + 1;
         }
     }
 
@@ -55,5 +65,4 @@ module guard::allowlist {
 
         vector::contains(&allowlist.addresses, &addr)
     }
-
 }
