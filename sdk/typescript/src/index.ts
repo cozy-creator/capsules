@@ -87,43 +87,43 @@ bcs.registerType(
 // This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than
 // a primitive type
 
-// bcs.registerType(
-//   'VecMap',
-//   (writer, data: Record<string, string>) => {
-//     writer.writeULEB(Object.entries(data).length);
-//     let strings = Object.entries(data).flat();
+bcs.registerType(
+  'VecMap',
+  (writer, data: Record<string, string>) => {
+    writer.writeULEB(Object.entries(data).length);
+    let strings = Object.entries(data).flat();
 
-//     let byteArray = strings.map(string => {
-//       return new TextEncoder().encode(string);
-//     });
+    let byteArray = strings.map(string => {
+      return new TextEncoder().encode(string);
+    });
 
-//     byteArray.forEach(bytes => {
-//       writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-//     });
-//     return writer;
-//   },
-//   reader => {
-//     let data: Record<string, string> = {};
+    byteArray.forEach(bytes => {
+      writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    });
+    return writer;
+  },
+  reader => {
+    let data: Record<string, string> = {};
 
-//     reader.readVec(reader => {
-//       let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-//       let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-//       data[key] = value;
-//     });
+    reader.readVec(reader => {
+      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      data[key] = value;
+    });
 
-//     return data;
-//   },
-//   value => is(value, MoveToStruct['VecMap<String,String>'])
-// );
+    return data;
+  },
+  value => is(value, MoveToStruct['VecMap<String,String>'])
+);
 
-bcs.registerStructType('VecMap<String,String>', {
-  contents: 'vector<Entry<String,String>>'
-});
+// bcs.registerStructType('VecMap<String,String>', {
+//   contents: 'vector<Entry<String,String>>'
+// });
 
-bcs.registerStructType('Entry<String,String>', {
-  k: 'String',
-  v: 'String'
-});
+// bcs.registerStructType('Entry<String,String>', {
+//   k: 'String',
+//   v: 'String'
+// });
 
 type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
   -readonly [K in keyof T]: MoveToJSTypes[T[K]];
