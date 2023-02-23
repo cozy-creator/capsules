@@ -113,14 +113,14 @@ bcs.registerType(
 
     return data;
   },
-  value => is(value, MoveToStruct['VecMap<String,String>'])
+  value => is(value, MoveToStruct['VecMap'])
 );
 
-// bcs.registerStructType('VecMap<String,String>', {
-//   contents: 'vector<Entry<String,String>>'
+// bcs.registerStructType('VecMap', {
+//   contents: 'vector<Entry>'
 // });
 
-// bcs.registerStructType('Entry<String,String>', {
+// bcs.registerStructType('Entry', {
 //   k: 'String',
 //   v: 'String'
 // });
@@ -291,12 +291,35 @@ function parseViewResults(result: DevInspectResults): Uint8Array {
   // TO DO: we can't just remove the 0th byte; that will fail if there are more than 128 items
   // in the response. Instead we need to parse the ULEB128 and remove that
   // @ts-ignore
-  const data = result.results.Ok[0][1].returnValues[0][0] as Uint8Array;
+  const data = new Uint8Array(result.results.Ok[0][1].returnValues[0][0]);
 
   // Delete the first tunnecessary ULEB128 length auto-added by the sui bcs view-function response
-  // data.splice(0, 1);
-  const dataCrop = data.slice(1, data.length);
+  let [_, dataCrop] = sliceULEB128(data);
   return dataCrop;
+}
+
+function sliceULEB128(array: Uint8Array, start: number = 0): [number, Uint8Array] {
+  let total = 0;
+  let shift = 0;
+  let len = 0;
+
+  while (true) {
+    if (len > 4) {
+      throw 'No ULEB128 found';
+    }
+
+    let byte = array[start + len];
+    total = total | ((byte & 0x7f) << shift);
+
+    if ((byte & 0x80) == 0) {
+      break;
+    }
+
+    shift = shift + 7;
+    len = len + 1;
+  }
+
+  return [total, array.slice(start + len + 1, array.length)];
 }
 
 export {
@@ -307,5 +330,6 @@ export {
   // serializeBcs,
   // deserializeBcs,
   parseViewResults,
-  moveStructValidator
+  moveStructValidator,
+  sliceULEB128
 };
