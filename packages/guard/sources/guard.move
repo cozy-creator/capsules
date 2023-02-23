@@ -49,10 +49,14 @@ module guard::guard_test {
 
     use guard::guard;
 
-    public fun initialize_guard<T>(witness: &T, scenario: &mut Scenario) {
-        let ctx = test_scenario::ctx(scenario);
+    public fun initialize_scenario<T>(witness: &T, sender: address): Scenario {
+        let scenario = test_scenario::begin(sender);
+        let ctx = test_scenario::ctx(&mut scenario);
 
         let guard = guard::initialize(witness, ctx);
         guard::share_object(guard);
+        test_scenario::next_tx(&mut scenario, sender);
+
+        scenario
     }
 }

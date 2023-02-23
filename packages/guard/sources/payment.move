@@ -120,10 +120,7 @@ module guard::payment_test {
     struct Witness has drop {}
 
     fun initialize_scenario(amount: u64, sender: address): Scenario {
-        let scenario = test_scenario::begin(sender);
-
-        guard_test::initialize_guard(&Witness {}, &mut scenario);      
-        test_scenario::next_tx(&mut scenario, sender);
+        let scenario = guard_test::initialize_scenario(&Witness {}, sender);      
         
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
