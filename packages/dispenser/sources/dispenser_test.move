@@ -16,7 +16,7 @@ module dispenser::dispenser_test {
         let scenario = test_scenario::begin(ADMIN);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        let dispenser = dispenser::initialize(option::none(), 5, true, schema, ctx);
+        let dispenser = dispenser::initialize(option::none(), 5, true, false, schema, ctx);
 
         dispenser::publish(dispenser);
         test_scenario::next_tx(&mut scenario, ADMIN);
@@ -125,9 +125,9 @@ module dispenser::dispenser_test {
     }
 
     #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::EAvailableCapacityExceeded)]
+    #[expected_failure(abort_code = dispenser::dispenser::ECapacityExceeded)]
     fun test_dispenser_capacity_exceeded_failure() {
-        let scenario = initialize_scenario(option::none());
+        let scenario = initialize_scenario(option::some(vector[b"String"]));
         let data = get_dispenser_test_data();
 
         // add more data to the test data
@@ -153,24 +153,6 @@ module dispenser::dispenser_test {
             let dispenser = test_scenario::take_shared<Dispenser>(&scenario);
 
             load_dispenser(&mut scenario, &mut dispenser, data);
-            test_scenario::return_shared(dispenser);
-        } ;
-
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::EDispenserAlreadyLoaded)]
-    fun test_set_schema_already_loaded_failure() {
-        let scenario = initialize_scenario(option::some(vector[b"String"]));
-        let data = get_dispenser_test_data();
-
-        {
-            let dispenser = test_scenario::take_shared<Dispenser>(&scenario);
-
-            load_dispenser(&mut scenario, &mut dispenser, data);
-            set_dispenser_schema(&mut scenario, &mut dispenser, vector[b"String"]);
-
             test_scenario::return_shared(dispenser);
         } ;
 

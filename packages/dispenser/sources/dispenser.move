@@ -1,5 +1,6 @@
-// Data dispenser module
-// Dispenser for data creation and distribution on the Sui network.
+/// Data dispenser
+/// 
+/// Dispenser for data creation and distribution on the Sui network.
 
 module dispenser::dispenser {
     use std::vector;
@@ -17,53 +18,91 @@ module dispenser::dispenser {
 
     use dispenser::schema::{Self, Schema};
 
+
+    // ========== Storage structs ==========
+
     struct Dispenser has key {
         id: UID,
-        items_available: u64, // the number of items available
+        /// Number of available items in the dispenser
+        available_items: u64,
+        /// Number of loaded items, including dispensed items
+        loaded_items: u64,
+        /// Vector of available items; bcs encoded
         items: vector<vector<u8>>, 
-        randomness_id: Option<ID>, // id of the randomness object which will be used to select item for non sequential dispenser
-        config: Config,
+        /// ID of the randomness object, if dispenser is non sequential 
+        randomness_id: Option<ID>,
+        /// Dispenser configuration
+        config: DispenserConfig, 
+
+        // there is ownership metadata which is be attached to this object by the capsule's ownership package
+        // this enables us to make the dispenser accessible to everyone but still owned
     }
 
-    struct Config has store {
-        capacity: u64, // capacity of the dispenser, i.e max number of items
+    struct DispenserConfig has store {
+        /// Capacity of the dispenser i.e maximum number of items the dispenser can hold
+        capacity: u64,
+        /// Indicates whether items are dispensed sequentially or not
         is_sequential: bool,
+        /// Indicates whether the dispenser can be reloaded after fully loaded or not
+        is_reloadable: bool,
+        /// Schema of the items the dispenser should hold
         schema: Option<Schema>
     }
+
+
+    // ========= Event structs ==========
+
+    struct DispenserCreated has copy, drop {
+        id: ID,
+        owner: address
+    }
+
+    struct DispenserLoaded has copy, drop {
+        id: ID,
+        items_count: u64
+    }
+
+    struct ItemDispensed has copy, drop {
+        id: ID,
+        item: vector<u8>
+    }
+
+
+    // ========== Witness structs =========
 
     struct RANDOMNESS_WITNESS has drop {}
     struct Witness has drop {}
 
+
+    // ========== Error constants ==========
+
     const EInvalidAuth: u64 = 0;
     const ELoadEmptyItems: u64 = 1;
-    const EDispenserAlreadLoaded: u64 = 2;
-    const EAvailableCapacityExceeded: u64 = 3;
-    const EInvalidData: u64 = 5;
-    const ESchemaNotSet: u64 = 6;
-    const EDispenserEmpty: u64 = 7;
-    const EInvalidDispenserType: u64 = 8;
-    const ERandomnessMismatch: u64 = 9;
-    const EMissingRandomness: u64 = 10;
-    const EDispenserAlreadyLoaded: u64 = 11;
-    const ESchemaAlreadySet: u64 = 12;
+    const ECapacityExceeded: u64 = 2;
+    const ESchemaNotSet: u64 = 3;
+    const EDispenserEmpty: u64 = 4;
+    const EInvalidDispenserType: u64 = 5;
+    const ERandomnessMismatch: u64 = 6;
+    const EMissingRandomness: u64 = 7;
+    const ESchemaAlreadySet: u64 = 8;
 
-    fun new(capacity: u64, is_sequential: bool, schema: Option<Schema>, ctx: &mut TxContext): Dispenser {
-         Dispenser {
+    // ========== Public functions ==========
+    
+    /// Initializes the dispenser and returns it by value
+    public fun initialize(owner: Option<address>, capacity: u64, is_sequential: bool, is_reloadable: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
+        let dispenser = Dispenser {
             id: object::new(ctx),
-            items_available: 0, 
+            available_items: 0, 
+            loaded_items: 0,
             items: vector::empty(),
             randomness_id: option::none(),
-            config: Config {
-                is_sequential,
-                schema,
+            config: DispenserConfig {
                 capacity,
+                is_sequential,
+                is_reloadable,
+                schema: option::none(),
             }
-        }
-    }
-
-    /// Initializes the dispenser and returns it by value
-    public fun initialize(owner: Option<address>, capacity: u64, is_sequential: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
-        let dispenser = new(capacity, is_sequential, option::none(), ctx);
+        };
 
         let owner = if(option::is_some(&owner)) option::extract(&mut owner) else tx_context::sender(ctx);
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
@@ -90,42 +129,46 @@ module dispenser::dispenser {
     /// Sets the schema of the dispenser item. aborts if schema is already set
     public fun set_schema(self: &mut Dispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-        assert!(vector::is_empty(&self.items), EDispenserAlreadyLoaded);
         assert!(option::is_none(&self.config.schema), ESchemaAlreadySet);
 
         option::fill(&mut self.config.schema, schema::create(schema));
     }
 
-    /// Loads items or data into the dispenser
-    public fun load(self: &mut Dispenser, data: vector<vector<u8>>, ctx: &mut TxContext) {
+    /// Loads items into the dispenser
+    public fun load(self: &mut Dispenser, items: vector<vector<u8>>, ctx: &mut TxContext) {
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-        assert!(!vector::is_empty(&data), ELoadEmptyItems);
+        assert!(!vector::is_empty(&items), ELoadEmptyItems);
+        assert!((option::is_some(&self.config.schema)), ESchemaNotSet);
 
-        let available_capacity = self.config.capacity - self.items_available;
+        let (i, items_count) = (0, vector::length(&items));
 
-        let (i, len) = (0, vector::length(&data));
-        assert!(len <= available_capacity, EAvailableCapacityExceeded);
+        if(!self.config.is_reloadable) {
+            // assert that the number of loaded items is less than the dispenser capacity
+            assert!(self.loaded_items < self.config.capacity, ECapacityExceeded);
 
-        while (i < len) {
-            let value = vector::pop_back(&mut data);
+            // assert that the number of loaded items combined with the items to be loaded does not exceed the dispenser capacity
+            assert!(self.loaded_items + items_count <= self.config.capacity, ECapacityExceeded);
+        };
 
-            if(option::is_some(&self.config.schema)) {
-                let schema = option::borrow(&self.config.schema);
+        let available_capacity = self.config.capacity - self.available_items;
+        assert!(items_count <= available_capacity, ECapacityExceeded);
 
-                // validate the data being loaded into the dispenser against the set schema to ensure the data validity and integrity
-                schema::validate(schema, value);
-            } else {
-                abort ESchemaNotSet
-            };
+        while (i < items_count) {
+            let value = vector::pop_back(&mut items);
+            let schema = option::borrow(&self.config.schema);
 
+            // validate the items being loaded into the dispenser against the set schema to 
+            // ensure the items validity and integrity
+            schema::validate(schema, value);
             vector::push_back(&mut self.items, value);
 
             i = i + 1;
         };
 
-        vector::destroy_empty(data);
+        vector::destroy_empty(items);
 
-        self.items_available = self.items_available + len;
+        self.loaded_items = self.loaded_items + items_count;
+        self.available_items = self.available_items + items_count;
     }
 
     /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
@@ -134,7 +177,7 @@ module dispenser::dispenser {
         assert!(!self.config.is_sequential, EInvalidDispenserType);
         assert!(option::is_some(&self.randomness_id), EMissingRandomness);
         assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), ERandomnessMismatch);
-        assert!(self.items_available != 0, EDispenserEmpty);
+        assert!(self.available_items != 0, EDispenserEmpty);
 
         // set the randomness signature which is generated from the client
         randomness::set(randomness, signature);
@@ -142,12 +185,12 @@ module dispenser::dispenser {
 
         // select a random number based on the number items available. 
         // the selected random number is the index of the item to be dispensed
-        let index = randomness::safe_selection((self.items_available), random_bytes);
+        let index = randomness::safe_selection((self.available_items), random_bytes);
 
         // randomness objects can only be set and consumed once, so we extract the previous randomess and fill it with a new one
         refill_randomness(self, ctx);
 
-        self.items_available = self.items_available - 1;
+        self.available_items = self.available_items - 1;
 
         // swap the item at the index with the last item and pops it, so the items order is not preserved. 
         // this is ideal because it's O(1) and order preservation is not disired because the selection is random
@@ -157,9 +200,9 @@ module dispenser::dispenser {
     /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
     public fun sequential_dispense(self: &mut Dispenser): vector<u8> {
         assert!(self.config.is_sequential, EInvalidDispenserType);
-        assert!(self.items_available != 0, EDispenserEmpty);
+        assert!(self.available_items != 0, EDispenserEmpty);
 
-        self.items_available = self.items_available - 1;
+        self.available_items = self.available_items - 1;
 
         // pops the last item in the vector (corresponds to the original first item). items order is preserved.
         vector::pop_back(&mut self.items)
