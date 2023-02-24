@@ -1,3 +1,22 @@
+/// Package guard
+/// 
+/// This guard can be used to restrict thirdparty packages call to your module functions. 
+/// It leverages the witness pattern to ensure that a package calling a module function is allowed.
+/// 
+/// ```move
+/// let guard = guard::initialize<Witness>(&Witness {}, ctx);
+/// 
+/// // create package guard by passing the allowed package witness
+/// package::create<Witness, AllowedPackageWitness>(&mut guard);
+/// 
+/// // create package guard by passing the allowed package id
+/// package::create_<Witness>(&mut guard, allowed_package_id);
+/// 
+/// // validate a the package calling a function is allowed
+/// package::validate<Witness, ThirdPartyPackageWitness>(&guard);
+/// ```
+
+
 module guard::package {
     use sui::dynamic_field;
     use sui::object::ID;
@@ -15,11 +34,13 @@ module guard::package {
     const EKeyNotSet: u64 = 0;
     const EInvalidPackage: u64 = 1;
 
+    /// Creates a new package guard using allowed package witness `W`
     public fun create<T, W>(guard: &mut Guard<T>) {
         let id = encode::package_id<W>();
         create_(guard, id);
     }
 
+    /// Creates a new package guard using the allowed package id
     public fun create_<T>(guard: &mut Guard<T>, id: ID) {
         let package = Package {
             value: id
@@ -31,6 +52,7 @@ module guard::package {
         dynamic_field::add<Key, Package>(uid, key, package)
     }
 
+    /// Validates that the package witness `W` against the guard type `T`
     public fun validate<T, W>(guard: &Guard<T>) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
@@ -43,6 +65,7 @@ module guard::package {
         assert!(package.value == id, EInvalidPackage)
     }
 
+   /// Updates the package guard with a new allowed package witness `W`
    public fun update<T, W>(guard: &mut Guard<T>) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::extend(guard);

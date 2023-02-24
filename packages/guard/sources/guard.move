@@ -1,3 +1,7 @@
+/// Guard makes it easy to add access restriction and control to any Sui move package or object.
+/// The module implements a set of guard you can choose from and use in your move code. Some of the available
+/// guards to include payment, package, sender etc.
+
 module guard::guard {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -16,16 +20,20 @@ module guard::guard {
         slot: u64
     }
 
+    /// Inititalizes a new instance of the guard object for `T`.
+    /// This is the base on which the main guards will be built upon.
     public fun initialize<T>(_witness: &T, ctx: &mut TxContext): Guard<T> {
         Guard<T> {
             id: object::new(ctx)
         }
     }
 
+    /// Transfers a guard `T` to an owner (currently, the transaction sender)
     public fun transfer<T>(guard: Guard<T>, ctx: &mut TxContext) {
         transfer::transfer(guard, tx_context::sender(ctx))
     }
 
+    /// Makes a guard `T` to a shared object
     public fun share_object<T>(guard: Guard<T>) {
         transfer::share_object(guard)
     }

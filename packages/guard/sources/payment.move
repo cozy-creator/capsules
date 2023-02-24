@@ -1,3 +1,25 @@
+/// Payment guard
+/// 
+/// This guard enables the validating, collecting and taking of any Sui coin type.
+/// It allows for the setting of payment amount, coin type and payment taker.
+/// 
+/// ```move
+/// let guard = guard::initialize<Witness>(&Witness {}, ctx);
+/// 
+/// // create payment guard
+/// payment::create<Witness, SUI>(&mut guard, 10000, @0xFEAC);
+/// 
+/// // validate a payment
+/// payment::validate<Witness, SUI>(&guard, &coins);
+/// 
+/// // collect a payment
+/// payment::collect<Witness, SUI>(&mut guard, coins, ctx);
+/// 
+/// // take an amount from payment balance
+/// let coin = payment::take<Witness, SUI>(&mut guard, 10000, ctx);
+/// transfer::transfer(coin, @0xAEBF)
+/// ```
+
 module guard::payment {
     use std::vector;
 
@@ -10,8 +32,11 @@ module guard::payment {
     use guard::guard::{Self, Key, Guard};
 
     struct Payment<phantom C> has store {
+        /// the total balance of coins paid
         balance: Balance<C>,
+        /// the amount of payment to be collected
         amount: u64,
+        /// the address that can take from the collected payment
         taker: address
     }
 
@@ -21,6 +46,9 @@ module guard::payment {
     const EInvalidPayment: u64 = 1;
     const EInvalidTaker: u64 = 2;
 
+    /// Creates a new payment guard type `T` and coin type `C`
+    /// amount: `u64` - amount of payment to collect
+    /// taker: `address` - address that can take from the collected payment
     public fun create<T, C>(guard: &mut Guard<T>, amount: u64, taker: address) {
         let payment =  Payment<C> {
             balance: balance::zero(),
@@ -34,6 +62,12 @@ module guard::payment {
         dynamic_field::add<Key, Payment<C>>(uid, key, payment);
     }
 
+    /// Validates the payment of coin type `C` against guard type `T`
+    /// The validation checks include:
+    /// - payment guard existence
+    /// - total coin type `T` value is greater than or equal to the configured payment amount
+    /// 
+    /// coins: `&vector<Coin<C>>` - vector of coin type `T` to be used for payment
     public fun validate<T, C>(guard: &Guard<T>, coins: &vector<Coin<C>>) {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::uid(guard);
@@ -53,6 +87,8 @@ module guard::payment {
         assert!(total >= payment.amount, EInvalidPayment)
     }
 
+    /// Collects the payment of coin type `C`
+    /// coins: `&vector<Coin<C>>` - vector of coin type `T` to be used for payment
     public fun collect<T, C>(guard: &mut Guard<T>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
@@ -80,6 +116,8 @@ module guard::payment {
         };
     }
 
+    /// Takes an amount from the available payment balance
+    /// amount: `u64` - amount to be taken from the payment balance
     public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext): Coin<C> {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::extend(guard);
@@ -92,6 +130,7 @@ module guard::payment {
         coin::take(&mut payment.balance, amount, ctx)
     }
 
+    /// Returns the balance value of the payment availabe in a guard
     public fun balance_value<T, C>(guard: &Guard<T>): u64 {
         let key = guard::key(PAYMENT_GUARD_ID);
         let uid = guard::uid(guard);
