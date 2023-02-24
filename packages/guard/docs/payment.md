@@ -5,9 +5,10 @@
 
 Payment guard
 
-This guard enables the validating, collecting and taking of any Sui coin type.
+This guard enables the validating, collecting and taking of any Sui coin type. \
 It allows for the setting of payment amount, coin type and payment taker.
 
+Example:
 ```move
 let guard = guard::initialize<Witness>(&Witness {}, ctx);
 
@@ -130,8 +131,8 @@ transfer::transfer(coin, @0xAEBF)
 
 ## Function `create`
 
-Creates a new payment guard type <code>T</code> and coin type <code>C</code>
-amount: <code>u64</code> - amount of payment to collect
+Creates a new payment guard type <code>T</code> and coin type <code>C</code> \
+amount: <code>u64</code> - amount of payment to collect \
 taker: <code><b>address</b></code> - address that can take from the collected payment
 
 
@@ -166,7 +167,7 @@ taker: <code><b>address</b></code> - address that can take from the collected pa
 
 ## Function `validate`
 
-Validates the payment of coin type <code>C</code> against guard type <code>T</code>
+Validates the payment of coin type <code>C</code> against guard type <code>T</code> \
 The validation checks include:
 - payment guard existence
 - total coin type <code>T</code> value is greater than or equal to the configured payment amount
@@ -211,7 +212,7 @@ coins: <code>&<a href="">vector</a>&lt;Coin&lt;C&gt;&gt;</code> - vector of coin
 
 ## Function `collect`
 
-Collects the payment of coin type <code>C</code>
+Collects the payment of coin type <code>C</code> \
 coins: <code>&<a href="">vector</a>&lt;Coin&lt;C&gt;&gt;</code> - vector of coin type <code>T</code> to be used for payment
 
 
@@ -260,7 +261,7 @@ coins: <code>&<a href="">vector</a>&lt;Coin&lt;C&gt;&gt;</code> - vector of coin
 
 ## Function `take`
 
-Takes an amount from the available payment balance
+Takes an amount from the available payment balance \
 amount: <code>u64</code> - amount to be taken from the payment balance
 
 

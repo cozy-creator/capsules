@@ -3,7 +3,7 @@
 
 # Module `0x1b969b64e325bdb04ac114b01dd57aecf7c3c925::guard`
 
-Guard makes it easy to add access restriction and control to any Sui move package or object.
+Guard makes it easy to add access restriction and control to any Sui move package or object. \
 The module implements a set of guard you can choose from and use in your move code. Some of the available
 guards to include payment, package, sender etc.
 
@@ -83,7 +83,7 @@ guards to include payment, package, sender etc.
 
 ## Function `initialize`
 
-Inititalizes a new instance of the guard object for <code>T</code>.
+Inititalizes a new instance of the guard object for <code>T</code> \
 This is the base on which the main guards will be built upon.
 
 
