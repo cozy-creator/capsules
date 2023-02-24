@@ -1,10 +1,8 @@
 module guard::package {
-    use std::type_name;
-    use std::ascii;
-
-    use sui::hex;
     use sui::dynamic_field;
-    use sui::object::{Self, ID};
+    use sui::object::ID;
+
+    use sui_utils::encode;
 
     use guard::guard::{Self, Key, Guard};
 
@@ -18,7 +16,8 @@ module guard::package {
     const EInvalidPackage: u64 = 1;
 
     public fun create<T, W>(guard: &mut Guard<T>) {
-        create_(guard, type_to_id<W>());
+        let id = encode::package_id<W>();
+        create_(guard, id);
     }
 
     public fun create_<T>(guard: &mut Guard<T>, id: ID) {
@@ -35,7 +34,8 @@ module guard::package {
     public fun validate<T, W>(guard: &Guard<T>) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
-        let id = type_to_id<W>();
+        
+        let id = encode::package_id<W>();
 
         assert!(dynamic_field::exists_with_type<Key, Package>(uid, key), EKeyNotSet);
         let package = dynamic_field::borrow<Key, Package>(uid, key);
@@ -46,19 +46,13 @@ module guard::package {
    public fun update<T, W>(guard: &mut Guard<T>) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::extend(guard);
-        let id = type_to_id<W>();
+        
+        let id = encode::package_id<W>();
 
         assert!(dynamic_field::exists_with_type<Key, Package>(uid, key), EKeyNotSet);
         let package = dynamic_field::borrow_mut<Key, Package>(uid, key);
 
         package.value = id;
-    }
-
-    fun type_to_id<T>(): ID {
-        let type_name = type_name::get<T>();
-        let addr_string = type_name::get_address(&type_name);
-        
-        object::id_from_bytes(hex::decode(ascii::into_bytes(addr_string)))
     }
 }
 

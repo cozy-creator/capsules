@@ -4,6 +4,7 @@ version = "0.0.1"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../sui_utils"}
 
 [addresses]
 guard =  "0x1b969b64e325bdb04ac114b01dd57aecf7c3c925"
