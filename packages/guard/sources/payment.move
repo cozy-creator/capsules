@@ -1,8 +1,9 @@
 /// Payment guard
 /// 
-/// This guard enables the validating, collecting and taking of any Sui coin type.
+/// This guard enables the validating, collecting and taking of any Sui coin type. \
 /// It allows for the setting of payment amount, coin type and payment taker.
 /// 
+/// Example:
 /// ```move
 /// let guard = guard::initialize<Witness>(&Witness {}, ctx);
 /// 
@@ -46,8 +47,8 @@ module guard::payment {
     const EInvalidPayment: u64 = 1;
     const EInvalidTaker: u64 = 2;
 
-    /// Creates a new payment guard type `T` and coin type `C`
-    /// amount: `u64` - amount of payment to collect
+    /// Creates a new payment guard type `T` and coin type `C` \
+    /// amount: `u64` - amount of payment to collect \
     /// taker: `address` - address that can take from the collected payment
     public fun create<T, C>(guard: &mut Guard<T>, amount: u64, taker: address) {
         let payment =  Payment<C> {
@@ -62,7 +63,7 @@ module guard::payment {
         dynamic_field::add<Key, Payment<C>>(uid, key, payment);
     }
 
-    /// Validates the payment of coin type `C` against guard type `T`
+    /// Validates the payment of coin type `C` against guard type `T` \
     /// The validation checks include:
     /// - payment guard existence
     /// - total coin type `T` value is greater than or equal to the configured payment amount
@@ -87,7 +88,7 @@ module guard::payment {
         assert!(total >= payment.amount, EInvalidPayment)
     }
 
-    /// Collects the payment of coin type `C`
+    /// Collects the payment of coin type `C` \
     /// coins: `&vector<Coin<C>>` - vector of coin type `T` to be used for payment
     public fun collect<T, C>(guard: &mut Guard<T>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
         let key = guard::key(PAYMENT_GUARD_ID);
@@ -116,7 +117,7 @@ module guard::payment {
         };
     }
 
-    /// Takes an amount from the available payment balance
+    /// Takes an amount from the available payment balance \
     /// amount: `u64` - amount to be taken from the payment balance
     public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext): Coin<C> {
         let key = guard::key(PAYMENT_GUARD_ID);

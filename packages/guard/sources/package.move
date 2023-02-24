@@ -1,7 +1,9 @@
 /// Package guard
 /// 
-/// This guard can be used to restrict thirdparty packages call to your module functions. 
+/// This guard can be used to restrict thirdparty packages call to your module functions. \
 /// It leverages the witness pattern to ensure that a package calling a module function is allowed.
+/// 
+/// Example:
 /// 
 /// ```move
 /// let guard = guard::initialize<Witness>(&Witness {}, ctx);

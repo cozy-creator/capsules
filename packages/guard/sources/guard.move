@@ -1,5 +1,5 @@
-/// Guard makes it easy to add access restriction and control to any Sui move package or object.
-/// The module implements a set of guard you can choose from and use in your move code. Some of the available
+/// Guard makes it easy to add access restriction and control to any Sui move package or object. \
+/// The module implements a set of guard you can choose from and use in your move code. Some of the available 
 /// guards to include payment, package, sender etc.
 
 module guard::guard {
@@ -20,7 +20,7 @@ module guard::guard {
         slot: u64
     }
 
-    /// Inititalizes a new instance of the guard object for `T`.
+    /// Inititalizes a new instance of the guard object for `T` \
     /// This is the base on which the main guards will be built upon.
     public fun initialize<T>(_witness: &T, ctx: &mut TxContext): Guard<T> {
         Guard<T> {
