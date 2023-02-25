@@ -15,7 +15,7 @@
 /// package::create_<Witness>(&mut guard, allowed_package_id);
 /// 
 /// // validate a the package calling a function is allowed
-/// package::validate<Witness, ThirdPartyPackageWitness>(&guard);
+/// package::validate<Witness, ThirdpartyPackageWitness>(&guard, &thirdpartyPackageWitness);
 /// ```
 
 
@@ -55,7 +55,7 @@ module guard::package {
     }
 
     /// Validates that the package witness `W` against the guard type `T`
-    public fun validate<T, W>(guard: &Guard<T>) {
+    public fun validate<T, W>(guard: &Guard<T>, _witness: &W) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
         
@@ -117,7 +117,7 @@ module guard::package_test {
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            package::validate<Witness, Witness>(&guard);
+            package::validate<Witness, Witness>(&guard, &Witness {});
             test_scenario::return_shared(guard);
         };
 
