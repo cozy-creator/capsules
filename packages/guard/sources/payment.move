@@ -2,24 +2,7 @@
 /// 
 /// This guard enables the validating, collecting and taking of any Sui coin type. \
 /// It allows for the setting of payment amount, coin type and payment taker.
-/// 
-/// Example:
-/// ```move
-/// let guard = guard::initialize<Witness>(&Witness {}, ctx);
-/// 
-/// // create payment guard
-/// payment::create<Witness, SUI>(&mut guard, 10000, @0xFEAC);
-/// 
-/// // validate a payment
-/// payment::validate<Witness, SUI>(&guard, &coins);
-/// 
-/// // collect a payment
-/// payment::collect<Witness, SUI>(&mut guard, coins, ctx);
-/// 
-/// // take an amount from payment balance
-/// let coin = payment::take<Witness, SUI>(&mut guard, 10000, ctx);
-/// transfer::transfer(coin, @0xAEBF)
-/// ```
+
 
 module guard::payment {
     use std::vector;
@@ -50,7 +33,7 @@ module guard::payment {
     /// Creates a new payment guard type `T` and coin type `C` \
     /// amount: `u64` - amount of payment to collect \
     /// taker: `address` - address that can take from the collected payment
-    public fun create<T, C>(guard: &mut Guard<T>, amount: u64, taker: address) {
+    public fun create<T, C>(guard: &mut Guard<T>, witness: &T, amount: u64, taker: address) {
         let payment =  Payment<C> {
             balance: balance::zero(),
             amount,
@@ -58,7 +41,7 @@ module guard::payment {
         };
 
         let key = guard::key(PAYMENT_GUARD_ID);
-        let uid = guard::extend(guard);
+        let uid = guard::extend(guard, witness);
 
         dynamic_field::add<Key, Payment<C>>(uid, key, payment);
     }
@@ -69,9 +52,9 @@ module guard::payment {
     /// - total coin type `T` value is greater than or equal to the configured payment amount
     /// 
     /// coins: `&vector<Coin<C>>` - vector of coin type `T` to be used for payment
-    public fun validate<T, C>(guard: &Guard<T>, coins: &vector<Coin<C>>) {
+    public fun validate<T, C>(guard: &Guard<T>, witness: &T, coins: &vector<Coin<C>>) {
         let key = guard::key(PAYMENT_GUARD_ID);
-        let uid = guard::uid(guard);
+        let uid = guard::uid(guard, witness);
 
         assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), EKeyNotSet);
         let payment = dynamic_field::borrow<Key, Payment<C>>(uid, key);
@@ -90,9 +73,9 @@ module guard::payment {
 
     /// Collects the payment of coin type `C` \
     /// coins: `&vector<Coin<C>>` - vector of coin type `T` to be used for payment
-    public fun collect<T, C>(guard: &mut Guard<T>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
+    public fun collect<T, C>(guard: &mut Guard<T>, witness: &T, coins: vector<Coin<C>>, ctx: &mut TxContext) {
         let key = guard::key(PAYMENT_GUARD_ID);
-        let uid = guard::extend(guard);
+        let uid = guard::extend(guard, witness);
 
         assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), EKeyNotSet);
         let payment = dynamic_field::borrow_mut<Key, Payment<C>>(uid, key);
@@ -119,9 +102,9 @@ module guard::payment {
 
     /// Takes an amount from the available payment balance \
     /// amount: `u64` - amount to be taken from the payment balance
-    public fun take<T, C>(guard: &mut Guard<T>, amount: u64, ctx: &mut TxContext): Coin<C> {
+    public fun take<T, C>(guard: &mut Guard<T>, witness: &T, amount: u64, ctx: &mut TxContext): Coin<C> {
         let key = guard::key(PAYMENT_GUARD_ID);
-        let uid = guard::extend(guard);
+        let uid = guard::extend(guard, witness);
 
         assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
         let payment = dynamic_field::borrow_mut<Key, Payment<C>>(uid, key);
@@ -132,9 +115,9 @@ module guard::payment {
     }
 
     /// Returns the balance value of the payment availabe in a guard
-    public fun balance_value<T, C>(guard: &Guard<T>): u64 {
+    public fun balance_value<T, C>(guard: &Guard<T>, witness: &T): u64 {
         let key = guard::key(PAYMENT_GUARD_ID);
-        let uid = guard::uid(guard);
+        let uid = guard::uid(guard, witness);
 
         assert!(dynamic_field::exists_with_type<Key, Payment<C>>(uid, key), 0);
         let payment = dynamic_field::borrow<Key, Payment<C>>(uid, key);
@@ -160,11 +143,12 @@ module guard::payment_test {
     struct Witness has drop {}
 
     fun initialize_scenario(amount: u64, sender: address): Scenario {
-        let scenario = guard_test::initialize_scenario(&Witness {}, sender);      
-        
+        let witness = Witness {};
+        let scenario = guard_test::initialize_scenario(&witness, sender);      
+
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::create<Witness, SUI>(&mut guard, amount, sender);
+            payment::create<Witness, SUI>(&mut guard, &witness, amount, sender);
             test_scenario::return_shared(guard);
         };
 
@@ -204,11 +188,12 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::validate<Witness, SUI>(&mut guard, &coins);
+            payment::validate(&mut guard, &witness, &coins);
             test_scenario::return_shared(guard);
         };
 
@@ -223,11 +208,12 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 3);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::validate<Witness, SUI>(&mut guard, &coins);
+            payment::validate(&mut guard, &witness, &coins);
             test_scenario::return_shared(guard);
         };
 
@@ -241,13 +227,14 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
 
-            assert!(payment::balance_value<Witness, SUI>(&guard) == amount, 0);
+            payment::collect(&mut guard, &witness, coins, test_scenario::ctx(&mut scenario));
+            assert!(payment::balance_value<Witness, SUI>(&guard, &witness) == amount, 0);
 
             test_scenario::return_shared(guard);
         };
@@ -262,11 +249,12 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 3);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+            payment::collect(&mut guard, &witness, coins, test_scenario::ctx(&mut scenario));
             test_scenario::return_shared(guard);
         };
 
@@ -279,13 +267,14 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+            payment::collect(&mut guard, &witness, coins, test_scenario::ctx(&mut scenario));
 
-            assert!(payment::balance_value<Witness, SUI>(&guard) == amount, 0);
+            assert!(payment::balance_value<Witness, SUI>(&guard, &witness) == amount, 0);
 
             test_scenario::return_shared(guard);
             test_scenario::next_tx(&mut scenario, sender)
@@ -293,10 +282,10 @@ module guard::payment_test {
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            let coin = payment::take<Witness, SUI>(&mut guard, 500, test_scenario::ctx(&mut scenario));
+            let coin = payment::take<Witness, SUI>(&mut guard, &witness, 500, test_scenario::ctx(&mut scenario));
 
-            assert!(payment::balance_value<Witness, SUI>(&guard) == 500, 0);
-
+            assert!(payment::balance_value<Witness, SUI>(&guard, &witness) == 500, 0);
+            
             destroy_test_coins(vector[coin]);
             test_scenario::return_shared(guard);
         };
@@ -311,13 +300,14 @@ module guard::payment_test {
         let scenario = initialize_scenario(amount, sender);
         test_scenario::next_tx(&mut scenario, sender);
 
+        let witness = Witness {};
         let coins = mint_test_coins<SUI>(&mut scenario, 200, 5);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            payment::collect<Witness, SUI>(&mut guard, coins, test_scenario::ctx(&mut scenario));
+            payment::collect(&mut guard, &witness, coins, test_scenario::ctx(&mut scenario));
 
-            assert!(payment::balance_value<Witness, SUI>(&guard) == amount, 0);
+            assert!(payment::balance_value<Witness, SUI>(&guard, &witness) == amount, 0);
 
             test_scenario::return_shared(guard);
             test_scenario::next_tx(&mut scenario, @0xEFAC)
@@ -325,7 +315,7 @@ module guard::payment_test {
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            let coin = payment::take<Witness, SUI>(&mut guard, 500, test_scenario::ctx(&mut scenario));
+            let coin = payment::take<Witness, SUI>(&mut guard, &witness, 500, test_scenario::ctx(&mut scenario));
 
             destroy_test_coins(vector[coin]);
             test_scenario::return_shared(guard);
