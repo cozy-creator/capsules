@@ -18,13 +18,13 @@ module guard::allowlist {
         create(guard, witness, vector::empty<address>());
     }
 
-    public fun create<T>(guard: &mut Guard<T>, witness: &T, addresses: vector<address>) {
+    public fun create<T>(guard: &mut Guard<T>, _witness: &T, addresses: vector<address>) {
         let allow_list =  Allowlist { 
             addresses 
         };
 
         let key = guard::key(ALLOWLIST_GUARD_ID);
-        let uid = guard::extend(guard, witness);
+        let uid = guard::extend(guard);
 
         dynamic_field::add<Key, Allowlist>(uid, key, allow_list)
     }
@@ -40,9 +40,9 @@ module guard::allowlist {
         }
     }
 
-    public fun allow<T>(guard: &mut Guard<T>, witness: &T, addresses: vector<address>) {
+    public fun allow<T>(guard: &mut Guard<T>, _witness: &T, addresses: vector<address>) {
         let key = guard::key(ALLOWLIST_GUARD_ID);
-        let uid = guard::extend(guard, witness);
+        let uid = guard::extend(guard);
 
         assert!(dynamic_field::exists_with_type<Key, Allowlist>(uid, key), EKeyNotSet);
         let allowlist = dynamic_field::borrow_mut<Key, Allowlist>(uid, key);
@@ -56,9 +56,9 @@ module guard::allowlist {
         }
     }
 
-    public fun is_allowed<T>(guard: &Guard<T>, witness: &T, addr: address): bool {
+    public fun is_allowed<T>(guard: &Guard<T>, _witness: &T, addr: address): bool {
         let key = guard::key(ALLOWLIST_GUARD_ID);
-        let uid = guard::uid(guard, witness);
+        let uid = guard::uid(guard);
 
         assert!(dynamic_field::exists_with_type<Key, Allowlist>(uid, key), EKeyNotSet);
         let allowlist = dynamic_field::borrow<Key, Allowlist>(uid, key);

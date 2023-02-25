@@ -42,11 +42,11 @@ module guard::guard {
         Key { slot }
     }
 
-    public(friend) fun extend<T>(self: &mut Guard<T>, _witness: &T): &mut UID {
+    public(friend) fun extend<T>(self: &mut Guard<T>): &mut UID {
         &mut self.id
     }
 
-    public(friend) fun uid<T>(self: &Guard<T>, _witness: &T): &UID {
+    public(friend) fun uid<T>(self: &Guard<T>): &UID {
         &self.id
     }
 }

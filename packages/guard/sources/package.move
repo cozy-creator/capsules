@@ -28,21 +28,21 @@ module guard::package {
     }
 
     /// Creates a new package guard using the allowed package id
-    public fun create_<T>(guard: &mut Guard<T>, witness: &T, id: ID) {
+    public fun create_<T>(guard: &mut Guard<T>, _witness: &T, id: ID) {
         let package = Package {
             value: id
         };
 
         let key = guard::key(PACKAGE_GUARD_ID);
-        let uid = guard::extend(guard, witness);
+        let uid = guard::extend(guard);
 
         dynamic_field::add<Key, Package>(uid, key, package)
     }
 
     /// Validates that the package witness `W` against the guard type `T`
-    public fun validate<T, W: drop>(guard: &Guard<T>, witness: &T, _package_witness: &W) {
+    public fun validate<T, W: drop>(guard: &Guard<T>, _witness: &T, _package_witness: &W) {
         let key = guard::key(PACKAGE_GUARD_ID);
-        let uid = guard::uid(guard, witness);
+        let uid = guard::uid(guard);
         
         let id = encode::package_id<W>();
 
@@ -53,9 +53,9 @@ module guard::package {
     }
 
    /// Updates the package guard with a new allowed package witness `W`
-   public fun update<T, W>(guard: &mut Guard<T>, witness: &T) {
+   public fun update<T, W>(guard: &mut Guard<T>, _witness: &T) {
         let key = guard::key(PACKAGE_GUARD_ID);
-        let uid = guard::extend(guard, witness);
+        let uid = guard::extend(guard);
         
         let id = encode::package_id<W>();
 
