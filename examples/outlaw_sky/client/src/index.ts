@@ -4,18 +4,16 @@ import {
   JSTypes,
   moveStructValidator,
   serializeByField,
-  deserializeByField,
   parseViewResultsFromVector,
-  bcs
-} from '../../../../sdk/typescript/src';
-import {
-  outlawObjectID,
-  outlawSkyPackageID,
-  provider,
-  publicKey,
-  schemaObjectID,
-  signer
-} from './config';
+  bcs,
+  getSigner,
+  getAddress,
+  provider
+} from '../../../../sdk/typescript/src/';
+import { outlawObjectID, outlawSkyPackageID, schemaObjectID } from './config';
+import path from 'path';
+
+const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
 // Step 1: Define your schema
 const outlawSchema = {
@@ -49,15 +47,18 @@ bcs.registerStructType('Outlaw', outlawSchema);
 
 async function create(data: Outlaw) {
   const byteArray = serializeByField(bcs, data, outlawSchema);
-  const moveCallTxn = await signer.executeMoveCall({
-    packageObjectId: outlawSkyPackageID,
-    module: 'outlaw_sky',
-    function: 'create',
-    typeArguments: [],
-    /// @ts-ignore
-    arguments: [schemaObjectID, byteArray],
-    gasBudget: 12000
-  });
+
+  const moveCallTxn = await getSigner(ENV_PATH).then(signer =>
+    signer.executeMoveCall({
+      packageObjectId: outlawSkyPackageID,
+      module: 'outlaw_sky',
+      function: 'create',
+      typeArguments: [],
+      /// @ts-ignore
+      arguments: [schemaObjectID, byteArray],
+      gasBudget: 12000
+    })
+  );
   return moveCallTxn;
 }
 
@@ -88,7 +89,7 @@ async function read(outlawObjectID: string, dataType: string): Promise<Record<st
     } as MoveCallTransaction
   } as UnserializedSignableTransaction;
 
-  let result = await provider.devInspectTransaction(publicKey, signableTxn);
+  let result = await provider.devInspectTransaction(await getAddress(ENV_PATH), signableTxn);
 
   // This doesn't work yet, but eventually we'll want to use it instead.
   //
@@ -118,15 +119,17 @@ async function readSubset() {
 
 async function update(outlawObjectID: string, keysToUpdate: string[], data: Outlaw) {
   const byteArray = serializeByField(bcs, data, outlawSchema, keysToUpdate);
-  const moveCallTxn = await signer.executeMoveCall({
-    packageObjectId: outlawSkyPackageID,
-    module: 'outlaw_sky',
-    function: 'overwrite',
-    typeArguments: [],
-    /// @ts-ignore
-    arguments: [outlawObjectID, keysToUpdate, byteArray, schemaObjectID],
-    gasBudget: 12000
-  });
+  const moveCallTxn = await getSigner(ENV_PATH).then(signer =>
+    signer.executeMoveCall({
+      packageObjectId: outlawSkyPackageID,
+      module: 'outlaw_sky',
+      function: 'overwrite',
+      typeArguments: [],
+      /// @ts-ignore
+      arguments: [outlawObjectID, keysToUpdate, byteArray, schemaObjectID],
+      gasBudget: 12000
+    })
+  );
 }
 
 async function updateAll() {}

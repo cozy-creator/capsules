@@ -17,8 +17,8 @@
     "typescript": "^4.9.5"
   },
   "dependencies": {
-    "@mysten/bcs": "^0.6.0",
-    "@mysten/sui.js": "^0.28.0",
+    "@mysten/bcs": "^0.6.1",
+    "@mysten/sui.js": "^0.29.1",
     "superstruct": "^1.0.3"
   },
   "description": "## Intro A small typescript sdk consisting of (de)serializing funtions. The purpose of this tool is to prepare argument data to invoke Move functions on the Sui blockchain.",
