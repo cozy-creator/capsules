@@ -195,7 +195,7 @@ module dispenser::dispenser {
         self.available_items = self.available_items + items_count;
 
         emit(DispenserLoaded {
-             id: object::id(self),
+            id: object::id(self),
             items_count
         });
     }
@@ -232,7 +232,7 @@ module dispenser::dispenser {
         let item = vector::swap_remove(&mut self.items, index);
         
         emit(ItemDispensed {
-             id: object::id(self),
+            id: object::id(self),
             item
         });
 
@@ -250,7 +250,7 @@ module dispenser::dispenser {
         let item = vector::pop_back(&mut self.items);
         
         emit(ItemDispensed {
-             id: object::id(self),
+            id: object::id(self),
             item
         });
 
