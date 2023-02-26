@@ -10,6 +10,7 @@ module dispenser::dispenser {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::randomness::{Self, Randomness};
+    use sui::event::emit;
 
     use ownership::ownership;
     use ownership::tx_authority;
@@ -98,7 +99,7 @@ module dispenser::dispenser {
         schema: Option<vector<vector<u8>>>,
         ctx: &mut TxContext
     ): Dispenser<T> {
-        let dispenser = Dispenser {
+        let dispenser = Dispenser<T> {
             id: object::new(ctx),
             available_items: 0, 
             loaded_items: 0,
@@ -130,6 +131,11 @@ module dispenser::dispenser {
         };
         
         ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut dispenser.id, owner, &auth);
+
+        emit(DispenserCreated {
+            id: object::id(&dispenser),
+            owner
+        });
 
         dispenser
     }
@@ -187,6 +193,11 @@ module dispenser::dispenser {
 
         self.loaded_items = self.loaded_items + items_count;
         self.available_items = self.available_items + items_count;
+
+        emit(DispenserLoaded {
+             id: object::id(self),
+            items_count
+        });
     }
 
     /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
@@ -218,7 +229,14 @@ module dispenser::dispenser {
 
         // swap the item at the index with the last item and pops it, so the items order is not preserved. 
         // this is ideal because it's O(1) and order preservation is not disired because the selection is random
-        vector::swap_remove(&mut self.items, index)
+        let item = vector::swap_remove(&mut self.items, index);
+        
+        emit(ItemDispensed {
+             id: object::id(self),
+            item
+        });
+
+        item
     }
 
     /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
@@ -229,7 +247,14 @@ module dispenser::dispenser {
         self.available_items = self.available_items - 1;
 
         // pops the last item in the vector (corresponds to the original first item). items order is preserved.
-        vector::pop_back(&mut self.items)
+        let item = vector::pop_back(&mut self.items);
+        
+        emit(ItemDispensed {
+             id: object::id(self),
+            item
+        });
+
+        item
     }
 
     /// Makes the dispenser a shared object
