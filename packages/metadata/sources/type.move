@@ -82,7 +82,8 @@ module metadata::type {
         let type = Type { id: object::new(ctx) };
         let auth = tx_authority::begin_with_type(&Witness { });
         let proof = ownership::setup(&type);
-        ownership::initialize_without_module_authority(&mut type.id, proof, &auth);
+
+        ownership::initialize_as_owned_object(&mut type.id, proof, &auth);
         metadata::attach(&mut type.id, data, schema, &tx_authority::empty());
 
         type

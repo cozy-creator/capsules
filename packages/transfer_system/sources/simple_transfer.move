@@ -25,7 +25,7 @@ module transfer_system::simple_transfer {
     }
 
     // Transfer ownership to an arbitrary address
-    public fun transfer(uid: &mut UID, new_owner: address, ctx: &TxContext) {
+    public fun transfer(uid: &mut UID, new_owner: vector<address>, ctx: &TxContext) {
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
