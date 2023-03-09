@@ -1,0 +1,16 @@
+[package]
+name = "royalties"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Ownership = { local = "../ownership" }
+TransferSystem = { local = "../transfer_system" }
+Metadata = { local = "../metadata" }
+
+
+[addresses]
+royalties = "0x0"
+sui = "0000000000000000000000000000000000000002"
+ownership = "0xac1494adacb65a36257a931aab153c33e9634f22"
+transfer_system = "0x9aa9b6109a693348f92c138ef7573f7396dac92e"
