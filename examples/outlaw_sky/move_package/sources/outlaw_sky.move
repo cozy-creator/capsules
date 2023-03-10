@@ -1,5 +1,5 @@
 module outlaw_sky::outlaw_sky {
-    use std::ascii::{Self};
+    use std::ascii;
     use std::string::String;
     use sui::bcs;
     use sui::object::{Self, UID};
