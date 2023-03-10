@@ -10,6 +10,7 @@ module metadata::abstract_type {
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
+    use sui::typed_id;
     use sui_utils::encode;
     use sui_utils::struct_tag::{Self, StructTag};
     use ownership::ownership;
@@ -71,12 +72,12 @@ module metadata::abstract_type {
 
         let abstract_type = AbstractType { 
             id: object::new(ctx),
-            type: struct_tag::create_abstract<T>(),
+            type: struct_tag::get_abstract<T>(),
             schema_id: schema_id_for_concrete_type
         };
         let auth = tx_authority::begin_with_type(&Witness { });
-        let proof = ownership::setup(&abstract_type);
-        ownership::initialize_without_module_authority(&mut abstract_type.id, proof, &auth);
+        let typed_id = typed_id::new(&abstract_type);
+        ownership::initialize_without_module_authority(&mut abstract_type.id, typed_id, &auth);
 
         abstract_type
     }
@@ -84,8 +85,8 @@ module metadata::abstract_type {
     public fun return_and_share(abstract_type: AbstractType, owner: Option<address>, ctx: &TxContext) {
         let owner = if (option::is_some(&owner)) { option::destroy_some(owner) }
             else { tx_context::sender(ctx) };
-        let auth = tx_authority::empty();
-        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut abstract_type.id, owner, &auth);
+
+        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, vector[owner], &tx_authority::empty());
 
         transfer::share_object(abstract_type);
     }
@@ -127,7 +128,7 @@ module metadata::abstract_type {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): Type<T> {
-        let struct_tag = struct_tag::create<T>();
+        let struct_tag = struct_tag::get<T>();
         assert!(struct_tag::is_same_abstract_type(&abstract.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
         assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
         assert!(schema::equals_(schema, abstract.schema_id), EINCORRECT_SCHEMA_SUPPLIED);
@@ -182,9 +183,10 @@ module metadata::abstract_type {
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
-        // TO DO: Enable these lines after we transition ownership to support strut tags
-        // let struct_tag = option::destroy_some(ownership::type(uid));
-        // assert!(struct_tag::is_same_abstract_type(&fallback_type.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
+        let struct_tag = option::destroy_some(ownership::get_type(uid));
+        assert!(
+            struct_tag::is_same_abstract_type(&fallback_type.type, &struct_tag),
+            EABSTRACT_DOES_NOT_MATCH_CONCRETE);
 
         metadata::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }

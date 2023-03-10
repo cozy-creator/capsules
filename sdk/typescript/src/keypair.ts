@@ -3,20 +3,38 @@ import {
   normalizeSuiAddress,
   RawSigner,
   JsonRpcProvider,
-  fromB64
+  fromB64,
+  Connection
 } from '@mysten/sui.js';
 
 import fs from 'fs';
+import util from 'util';
 
 const PRIVATE_KEY_ENV_VAR = 'PRIVATE_KEY';
 
-// Build a class to connect to Sui RPC servers
 // Default endpoint is devnet 'https://fullnode.devnet.sui.io:443'
-export const provider = new JsonRpcProvider();
+// https://sui-devnet.artifact.systems:443/
+// https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd
+
+// Build a class to connect to Sui RPC servers
+export const provider = new JsonRpcProvider(
+  new Connection({
+    fullnode: 'https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd',
+    faucet: 'https://fullnode.devnet.sui.io:443'
+  })
+);
 
 async function requestFromFaucet(address: string) {
-  const response = await provider.requestSuiFromFaucet(address);
-  return response.transferred_gas_objects;
+  try {
+    const response = await provider.requestSuiFromFaucet(address);
+    return response.transferred_gas_objects;
+  } catch (error) {
+    console.log('Request to faucet failed');
+    // @ts-ignore
+    console.log(util.inspect(error.message, { showHidden: false, depth: null, colors: true }));
+
+    return [];
+  }
 }
 
 async function loadEnv(env_path: string): Promise<string> {
@@ -89,7 +107,9 @@ async function loadKeypair(env_path: string) {
 }
 
 async function fetchSuiCoinsForAddress(address: string) {
+  console.log(`fetching coins for ${address}`);
   const coins = await provider.getCoins(address, '0x2::sui::SUI');
+  console.log(coins);
   return coins.data;
 }
 

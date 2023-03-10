@@ -79,7 +79,7 @@ module ownership::tx_authority {
         is_signed_by(type_into_address<T>(), auth)
     }
 
-    public fun has_k_of_n_addresses(addrs: &vector<address>, threshold: u64, auth: &TxAuthority): bool {
+    public fun has_k_of_n_signatures(addrs: &vector<address>, threshold: u64, auth: &TxAuthority): bool {
         let k = number_of_signers(addrs, auth);
         if (k >= threshold) true
         else false

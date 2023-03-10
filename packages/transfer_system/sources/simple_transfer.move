@@ -15,17 +15,17 @@ module transfer_system::simple_transfer {
     // Convenience function
     public fun transfer_to_object<T: key>(uid: &mut UID, obj: &T, ctx: &TxContext) {
         let addr = object::id_address(obj);
-        transfer(uid, addr, ctx);
+        transfer(uid, vector[addr], ctx);
     }
 
     // Convenience function
     public fun transfer_to_type<T>(uid: &mut UID, ctx: &TxContext) {
         let addr = tx_authority::type_into_address<T>();
-        transfer(uid, addr, ctx);
+        transfer(uid, vector[addr], ctx);
     }
 
     // Transfer ownership to an arbitrary address
-    public fun transfer(uid: &mut UID, new_owner: address, ctx: &TxContext) {
+    public fun transfer(uid: &mut UID, new_owner: vector<address>, ctx: &TxContext) {
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 

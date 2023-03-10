@@ -1,9 +1,10 @@
 module outlaw_sky::outlaw_sky {
-    use std::ascii::{Self};
+    use std::ascii;
     use std::string::String;
     use sui::bcs;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
+    use sui::typed_id;
     use sui::transfer;
     use sui::vec_map::{Self, VecMap};
     use ownership::ownership;
@@ -27,14 +28,19 @@ module outlaw_sky::outlaw_sky {
     }
 
     public entry fun create(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
-        let outlaw = Outlaw { id: object::new(ctx) };
-        let owner = tx_context::sender(ctx);
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        let proof = ownership::setup(&outlaw);
+        let auth = tx_authority::begin_with_type(&Witness {});
+        let outlaw = Outlaw { 
+            id: object::new(ctx) 
+        };
+        let typed_id = typed_id::new(&outlaw);
 
-        ownership::initialize(&mut outlaw.id, proof, &auth);
+        ownership::initialize_with_module_authority(&mut outlaw.id, typed_id, &auth);
+
         metadata::attach(&mut outlaw.id, data, schema, &auth);
-        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut outlaw.id, owner, &auth);
+
+        let owner = vector[tx_context::sender(ctx)];
+        ownership::as_shared_object<SimpleTransfer>(&mut outlaw.id, owner, &auth);
+
         transfer::share_object(outlaw);
     }
 
