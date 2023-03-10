@@ -19,7 +19,7 @@ module sui_utils::struct_tag {
         generics: vector<String>, // we have to use Strings rather than recursive StructTags
     }
 
-    public fun create<T>(): StructTag {
+    public fun get<T>(): StructTag {
         let (package_id, module_name, struct_name, generics) = encode::type_name_decomposed<T>();
 
         StructTag { package_id, module_name, struct_name, generics }
@@ -27,7 +27,7 @@ module sui_utils::struct_tag {
 
     // Same as above, except generics are stripped.
     // Aborts if generics are not present.
-    public fun create_abstract<T>(): StructTag {
+    public fun get_abstract<T>(): StructTag {
         let (package_id, module_name, struct_name, generics) = encode::type_name_decomposed<T>();
         assert!(vector::length(&generics) > 0, ESUPPLIED_TYPE_CANNOT_BE_ABSTRACT);
 

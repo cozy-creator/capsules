@@ -16,7 +16,9 @@ module metadata::type {
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
+    use sui::typed_id;
     use sui_utils::encode;
+    use sui_utils::struct_tag;
     use ownership::ownership;
     use ownership::tx_authority;
     use metadata::metadata;
@@ -81,10 +83,11 @@ module metadata::type {
     public(friend) fun define_internal<T>(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext): Type<T> {
         let type = Type { id: object::new(ctx) };
         let auth = tx_authority::begin_with_type(&Witness { });
-        let proof = ownership::setup(&type);
+        let typed_id = typed_id::new(&type);
 
-        ownership::initialize_as_owned_object(&mut type.id, proof, &auth);
+        ownership::initialize_without_module_authority(&mut type.id, typed_id, &auth);
         metadata::attach(&mut type.id, data, schema, &tx_authority::empty());
+        ownership::as_owned_object(&mut type.id, &tx_authority::empty());
 
         type
     }
@@ -128,8 +131,8 @@ module metadata::type {
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
-        let object_type = option::destroy_some(ownership::type(uid));
-        assert!(encode::type_name<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
+        let object_type = option::destroy_some(ownership::get_type(uid));
+        assert!(struct_tag::get<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
 
         metadata::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }

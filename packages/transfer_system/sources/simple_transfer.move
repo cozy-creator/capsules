@@ -15,13 +15,13 @@ module transfer_system::simple_transfer {
     // Convenience function
     public fun transfer_to_object<T: key>(uid: &mut UID, obj: &T, ctx: &TxContext) {
         let addr = object::id_address(obj);
-        transfer(uid, addr, ctx);
+        transfer(uid, vector[addr], ctx);
     }
 
     // Convenience function
     public fun transfer_to_type<T>(uid: &mut UID, ctx: &TxContext) {
         let addr = tx_authority::type_into_address<T>();
-        transfer(uid, addr, ctx);
+        transfer(uid, vector[addr], ctx);
     }
 
     // Transfer ownership to an arbitrary address

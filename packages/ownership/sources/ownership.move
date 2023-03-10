@@ -11,13 +11,10 @@ module ownership::ownership {
     const ENO_MODULE_AUTHORITY: u64 = 0;
     const ENO_OWNER_AUTHORITY: u64 = 1;
     const ENO_TRANSFER_AUTHORITY: u64 = 2;
-    const EUID_DOES_NOT_BELONG_TO_PROOF_OBJECT: u64 = 3;
+    const EUID_DOES_NOT_BELONG_TO_OBJECT: u64 = 3;
     const EOBJECT_NOT_INITIALIZED: u64 = 4;
     const EOBJECT_ALREADY_INITIALIZED: u64 = 5;
-    const ETRANSFER_ALREADY_EXISTS: u64 = 6;
-    const EOWNER_ALREADY_EXISTS: u64 = 7;
-    const EOWNER_ALREADY_INITIALIZED: u64 = 8;
-    const ETHIS_ASSET_CANNOT_BE_OWNED: u64 = 9;
+    const EOWNER_ALREADY_INITIALIZED: u64 = 6;
 
     // Dynamic field key for Ownership struct
     struct Key has store, copy, drop {}
@@ -32,7 +29,8 @@ module ownership::ownership {
         module_auth: vector<address>,
         owner: vector<address>,
         transfer_auth: vector<address>,
-        type: StructTag
+        type: StructTag,
+        is_shared: Option<bool>
     }
 
     // ======= Module Authority =======
@@ -42,52 +40,57 @@ module ownership::ownership {
     // Hence why we have to break the type verification step into two function calls
 
     // Set the module authority as the default authority-witness for the module declaring `T`
-    public fun initialize_as_shared_object<T: key>(uid: &mut UID, typed_id: TypedID<T>, auth: &TxAuthority) {
+    public fun initialize_with_module_authority<T: key>(uid: &mut UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         let module_authority = tx_authority::witness_addr<T>();
-        initialize_module_auth(uid, typed_id, vector[module_authority], auth);
+        initialize(uid, typed_id, vector[module_authority], auth);
     }
 
     // In this case, ownership of UID reverts to Sui root-level ownership
-    public fun initialize_as_owned_object<T: key>(uid: &mut UID, typed_id: TypedID<T>, auth: &TxAuthority) {
-        initialize_module_auth(uid, typed_id, vector::empty(), auth);
+    public fun initialize_without_module_authority<T: key>(uid: &mut UID, typed_id: TypedID<T>, auth: &TxAuthority) {
+        initialize(uid, typed_id, vector::empty(), auth);
     }
 
     // If module-authority is not set here, it can never be set, meaning owner and tranfser authority
     // can never be set either. The ability to obtain a mutable reference to UID is proof-of-ownership
     // As such, the object should either by owned (root-level) or wrapped; never shared (root-level)
-    public fun initialize_module_auth<T: key>(
+    public fun initialize<T: key>(
         uid: &mut UID,
         typed_id: TypedID<T>,
         module_authority: vector<address>,
         auth: &TxAuthority
     ) {
-        assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_PROOF_OBJECT);
-        assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
+        assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
+        assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
 
         let ownership = Ownership {
             module_auth: module_authority,
             owner: vector::empty(),
             transfer_auth: vector::empty(),
-            type: struct_tag::create<T>()
+            type: struct_tag::get<T>(),
+            // this won't be determined until we call `as_shared_object` or `as_owned_object`
+            is_shared: option::none()
         };
 
         dynamic_field::add(uid, Key { }, ownership);
     }
 
     // Requires module and owner authority
-    public fun add_module_auth(uid: &mut UID, new_authority: address, auth: &TxAuthority) {
+    // Note that in case module-authority is empty, we allow the owner to unilaterally add one
+    // This means an asset can migrate between module-authorities
+    public fun add_module_authority(uid: &mut UID, new_authority: address, auth: &TxAuthority) {
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+
         if (!vector::contains(&ownership.module_auth, &new_authority)) {
             vector::push_back(&mut ownership.module_auth, new_authority);
         };
     }
 
     // Requires module and owner authority
-    public fun remove_module_auth(uid: &mut UID, authority: address, auth: &TxAuthority) {
+    public fun remove_module_authority(uid: &mut UID, authority: address, auth: &TxAuthority) {
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
@@ -101,7 +104,7 @@ module ownership::ownership {
     // Requires module and owner authority
     // Module authority is removed, and all module permissions now default to true.
     // After it is ejected, module authority can never be added again.
-    public fun remove_all_module_auth(uid: &mut UID, auth: &TxAuthority) {
+    public fun remove_all_module_authorities(uid: &mut UID, auth: &TxAuthority) {
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
@@ -112,32 +115,45 @@ module ownership::ownership {
     // ======= Transfer Authority =======
 
     // Convenience function
-    public fun initialize_owner_and_transfer_auth<Transfer>(
+    public fun as_shared_object<Transfer>(
         uid: &mut UID,
         owner: vector<address>,
         auth: &TxAuthority
     ) {
         let transfer = tx_authority::type_into_address<Transfer>();
-        initialize_owner_and_transfer_auth_(uid, owner, vector[transfer], auth);
+        as_shared_object_(uid, owner, vector[transfer], auth);
     }
 
     // We have to set both an owner and a transfer authority at the same time. Module authority must exist and
     // approve this. This initialize can only every be done once per object.
-    public fun initialize_owner_and_transfer_auth_(
+    public fun as_shared_object_(
         uid: &mut UID,
         owner: vector<address>,
         transfer_auth: vector<address>,
         auth: &TxAuthority
     ) {
-        let (module_auth, current_owner, current_transfer, _) = get_ownership(uid);
         assert!(is_initialized(uid), EOBJECT_NOT_INITIALIZED);
-        assert!(vector::is_empty(&current_owner) && vector::is_empty(&current_transfer), EOWNER_ALREADY_INITIALIZED);
-        assert!(!vector::is_empty(&module_auth), ETHIS_ASSET_CANNOT_BE_OWNED);
         assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        assert!(option::is_none(&ownership.is_shared), EOWNER_ALREADY_INITIALIZED);
+
+        ownership.is_shared = option::some(true);
         ownership.owner = owner;
         ownership.transfer_auth = transfer_auth;
+    }
+
+    // In this case no owner can ever be set, meaning ownership reverts to Sui's root-level ownership system
+    // This means that a reference to this object, such as `&mut T` is all the authority that is needed
+    // Note that transfer authority also cannot be set and has no meaning
+    public fun as_owned_object(uid: &mut UID, auth: &TxAuthority) {
+        assert!(is_initialized(uid), EOBJECT_NOT_INITIALIZED);
+        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
+
+        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        assert!(option::is_none(&ownership.is_shared), EOWNER_ALREADY_INITIALIZED);
+
+        ownership.is_shared = option::some(false);
     }
 
     // Requires transfer and owner authority
@@ -228,12 +244,29 @@ module ownership::ownership {
 
     // ========== Getter Functions =========
 
-    public fun get_ownership(uid: &UID): (vector<address>, vector<address>, vector<address>, Option<StructTag>) {
+    public fun get_type(uid: &UID): Option<StructTag> {
         if (!dynamic_field::exists_(uid, Key { })) {
-            return (vector::empty(), vector::empty(), vector::empty(), option::none())
+            return option::none()
         };
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-        (ownership.module_auth, ownership.owner, ownership.transfer_auth, option::some(ownership.type))
+        option::some(ownership.type)
+    }
+
+    public fun get_ownership(
+        uid: &UID
+    ): (vector<address>, vector<address>, vector<address>, Option<StructTag>, Option<bool>) {
+        if (!dynamic_field::exists_(uid, Key { })) {
+            return (vector::empty(), vector::empty(), vector::empty(), option::none(), option::none())
+        };
+
+        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+        (
+            ownership.module_auth,
+            ownership.owner,
+            ownership.transfer_auth,
+            option::some(ownership.type),
+            ownership.is_shared
+        )
     }
 }

@@ -3,6 +3,7 @@ module metadata::package {
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
+    use sui::typed_id;
 
     use metadata::metadata;
     use metadata::schema::Schema;
@@ -31,8 +32,9 @@ module metadata::package {
 
         // Renounce control of this asset so that the owner can attach metadata independently of us
         let auth = tx_authority::begin_with_type(&Witness { });
-        let proof = ownership::setup(&package);
-        ownership::initialize_without_module_authority(&mut package.id, proof, &auth);
+        let typed_id = typed_id::new(&package);
+        ownership::initialize_without_module_authority(&mut package.id, typed_id, &auth);
+        ownership::as_owned_object(&mut package.id, &auth);
 
         package
     }
