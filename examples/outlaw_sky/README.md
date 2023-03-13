@@ -16,8 +16,8 @@ This will return two UIDs, looking something like:
 
 > Created Objects:
 >
-> ID: 0x5b677ebf672b2a749c26ab5053bff015644308f5 , Owner: Immutable
-> ID: 0xe89507e8ea9b8c67afb5c5b90646da792fcf91c1 , Owner: Account Address ( 0xbb81965d327c51d42d1081e5d81909652f05a675 )
+> ID: 0x0b0bbca283777a702829486f8435a870b6ab33bf , Owner: Immutable
+> ID: 0x6e0ed1a14bbb9f648544991fb6b5f7093d0a467d , Owner: Account Address ( 0xbb81965d327c51d42d1081e5d81909652f05a675 )
 
 The first ID is the package-id you just deployed, which is an immutable object, and the second ID is the package's publish-receipt, which is owned by whatever keypair you used to deploy the package.
 
@@ -47,7 +47,7 @@ Putting the above arguments arguments in yields the serialized `vector<vector<u8
 
 which we then put into our command as the second argument:
 
-`sui client call --package 0xda9c939657391dc29566e67c95a4e91610e85e75 --module type --function define --type-args 0x5b677ebf672b2a749c26ab5053bff015644308f5::outlaw_sky::Outlaw --args 0xe89507e8ea9b8c67afb5c5b90646da792fcf91c1 "[ [6, 79, 117, 116, 108, 97, 119], [1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [199, 0, 0, 0, 0, 0, 0, 0], [0] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 15000`
+`sui client call --package 0xda9c939657391dc29566e67c95a4e91610e85e75 --module type --function define --type-args 0x0b0bbca283777a702829486f8435a870b6ab33bf::outlaw_sky::Outlaw --args 0x6e0ed1a14bbb9f648544991fb6b5f7093d0a467d "[ [6, 79, 117, 116, 108, 97, 119], [1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [199, 0, 0, 0, 0, 0, 0, 0], [0] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 15000`
 
 The first argument is our publish receipt; do you remember the object we got back in step-1? That publish receipt proves that we are the ones who published the package, and hence we have special priviliges to define type metadata for the structs we defined in our package (we wouldn't want random people on the internet defining metadata for our own objects!). Also note that type metadata is a **singleton object**; there will only ever be _one_ `metadata::type::Type<<package-id>::outlaw_sky::Outlaw>` in existence. If you try to run the command above again, it will fail! That's because metadata::type leaves a record on your package receipt recording that you used it to create your type metadata object. The next time you try to use that publish receipt again, metadata::type will see the leftover record and abort!
 
@@ -57,7 +57,7 @@ Now for the fun of it, let's try editing our type metadata! Try the following co
 
 **To Do:** Make this update more interesting
 
-`sui client call --package 0xda9c939657391dc29566e67c95a4e91610e85e75 --module type --function update --type-args 0x5b677ebf672b2a749c26ab5053bff015644308f5::outlaw_sky::Outlaw --args 0x10dce545bd725319732dae6a6778056c8ad1aa00 "[ \"description\", \"image\", \"power_level\" ]" "[ [1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [0, 0, 2, 0, 0, 0, 0, 0] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d true --gas-budget 2000`
+`sui client call --package 0xda9c939657391dc29566e67c95a4e91610e85e75 --module type --function update --type-args 0x0b0bbca283777a702829486f8435a870b6ab33bf::outlaw_sky::Outlaw --args 0x10dce545bd725319732dae6a6778056c8ad1aa00 "[ \"description\", \"image\", \"power_level\" ]" "[ [1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [0, 0, 2, 0, 0, 0, 0, 0] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d true --gas-budget 2000`
 
 Notice how fast and cheap that was? Our transaction was completed in <2 seconds, and cost a measly 1,410 nanoSUI to write 340 bytes; on mainnet that'll likely be around 1,410,000 nanoSUI, which works out to 0.0014 SUI, which is equivalent to 350+ edit-transactions for $1. Oof.
 
@@ -71,7 +71,7 @@ Now let's call into the `create` function that we deployed in Step-1. This will 
 
 turns into this:
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function create --args "[ [5, 75, 121, 114, 105, 101], [], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [1, 0, 0, 0, 0, 0, 0, 0], [ 2, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101 ] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 8000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function create --args "[ [5, 75, 121, 114, 105, 101], [], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [1, 0, 0, 0, 0, 0, 0, 0], [ 2, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101 ] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 8000`
 
 This transaction will return a result that looks like this:
 
@@ -142,7 +142,7 @@ curl --location --request POST $SUI_RPC_HOST \
         [
             {
                 "moveCallRequestParams": {
-                    "packageObjectId": "0x5b677ebf672b2a749c26ab5053bff015644308f5",
+                    "packageObjectId": "0x0b0bbca283777a702829486f8435a870b6ab33bf",
                     "module": "outlaw_sky",
                     "function": "view_all",
                     "typeArguments": [],
@@ -201,7 +201,7 @@ Let's change our Outlaw by adding more attributes! Here's are our new set of att
 
 After serializing these, they turn out to be:
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function update --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "[ \"attributes\" ]" "[ [ 7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101, 6, 79, 117, 116, 102, 105, 116, 14, 80, 97, 114, 97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110, 7, 67, 108, 111, 116, 104, 101, 115, 12, 83, 117, 109, 109, 101, 114, 32, 83, 104, 105, 114, 116, 4, 72, 101, 97, 100, 17, 66, 101, 97, 110, 105, 101, 32, 40, 98, 108, 97, 99, 107, 111, 117, 116, 41, 7, 69, 121, 101, 119, 101, 97, 114, 14, 77, 101, 108, 114, 111, 115, 101, 32, 66, 114, 105, 99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 3000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function update --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "[ \"attributes\" ]" "[ [ 7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101, 6, 79, 117, 116, 102, 105, 116, 14, 80, 97, 114, 97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110, 7, 67, 108, 111, 116, 104, 101, 115, 12, 83, 117, 109, 109, 101, 114, 32, 83, 104, 105, 114, 116, 4, 72, 101, 97, 100, 17, 66, 101, 97, 110, 105, 101, 32, 40, 98, 108, 97, 99, 107, 111, 117, 116, 41, 7, 69, 121, 101, 119, 101, 97, 114, 14, 77, 101, 108, 114, 111, 115, 101, 32, 66, 114, 105, 99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 3000`
 
 Notice that took a little longer? But still <3 seconds to edit. That's because our Outlaw is a _shared object_, which means it needs to go through full consensus, which takes longer than it does for _owned objects_.
 
@@ -211,13 +211,13 @@ Also note that all of the metadata describing out Outlaw, the name, image url, a
 
 Our module exposes commands to allow owners to modify metadata on their objects. Creators have full control over what they allow owners to do, and not to do. Let's call of our on-chain modules!
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function rename --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Super" 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 1000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function rename --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Super" 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 1000`
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function add_attribute --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Leg" "Mechanical" --gas-budget 1000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function add_attribute --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Leg" "Mechanical" --gas-budget 1000`
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function remove_attribute --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Face" --gas-budget 1000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function remove_attribute --args 0x1500a577dcf0df760a601a0771b3c0315504c331 "Face" --gas-budget 1000`
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function increment_power_level --args 0x1500a577dcf0df760a601a0771b3c0315504c331 --gas-budget 1000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function increment_power_level --args 0x1500a577dcf0df760a601a0771b3c0315504c331 --gas-budget 1000`
 
 Notice that all of these transactions are fast and cheap! They're only about 580 nanoSUI each, which, on mainnet, means we'd be able to do about 850 of these updates for $1.
 
@@ -225,7 +225,7 @@ Notice that all of these transactions are fast and cheap! They're only about 580
 
 Our Outlaw object itself is a shared object, meaning we cannot destroy it right now, although Sui will eventually support destroying shared objects! However we _can_ delete the metadata of our Outlaw! So let's do that:
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module outlaw_sky --function delete_all --args 0x1500a577dcf0df760a601a0771b3c0315504c331 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 9000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module outlaw_sky --function delete_all --args 0x1500a577dcf0df760a601a0771b3c0315504c331 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 9000`
 
 You'll get a response like this:
 
@@ -250,7 +250,7 @@ And viola! All our metadata is gone. A real digital asset collection probably wo
 
 ## Demo Factory Command
 
-`sui client call --package 0x5b677ebf672b2a749c26ab5053bff015644308f5 --module demo_factory --function create --gas-budget 8000`
+`sui client call --package 0x0b0bbca283777a702829486f8435a870b6ab33bf --module demo_factory --function create --gas-budget 8000`
 
 ## Sui Typescript SDK
 
@@ -260,8 +260,8 @@ And viola! All our metadata is gone. A real digital asset collection probably wo
 
 Transaction signer = 0xed2c39b73e055240323cf806a7d8fe46ced1cabb
 Metadata package = 0xda9c939657391dc29566e67c95a4e91610e85e75
-Outlaw Sky package = 0x5b677ebf672b2a749c26ab5053bff015644308f5
-Publish Receipt Object = 0xe89507e8ea9b8c67afb5c5b90646da792fcf91c1
+Outlaw Sky package = 0x0b0bbca283777a702829486f8435a870b6ab33bf
+Publish Receipt Object = 0x6e0ed1a14bbb9f648544991fb6b5f7093d0a467d
 Outlaw Object = 0x1500a577dcf0df760a601a0771b3c0315504c331
 Schema Object = 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d
 `Type<Outlaw> Object` = 0x10dce545bd725319732dae6a6778056c8ad1aa00

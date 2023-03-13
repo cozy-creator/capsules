@@ -5,14 +5,16 @@ module outlaw_sky::demo_factory {
     use std::vector;
     use sui::dynamic_field;
     use sui::url::{Self, Url};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::vec_map::{Self, VecMap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::event;
     use sui_utils::ascii2;
     use sui_utils::rand;
 
-    // All of these are metadata properites and do not belong on this struct, but we include them here anyway because the sui-explorer is built to read them (lol)
+    // All of these are metadata properites and do not belong on this struct, but we include them here anyway because the sui-explorer
+    // is built to read them (lol)
     struct Outlaw has key {
         id: UID,
         name: String,
@@ -36,6 +38,11 @@ module outlaw_sky::demo_factory {
     struct OutlawMetadata has store, copy, drop {
         attributes: VecMap<String, String>,
         url: String
+    }
+
+    // Event
+    struct MetadataUpdated has copy, drop {
+        for: ID
     }
 
     const URL_TEMPLATE: vector<u8> = b"https://d23f0jexolvu5k.cloudfront.net/";
@@ -77,6 +84,10 @@ module outlaw_sky::demo_factory {
 
         let metadata = OutlawMetadata { attributes, url };
         dynamic_field::add(&mut id, b"metadata", metadata);
+
+        event::emit(MetadataUpdated {
+            for: object::uid_to_inner(&id)
+        });
 
         Outlaw {
             id,

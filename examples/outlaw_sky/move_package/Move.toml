@@ -11,4 +11,4 @@ SuiMetadata = { local = "../../../packages/metadata" }
 TransferSystem = { local = "../../../packages/transfer_system" }
 
 [addresses]
-outlaw_sky = "0x5b677ebf672b2a749c26ab5053bff015644308f5"
+outlaw_sky = "0x0b0bbca283777a702829486f8435a870b6ab33bf"
