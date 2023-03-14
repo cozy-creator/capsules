@@ -1,16 +1,12 @@
 [package]
-name = "Power"
+name = "GLBAsset"
 version = "0.1.0"
-authors = []
+authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
-SuiUtils = { local = "../../../packages/sui_utils" }
-SuiMetadata = { local = "../../../packages/metadata" }
 Ownership = { local = "../../../packages/ownership" }
+# SuiMetadata = { local = "../../../packages/metadata" }
 
 [addresses]
-power = "0x0"
-metadata = "0x0"
-sui_utils = "0x0"
-ownership = "0x0"
+glb_asset = "0x1159c0f222353153c4c75592c73d3dd86806920c"

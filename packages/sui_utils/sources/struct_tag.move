@@ -3,11 +3,13 @@
 // having to re-parse them every time in future transactions.
 
 module sui_utils::struct_tag {
-    use std::ascii::{Self, String};
+    use std::string::{Self, String, utf8};
     use std::vector;
+
     use sui::object::{Self, ID};
-    use sui_utils::ascii2;
+
     use sui_utils::encode;
+    use sui_utils::string2;
 
     // Error enums
     const ESUPPLIED_TYPE_CANNOT_BE_ABSTRACT: u64 = 0;
@@ -74,28 +76,28 @@ module sui_utils::struct_tag {
 
     // Turns a StructTag back into its original String type name.
     public fun into_string(type: &StructTag): String {
-        let result = ascii2::empty();
+        let result = string2::empty();
 
-        ascii2::append(&mut result, ascii::string(object::id_to_bytes(&type.package_id)));
-        ascii2::append(&mut result, ascii::string(b"::"));
-        ascii2::append(&mut result, type.module_name);
-        ascii2::append(&mut result, ascii::string(b"::"));
-        ascii2::append(&mut result, type.struct_name);
+        string::append(&mut result, utf8(object::id_to_bytes(&type.package_id)));
+        string::append(&mut result, utf8(b"::"));
+        string::append(&mut result, type.module_name);
+        string::append(&mut result, utf8(b"::"));
+        string::append(&mut result, type.struct_name);
 
         if (vector::length(&type.generics) > 0) {
-            ascii2::append(&mut result, ascii::string(b"<"));
+            string::append(&mut result, utf8(b"<"));
 
             let (i, first) = (0, true);
             while (i < vector::length(&type.generics)) {
                 if (!first) {
-                    ascii2::append(&mut result, ascii::string(b", "));
+                    string::append(&mut result, utf8(b", "));
                 };
-                ascii2::append(&mut result, *vector::borrow(&type.generics, i));
+                string::append(&mut result, *vector::borrow(&type.generics, i));
                 i = i + 1;
                 first = false;
             };
 
-            ascii2::append(&mut result, ascii::string(b">"));
+            string::append(&mut result, utf8(b">"));
         };
         
         result
