@@ -6,7 +6,7 @@ authors = ["Paul Fidika (paul@fidika.com)"]
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 Ownership = { local = "../../../packages/ownership" }
-SuiMetadata = { local = "../../../packages/metadata" }
+# SuiMetadata = { local = "../../../packages/metadata" }
 
 [addresses]
-glb_asset = "0x0"
+glb_asset = "0xd7d903fe3ce8db1f0d943339f3f93a10231ddbbf"

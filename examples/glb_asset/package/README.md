@@ -38,3 +38,12 @@ cost: 2,407
 (that single assertion is costing 1,544)
 1,544 x2 + 1,791 = 4879 just for those 3 operations
 The remaining 980 are accounted for by literally everything else
+
+Same as above, but with newly revised sui_utils (removed ascii, add utf8)
+`sui client call --package 0x8e46b2e094084df50aa63dda7d51caea142de20f --module glb_asset --function create --gas-budget 6000`
+cost: 1,168
+
+Same as the original (first) call, but with more efficient:
+`sui client call --package 0xd7d903fe3ce8db1f0d943339f3f93a10231ddbbf --module glb_asset --function create --gas-budget 6000`
+cost: 1,981
+We went from 5,859 to 1,981; a 66% reduction in gas cost!
