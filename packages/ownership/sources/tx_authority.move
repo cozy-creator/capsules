@@ -3,13 +3,16 @@
 // carefully guard access to it, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
-    use std::ascii::{Self, String};
+    use std::address;
+    use std::string::{Self, String};
     use std::hash;
     use std::type_name;
     use std::vector;
+
     use sui::bcs;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
+
     use sui_utils::vector2;
     use sui_utils::encode;
 
@@ -100,14 +103,14 @@ module ownership::tx_authority {
     // ========= Convert Types to Addresses =========
 
     public fun type_into_address<T>(): address {
-        let typename = type_name::into_string(type_name::get<T>());
+        let typename = encode::type_name<T>();
         type_string_into_address(typename)
     }
 
     public fun type_string_into_address(type: String): address {
         let typename_bytes = bcs::to_bytes(&type);
         let hashed_typename = hash::sha3_256(typename_bytes);
-        let truncated = vector2::slice(&hashed_typename, 0, 20);
+        let truncated = vector2::slice(&hashed_typename, 0, address::length());
         bcs::peel_address(&mut bcs::new(truncated))
     }
 
@@ -124,12 +127,12 @@ module ownership::tx_authority {
     }
 
     public fun witness_string<T>(): String {
-        encode::append_struct_name<T>(ascii::string(WITNESS_STRUCT))
+        encode::append_struct_name<T>(string::utf8(WITNESS_STRUCT))
     }
 
     public fun witness_string_(type: String): String {
         let module_addr = encode::package_id_and_module_name_(type);
-        encode::append_struct_name_(module_addr, ascii::string(WITNESS_STRUCT))
+        encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
     }
 
     // ========= Internal Functions =========

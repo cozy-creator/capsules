@@ -1,10 +1,13 @@
 module ownership::ownership {
     use std::option::{Self, Option};
     use std::vector;
+
     use sui::object::{Self, UID};
     use sui::dynamic_field;
     use sui::typed_id::{Self, TypedID};
+
     use sui_utils::struct_tag::{Self, StructTag};
+    
     use ownership::tx_authority::{Self, TxAuthority};
 
     // error enums
