@@ -6,7 +6,6 @@ module ownership::tx_authority {
     use std::address;
     use std::string::{Self, String};
     use std::hash;
-    use std::type_name;
     use std::vector;
 
     use sui::bcs;

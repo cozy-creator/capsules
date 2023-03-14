@@ -11,7 +11,7 @@
 
 module sui_utils::encode {
     use std::ascii;
-    use std::string::{utf8, String};
+    use std::string::{Self, String, utf8};
     use std::type_name;
     use std::vector;
 
@@ -20,7 +20,6 @@ module sui_utils::encode {
     use sui::object::{Self, ID};
 
     use sui_utils::vector2;
-    use sui_utils::ascii2;
     use sui_utils::string2;
 
     // error constants
@@ -59,7 +58,7 @@ module sui_utils::encode {
             let module_name = string::sub_string(&s2, 0, j);
             let struct_name_and_generics = string::sub_string(&s2, j + 2, string::length(&s2));
 
-            let package_id = hex::decode(*string::bytes(package_id_str));
+            let package_id = object::id_from_bytes(hex::decode(*string::bytes(&package_id_str)));
             let (struct_name, generics) = decompose_struct_name(struct_name_and_generics);
 
             (package_id, module_name, struct_name, generics)
@@ -80,10 +79,10 @@ module sui_utils::encode {
 
     // Faster than decomposing the entire type name
     public fun package_id<T>(): ID {
-        let bytes_full = ascii::into_bytes(type_name::into_string(type_name::get<T>()))
+        let bytes_full = ascii::into_bytes(type_name::into_string(type_name::get<T>()));
         // hex doubles the number of characters used
         let bytes = vector2::slice(&bytes_full, 0, address::length() * 2); 
-        hex::decode(bytes)
+        object::id_from_bytes(hex::decode(bytes))
     }
 
     // Faster than decomposing the entire type name
@@ -220,7 +219,7 @@ module sui_utils::encode {
     // Returns true for types with generics like `Coin<T>`, returns false for all others
     public fun has_generics<T>(): bool {
         let str = type_name<T>();
-        let i = sub_string::index_of(&str, &utf8(b"<"));
+        let i = string::index_of(&str, &utf8(b"<"));
 
         if (i == string::length(&str)) false
         else true
