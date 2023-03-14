@@ -9,4 +9,4 @@ Ownership = { local = "../../../packages/ownership" }
 # SuiMetadata = { local = "../../../packages/metadata" }
 
 [addresses]
-glb_asset = "0xd7d903fe3ce8db1f0d943339f3f93a10231ddbbf"
+glb_asset = "0x1159c0f222353153c4c75592c73d3dd86806920c"

@@ -1,5 +1,5 @@
 module glb_asset::glb_asset {
-    use std::option::Option;
+    use std::string::{String, utf8};
     use std::vector;
 
     use sui::object::{Self, UID};
@@ -23,8 +23,13 @@ module glb_asset::glb_asset {
         b"https://s3.eu-central-1.amazonaws.com/files.capsulecraft.dev/Fullsize_Fang.glb",
     ];
 
+    const THUMBNAIL: vector<u8> = b"https://pbs.twimg.com/profile_images/1569727324081328128/7sUnJvRg_400x400.jpg";
+
     struct GLBAsset has key, store {
         id: UID,
+        // Sui explorer recognizes these fields as the thumbnail and name of the asset
+        url: Url,
+        name: String,
         // We add the file url here as well for now; might make it easier to find the file url
         // But really you should be loading for the metadata dynamic field
         file_url: Url,
@@ -39,6 +44,8 @@ module glb_asset::glb_asset {
 
         let glb_asset = GLBAsset { 
             id: object::new(ctx),
+            url: url::new_unsafe_from_bytes(THUMBNAIL),
+            name: utf8(b"Outlaw Sky Avatar"),
             file_url
         };
         let auth = tx_authority::begin_with_type(&Witness {});

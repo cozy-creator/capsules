@@ -47,3 +47,7 @@ Same as the original (first) call, but with more efficient:
 `sui client call --package 0xd7d903fe3ce8db1f0d943339f3f93a10231ddbbf --module glb_asset --function create --gas-budget 6000`
 cost: 1,981
 We went from 5,859 to 1,981; a 66% reduction in gas cost!
+
+New command:
+`sui client call --package 0x1159c0f222353153c4c75592c73d3dd86806920c --module glb_asset --function create --gas-budget 3000`
+cost: 2,390
