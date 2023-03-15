@@ -37,23 +37,25 @@ module metadata::publish_receipt {
         *&publisher.package
     }
 
-    public fun did_publish(publisher: &PublishReceipt, id: ID): bool {
+    public fun did_publish<T>(publisher: &PublishReceipt): bool {
+        did_publish_(publisher, encode::package_id<T>())
+    }
+
+    public fun did_publish_(publisher: &PublishReceipt, id: ID): bool {
         publisher.package == id
     }
 
+    // Publisher is an owned-object, so no need for an ownership check here
     public fun extend(publisher: &mut PublishReceipt): &mut UID {
         &mut publisher.id
-    }
-
-    // Do we need this function? Can we do this generically in another module?
-    public entry fun freeze_(publisher: PublishReceipt) {
-        transfer::freeze_object(publisher);
     }
 
     public entry fun destroy(publisher: PublishReceipt) {
         let PublishReceipt { id, package: _ } = publisher;
         object::delete(id);
     }
+
+    // Note that because PublishReceipt has key + store, it can be transfered and frozen generically
 
     #[test_only]
     public fun test_claim<GENESIS: drop>(_: &GENESIS, ctx: &mut TxContext): PublishReceipt {

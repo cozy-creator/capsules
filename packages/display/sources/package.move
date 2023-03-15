@@ -1,17 +1,17 @@
-module metadata::package {
+module dislpay::package {
     use std::ascii;
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::typed_id;
 
-    use metadata::metadata;
-    use metadata::schema::Schema;
+    use display::display;
+    use display::schema::Schema;
     
     use ownership::ownership;
     use ownership::tx_authority;
 
-    friend metadata::creator;
+    friend display::creator;
 
     // Error enums
     const EBAD_WITNESS: u64 = 0;
@@ -22,15 +22,22 @@ module metadata::package {
     // Owned, root-level object. Cannot be destroyed. Unique by package ID.
     struct Package has key {
         id: UID,
+        // The ID of the published package
         package: ID,
-        creator: ID // this is denormalized data; makes it more convenient to find creators
+        // The object-ID of the creator object that 'owns' this package
+        // The reputation of the creator will extend to this package, as a chain of trust
+        creator: ID
     }
 
-    // Only metadata::creator can create Package Metadata
+    // Only display::creator can create Package Display data
     public(friend) fun define(package: ID, creator: ID, ctx: &mut TxContext): Package {
-        let package = Package { id: object::new(ctx), package, creator };
+        let package = Package { 
+            id: object::new(ctx),
+            package,
+            creator
+        };
 
-        // Renounce control of this asset so that the owner can attach metadata independently of us
+        // Renounce control of this asset so that the owner can attach display data independently of us
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&package);
         ownership::initialize_without_module_authority(&mut package.id, typed_id, &auth);
@@ -39,11 +46,24 @@ module metadata::package {
         package
     }
 
-    // ======== Metadata Module API =====
-    // For convenience, we replicate the Metadata Module API here to make it easier to access Package's UID.
+    // Conveninece function
+    public entry fun change_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
+        change_creator_(package, creator, tx_authority::begin(ctx));
+    }
+
+    // If you have control of the package object, you can redefine who the creator is
+    public fun change_creator_(package: &mut Package, creator: &Creator, auth: TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
+
+        package.creator = object::id(creator);
+    }
+
+    // ======== Display Module API =====
+    // For convenience, we replicate the Display Module API here to make it easier to access Package's UID.
+    // This can be removed once Sui supports script transactions
 
     public entry fun attach(package: &mut Package, data: vector<vector<u8>>, schema: &Schema) {
-        metadata::attach(&mut package.id, data, schema, &tx_authority::empty());
+        display::attach(&mut package.id, data, schema, &tx_authority::empty());
     }
 
     public entry fun update(
@@ -53,15 +73,15 @@ module metadata::package {
         schema: &Schema,
         overwrite_existing: bool
     ) {
-        metadata::update(&mut package.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
+        display::update(&mut package.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
     public entry fun delete_optional(package: &mut Package, keys: vector<ascii::String>, schema: &Schema) {
-        metadata::delete_optional(&mut package.id, keys, schema, &tx_authority::empty());
+        display::delete_optional(&mut package.id, keys, schema, &tx_authority::empty());
     }
 
     public entry fun delete_all(package: &mut Package, schema: &Schema) {
-        metadata::delete_all(&mut package.id, schema, &tx_authority::empty());
+        display::delete_all(&mut package.id, schema, &tx_authority::empty());
     }
 
     public entry fun migrate(
@@ -71,12 +91,12 @@ module metadata::package {
         keys: vector<ascii::String>,
         data: vector<vector<u8>>
     ) {
-        metadata::migrate(&mut package.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+        display::migrate(&mut package.id, old_schema, new_schema, keys, data, &tx_authority::empty());
     }
 
     // ======== For Owners =====
 
-    // Makes the metadata immutable. This cannot be undone
+    // Makes the package object immutable. This cannot be undone
     public entry fun freeze_(package: Package) {
         transfer::freeze_object(package);
     }

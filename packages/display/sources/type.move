@@ -46,8 +46,8 @@ module display::type {
     // Singleton, owned, root-level object. Cannot be destroyed. Unique on `T`.
     struct Type<phantom T> has key {
         id: UID,
-        fields: vector<Field>
-        // <display::Key { slot: String }> : <T: store> <- T conforms to the specified schema
+        fields: VecMap<String, Field>
+        // <display::Key { slot: String }> : <T: store> <- T conforms to the schema specified in .fields
     }
 
     // Added to publish receipt
@@ -62,10 +62,10 @@ module display::type {
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        fields: vector<vector<String>>,
+        raw_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let type = define_<T>(publisher, data, fields, ctx);
+        let type = define_<T>(publisher, data, raw_fields, ctx);
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
@@ -79,7 +79,7 @@ module display::type {
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        fields: vector<vector<String>>,
+        raw_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -92,89 +92,89 @@ module display::type {
 
         dynamic_field::add(uid, key, true);
 
-        define_internal<T>(data, resolvers, fields, ctx)
+        let fields = schema::fields_from_strings(raw_fields);
+        define_internal<T>(data, fields, ctx)
     }
 
     // This is used by abstract_type as well, to define concrete types from abstract types
     public(friend) fun define_internal<T>(
         data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
+        fields: VecMap<String, Field>,
         ctx: &mut TxContext
     ): Type<T> {
-        let (resolvers, i) = (vec_map::empty(), 0);
-        let fields = schema::from_fields(raw_fields);
-
         let type = Type {
             id: object::new(ctx),
-            fields: schema::into_fields(schema),
+            fields,
         };
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&type);
 
+        // We attach with module authority, so that you must go through our API to edit the display
+        // data stored on this `Type` object.
         ownership::initialize_with_module_authority(&mut type.id, typed_id, &auth);
-        display::attach_(&mut type.id, data, fields, &tx_authority::empty());
+        display::attach_(&mut type.id, data, fields, &auth);
         ownership::as_owned_object(&mut type.id, &auth);
 
         type
     }
 
     // ====== Modify Schema and Resolvers ======
+    // This is Type's own custom API for editing the display-data stored on the Type object.
     
     // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
     // it will be added.
     public entry fun set_fields<T>(
         self: &mut Type<T>,
-        new_fields: vector<vector<String>>,
         data: vector<vector<u8>>,
+        raw_fields: vector<vector<String>>,
     ) {
-        let (len, i) = (vector::length(&new_fields), 0);
+        let (len, i) = (vector::length(&raw_fields), 0);
 
         while (i < len) {
-            let (new_field, j) = (schema::new_field(vector::borrow(&new_fields, i)), 0);
-            let (key, _, _, _) = schema::field_into_components(&new_field);
-            let old_field = option::none<Field>();
-
-            while (j < vector::length(&self.fields)) {
-                if (schema::is_field_key(*vector::borrow(&self.fields, j), key)) {
-                    old_field = option::some(*vector::borrow(&self.fields, j));
-                    vector::borrow_mut(&mut self.fields, j) = new_field;
-                    break
-                };
-                j = j + 1;
-            };
-
-            // Existing key not found
-            if (j == vector::length(&self.fields)) {
-                vector::push_back(&mut self.fields, new_field);
+            let (key, field) = schema::new_field(vector::borrow(&raw_fields, i));
+            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            let old_field = if (option::is_some(&index_maybe)) {
+                let (_, field_ref) = vec_map::get_entry_by_idx_mut(&self.fields, option::destroy_some(index_maybe));
+                let old_field = option::some(*field_ref);
+                field_ref = field;
+                old_field
+            } else {
+                vec_map::insert(&mut self.fields, key, field);
+                option::none()
             };
 
             display::set_field_manually(
-                &mut self.id, *vector::borrow(data, i), new_field, old_field, tx_authority::empty());
+                &mut self.id,
+                key,
+                *vector::borrow(data, i),
+                field,
+                old_field,
+                tx_authority::begin_with_type(&Witness { })
+            );
 
             i = i + 1;
         };
     }
 
-    /// Remove keys from the Type Display.
-    public entry fun remove_fields<T>(self: &mut Display<T>, keys: vector<String>) {
+    /// Remove keys from the Type object
+    public entry fun remove_fields<T>(self: &mut Type<T>, keys: vector<String>) {
         let (len, i) = (vector::length(&keys), 0);
 
         while (i < len) {
             let key = vector::borrow(&keys, i);
-            let j = 0;
-            let old_field = option::none();
+            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            if (option::is_some(&index_maybe)) {
+                let (_, old_field) = vec_map::remove_entry_by_idx(
+                    &mut self.fields,
+                    option::destroy_some(index_maybe)
+                );
 
-            while (j < vector::length(&self.fields)) {
-                if (schema::is_field_key(*vector::borrow(&self.fields, j), key)) {
-                    old_field = option::some(vector::remove(&mut self.fields, j));
-                    break
-                };
-                j = j + 1;
-            };
-
-            if (option::is_some(old_field)) {
                 display::remove_field_manually(
-                    &mut self.id, option::destroy_some(old_field), tx_authority::empty());
+                    &mut self.id,
+                    key,
+                    old_field,
+                    tx_authority::begin_with_type(&Witness { })
+                );
             };
 
             i = i + 1;
@@ -183,7 +183,7 @@ module display::type {
 
     // ======== Accessor Functions =====
 
-    public fun borrow_fields<T>(type: &Type<T>): &vector<Field> {
+    public fun borrow_fields<T>(type: &Type<T>): &VecMap<String, Field> {
         &type.fields
     }
 
@@ -194,15 +194,14 @@ module display::type {
         uid: &UID,
         fallback_type: &Type<T>,
         keys: vector<String>,
-        schema: &Schema,
-        fallback_schema: &Schema,
+        schema: &Schema
     ): vector<u8> {
         let object_type = option::destroy_some(ownership::get_type(uid));
         assert!(struct_tag::get<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
 
-        let fallbac_schema = 
+        let fallback_schema = schema::create_from_fields(&fallback_type.fields);
 
-        display::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
+        display::view_with_default(uid, &fallback_type.id, keys, schema, &fallback_schema)
     }
 
     // ======== For Owners ========

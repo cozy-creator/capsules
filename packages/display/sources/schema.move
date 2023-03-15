@@ -21,12 +21,11 @@ module metadata::schema {
     // Intended to be an immutable root-level object. But can also be stored.
     struct Schema has key, store {
         id: UID,
-        fields: vector<Field>,
+        fields: VecMap<String, Field>,
         hash_id: vector<u8>
     }
 
     struct Field has store, copy, drop {
-        key: String,
         type: String,
         optional: bool,
         resolver: String
@@ -45,104 +44,41 @@ module metadata::schema {
     // It's safe to return a schema here; the caller will eventually have to return the schema
     // before the end of the transaction because schemas only have `key`, so we can guarantee this
     // schema will be frozen
-    public fun create_(schema_fields: vector<vector<String>>, ctx: &mut TxContext): Schema {
-        let fields = from_fields(schema_fields);
+    public fun create_from_strings(schema_fields: vector<vector<String>>, ctx: &mut TxContext): Schema {
+        let fields = fields_from_strings(schema_fields);
 
         Schema { 
             id: object::new(ctx), 
             fields, 
-            hash_id: compute_hash_id(&fields) 
+            hash_id: compute_hash_id(fields) 
         }
     }
 
-    public fun create_from_fields(fields: vector<Field>, ctx: &mut TxContext): Schema {
+    public fun create_from_vec_map(fields: VecMap<String, Field>, ctx: &mut TxContext): Schema {
         Schema { 
             id: object::new(ctx),
             fields,
-            hash_id: compute_hash_id(&schema_fields) 
+            hash_id: compute_hash_id(fields) 
         }
     }
 
-    public fun from_fields(schema_fields: vector<vector<String>>): vector<Field> {
+    public fun fields_from_strings(schema_fields: vector<vector<String>>): VecMap<String, Field> {
         let len = vector::length(&schema_fields);
 
-        let (i, fields) = (0, vector::empty<Field>());
+        let (i, fields) = (0, vec_map::empty<String, Field>());
         while (i < len) {
             let tuple = vector::borrow(&schema_fields, i);
-            let field = new_field(tuple);
-            vector::push_back(&mut fields, field);
+            let (key, field) = new_field(tuple);
+            vec_map::insert(&mut fields, key, field);
             i = i + 1;
         };
 
         fields
     }
 
-    public fun freeze(schema: Schema) {
-        transfer::freeze_object(schema);
-    }
-
-    public fun destroy(schema: Schema) {
-        let Schema { id, fields: _, hash_id: _ } = schema;
-        object::delete(id);
-    }
-
-    // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
-    public fun difference(schema1: &Schema, schema2: &Schema): vector<Field> {
-        let fields = into_fields(schema1);
-        let (i, remaining_fields) = (0, vector::empty<Field>());
-
-        while (i < vector::length(&fields)) {
-            let field = vector::borrow(&fields, i);
-            let (key, _, _) = field(field);
-            if (!has_key(schema2, key)) {
-                vector::push_back(&mut remaining_fields, *field)
-            };
-            i = i + 1;
-        };
-
-        remaining_fields
-    }
-
-    // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
-    public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
-        if (equals(schema1, schema2)) return true;
-
-        let fields = into_fields(schema1);
-        let i = 0;
-        while (i < vector::length(&fields)) {
-            let (key, type1, _) = field(vector::borrow(&fields, i));
-            let (type2_maybe, _) = find_type_for_key(schema2, key);
-            if (option::is_some(&type2_maybe)) {
-                let type2 = option::destroy_some(type2_maybe);
-                if (type1 != type2) return false;
-            };
-            i = i + 1;
-        };
-
-        true
-    }
-
-    // ========= Accessor Functions =========
-
-    public fun duplicate(schema: &Schema, ctx: &mut TxContext): Schema {
-        Schema { 
-            id: object::new(ctx),
-            fields: into_fields(schema),
-            hash_id: into_schema_id(schema)
-        }
-    }
-
-    public fun into_fields(schema: &Schema): vector<Field> {
-        *&schema.fields
-    }
-
-    // Breaks a field down into its components
-    public fun field_into_components(field: &Field): (String, String, bool, String) {
-        (field.key, field.type, field.optional, field.resolver)
-    }
-
+    // Creates a `Field` from a vector of Strings
     // input strings: [ name, type, resolver ]
-    public fun new_field(tuple: &vector<String>): Field {
+    public fun new_field(tuple: &vector<String>): (String, Field) {
         let type_raw = *vector::borrow(tuple, 1);
         let type_parsed = encode::parse_option(type_raw);
         let (type, optional) = if (string::is_empty(&type_parsed)) {
@@ -157,28 +93,87 @@ module metadata::schema {
             *vector::borrow(tuple, 2)
         } else { string2::empty() };
 
-        let key = *vector::borrow(tuple, 0);
-
-        Field { key, type, optional, resolver }
+        (*vector::borrow(&tuple, 0), Field { type, optional, resolver })
     }
 
-    public fun is_field_key(field: &Field, key: String): bool {
-        field.key == key
+    public fun freeze(schema: Schema) {
+        transfer::freeze_object(schema);
     }
 
-    public fun length(schema: &Schema): u64 {
-        vector::length(&schema.fields)
+    public fun destroy(schema: Schema) {
+        let Schema { id, fields: _, hash_id: _ } = schema;
+        object::delete(id);
     }
 
-    public fun into_keys(schema: &Schema): vector<String> {
-        let (fields, i, keys) = (into_fields(schema), 0, vector::empty<String>());
-        while (i < vector::length(&fields)) {
-            let (key, _, _) = field(vector::borrow(&fields, i));
-            vector::push_back(&mut keys, key);
+    // Schemas cannot have 'copy' because they have 'key', but we can still duplicate them manually
+    public fun duplicate(schema: &Schema, ctx: &mut TxContext): Schema {
+        Schema { 
+            id: object::new(ctx),
+            fields: *&schema.fields,
+            hash_id: *&schema.hash_id
+        }
+    }
+
+    // ========= Comparison Functions =========
+
+    // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
+    public fun difference(schema1: &Schema, schema2: &Schema): vector<Field> {
+        let (i, remaining_keys) = (0, vector::empty<String>());
+
+        while (i < vec_map::size(&schema1.fields)) {
+            let (key, _) = vec_map::get_entry_by_idx(&schema.fields, i);
+            if (!has_key(schema2, key)) {
+                vector::push_back(&mut remaining_keys, *key)
+            };
             i = i + 1;
         };
 
-        keys
+        remaining_keys
+    }
+
+    // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
+    public fun is_compatible(schema1: &Schema, schema2: &Schema): bool {
+        if (equals(schema1, schema2)) return true;
+
+        let i = 0;
+        while (i < vec_map::size(&schema1.fields)) {
+            let (key, fields1) = vec_map::get_entry_by_idx(&schema1.fields, i);
+            let (type2_maybe, _) = find_type_for_key(schema2, key);
+            if (option::is_some(&type2_maybe)) {
+                let type2 = option::destroy_some(type2_maybe);
+                if (fields1.type != type2) return false;
+            };
+            i = i + 1;
+        };
+
+        true
+    }
+
+    // ========= Accessor Functions =========
+
+    public fun get_fields(schema: &Schema): VecMap<String, Field> {
+        *&schema.fields
+    }
+
+    public fun get_hash_id(schema: &Schema): vector<u8> {
+        schema.hash_id
+    }
+
+    // Breaks a field down into its components
+    public fun field_into_components(field: &Field): (String, bool, String) {
+        (field.type, field.optional, field.resolver)
+    }
+
+    public fun length(schema: &Schema): u64 {
+        vec_map::size(&schema.fields)
+    }
+
+    public fun into_keys(schema: &Schema): vector<String> {
+        vec_map::keys(&schema.fields)
+    }
+
+    public fun has_key(schema: &Schema, key: String): bool {
+        vec_map::contains(&schema.fields, key)
     }
 
     // ============ Helper Function ============
@@ -194,28 +189,17 @@ module metadata::schema {
         }
     }
 
-    public fun has_key(schema: &Schema, key: String): bool {
-        let (fields, i) = (into_fields(schema), 0);
-        while (i < vector::length(&fields)) {
-            if (key == *&vector::borrow(&fields, i).key) return true;
-            i = i + 1;
-        };
-
-        false
-    }
-
     // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
-    public fun find_type_for_key(schema: &Schema, key: String): (Option<String>, Option<bool>) {
-        let (fields, i) = (into_fields(schema), 0);
-        while (i < vector::length(fields)) {
-            let field = vector::borrow(fields, i);
-            if (field.key == key) {
-                return (option::some(field.type), option::some(field.optional))
-            };
-            i = i + 1;
-        };
+    public fun get_field(schema: &Schema, key: String): (Option<String>, Option<bool>, Option<String>) {
+        let index_maybe = vec_map::get_idx_opt(&schema.fields, key);
 
-        (option::none(), option::none())
+        if (option::is_some(&index_maybe)) {
+            let index = option::destroy_some(index_maybe);
+            let (_, field) = vec_map::get_entry_by_idx(&schema.fields, index);
+            (option::some(field.type), option::some(field.optional), option::some(field.resolver))
+        } else {
+            (option::none(), option::none(), option::none())
+        }
     }
 
     // ======= Schema Hash ID =======
@@ -230,10 +214,12 @@ module metadata::schema {
     }
 
     // Resolver strings are ignored for the purposes of computing the schema's hash_id
-    public fun compute_schema_id(fields: vector<Field>): vector<u8> {
-        let (i, len) = (0, vector::len(fields));
+    // Note that the hash_id depends on the order of the fields
+    public fun compute_hash_id(fields: VecMap<String, Field>): vector<u8> {
+        let (i, len) = (0, vec_map::size(fields));
+
         while (i < len) {
-            let field = vector::borrow_mut(&mut fields, i);
+            let (_, field) = vec_map::get_entry_by_idx_mut(fields, i);
             field.resolver = string2::empty();
             i = i + 1;
         };
@@ -242,12 +228,8 @@ module metadata::schema {
         hash::sha3_256(bytes)
     }
 
-    public fun compute_schema_id_(schema_fields: vector<vector<String>>): vector<u8> {
-        let schema = from_fields(schema_fields);
-        compute_schema_id(&schema)
-    }
-
-    public fun into_schema_id(schema: &Schema): vector<u8> {
-        schema.hash_id
+    public fun compute_hash_id_(raw_fields: vector<vector<String>>): vector<u8> {
+        let fields = fields_from_strings(raw_fields);
+        compute_hash_id(fields)
     }
 }

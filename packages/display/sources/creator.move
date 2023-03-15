@@ -26,19 +26,22 @@ module metadata::creator {
     const ESENDER_UNAUTHORIZED: u64 = 2;
     const EPACKAGE_DOES_NOT_BELONG_TO_CREATOR: u64 = 3;
 
-    struct Witness has drop { }
-    struct Key has store, copy, drop { }
-
-    // Shared, root-level object
+    // Shared, root-level object. Cannot be destroyed.
     struct Creator has key {
-        id: UID,
-        packages: vector<ID>
+        id: UID
+        // <display::Key { slot: String }> : <T: store>
     }
 
+    // Added to publish-receipt
+    struct Key has store, copy, drop { }
+
+    // Module authority struct
+    struct Witness has drop { }
+
     public entry fun define(
+        owner: address,
         data: vector<vector<u8>>,
         schema: &Schema,
-        owner: address,
         ctx: &mut TxContext
     ) {
         let creator = Creator { 
@@ -66,6 +69,7 @@ module metadata::creator {
         package::transfer(package_object, tx_context::sender(ctx));
     }
 
+    // This is the only way to produce a package object
     public fun claim_package_(
         creator: &mut Creator,
         receipt: &mut PublishReceipt,
@@ -74,54 +78,22 @@ module metadata::creator {
     ): Package {
         assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
 
-        let package_id = publish_receipt::into_package_id(receipt);
-        let receipt_uid = publish_receipt::extend(receipt);
-
         // This package can only ever be claimed once
+        let receipt_uid = publish_receipt::extend(receipt);
         assert!(!dynamic_field::exists_(receipt_uid, Key { }), EPACKAGE_ALREADY_CLAIMED);
         dynamic_field::add(receipt_uid, Key { }, true);
 
-        // It should be impossible for this assert to ever fail, but just in case...
-        assert!(!vector::contains(&creator.packages, &package_id), EPACKAGE_ALREADY_CLAIMED);
-        vector::push_back(&mut creator.packages, package_id);
-
+        let package_id = publish_receipt::into_package_id(receipt);
         package::define(package_id, object::id(creator), ctx)
-    }
-
-    public entry fun transfer_package(
-        old_creator: &mut Creator,
-        new_creator: &mut Creator,
-        package: ID,
-        ctx: &mut TxContext
-    ) {
-        transfer_package_(old_creator, new_creator, package, &tx_authority::begin(ctx));
-    }
-
-    public fun transfer_package_(
-        old_creator: &mut Creator,
-        new_creator: &mut Creator,
-        package: ID,
-        auth: &TxAuthority
-    ) {
-        assert!(ownership::is_authorized_by_owner(&old_creator.id, auth), ESENDER_UNAUTHORIZED);
-        assert!(ownership::is_authorized_by_owner(&new_creator.id, auth), ESENDER_UNAUTHORIZED);
-
-        // Remove the package from the old creator's list
-        let (exists, index) = vector::index_of(&old_creator.packages, &package);
-        assert!(exists, EPACKAGE_DOES_NOT_BELONG_TO_CREATOR);
-        vector::remove(&mut old_creator.packages, index);
-
-        // Add the package to the new creator's list
-        vector::push_back(&mut new_creator.packages, package);
     }
 
     // ======== Metadata Module's API =====
     // For convenience, we replicate the Metadata Module's API here to make it easier to access Creator's UID.
-    // Once Sui Programmable transactions can support returning mutable references, we can remove these.
+    // Once Sui supports Script transactions, we can remove these.
 
     public entry fun update(
         creator: &mut Creator,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>,
         schema: &Schema,
         overwrite_existing: bool
@@ -129,7 +101,7 @@ module metadata::creator {
         metadata::update(&mut creator.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
-    public entry fun delete_optional(creator: &mut Creator, keys: vector<ascii::String>, schema: &Schema) {
+    public entry fun delete_optional(creator: &mut Creator, keys: vector<String>, schema: &Schema) {
         metadata::delete_optional(&mut creator.id, keys, schema, &tx_authority::empty());
     }
 
@@ -141,7 +113,7 @@ module metadata::creator {
         creator: &mut Creator,
         old_schema: &Schema,
         new_schema: &Schema,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>
     ) {
         metadata::migrate(&mut creator.id, old_schema, new_schema, keys, data, &tx_authority::empty());
@@ -150,11 +122,12 @@ module metadata::creator {
     // ======== For Owners =====
     // We don't need any transfer functions here; that can be handled within the SimpleTransfer module.
 
-    public fun extend(creator: &mut Creator, ctx: &TxContext): &mut UID {
-        extend_(creator, &tx_authority::begin(ctx))
+    // Convenience function
+    public fun extend_(creator: &mut Creator, ctx: &TxContext): &mut UID {
+        extend(creator, &tx_authority::begin(ctx))
     }
 
-    public fun extend_(creator: &mut Creator, auth: &TxAuthority): &mut UID {
+    public fun extend(creator: &mut Creator, auth: &TxAuthority): &mut UID {
         assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
 
         &mut creator.id
@@ -170,7 +143,6 @@ module metadata::creator {
     // should not be displayed in wallets / marketplaces, and should be viewed as spam.
     //
     // We use dynamic fields, rather than vectors, because it scales O(1) instead of O(n) for n endorsements.
-
 
     struct Endorsement has store, copy, drop { from: address }
     
