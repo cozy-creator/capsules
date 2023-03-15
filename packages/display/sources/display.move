@@ -5,19 +5,22 @@
 // Future to do:
 // - have a dedicated URL type rather than using just a string
 
-module metadata::metadata {
-    use std::ascii;
+module display::display {
     use std::string::String;
     use std::option;
     use std::vector;
+
     use sui::bcs::{Self};
     use sui::dynamic_field;
     use sui::object::{UID, ID};
     use sui::vec_map::VecMap;
+
     use metadata::schema::{Self, Schema};
+
     use sui_utils::encode;
     use sui_utils::deserialize;
     use sui_utils::dynamic_field2;
+
     use ownership::ownership;
     use ownership::tx_authority::TxAuthority;
 
@@ -34,28 +37,45 @@ module metadata::metadata {
     const EKEY_IS_NOT_OPTIONAL: u64 = 9;
     const EVALUE_UNDEFINED: u64 = 10;
 
-    struct SchemaID has store, copy, drop { } // vector<u8>
-    struct Key has store, copy, drop { slot: ascii::String }
+    struct SchemaKey has store, copy, drop { } // editable stored schema
+    struct SchemaID has store, copy, drop { } // vector<u8>, the ID of an external schema
+    struct Key has store, copy, drop { slot: String }
 
     // `data` is an array of BCS-serialized values. Such as [ [3, 0, 0, 0], [2, 99, 100] ]
-    // All variable-length types are prepended with a ULEB18 length. The Schema object is needed to deserialize the data.
+    // All variable-length types are prepended with a ULEB18 length. The Schema object is
+    // needed to deserialize the data.
     public fun attach(uid: &mut UID, data: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
+        dynamic_field::add(uid, SchemaID { }, schema::into_schema_id(schema));
+        attach_internal(uid, data, schema::into_fields(schema), auth);
+    }
+
+    // If you attach dispay-data directly without storing a schema ID, it's up to the client to
+    // understand which fields exist and what their value-types are
+    public fun attach_(uid: &mut UID, data: vector<vector<u8>>, fields: vector<Field>, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        let items = schema::into_items(schema);
-
         let i = 0;
-        while (i < vector::length(&items)) {
-            let item = vector::borrow(&items, i);
-            let (key, type, optional) = schema::item(item);
+        while (i < vector::length(&fields)) {
+            let field = vector::borrow(&fields, i);
+            let (key, type, optional, _) = schema::field_into_components(field);
             let value = *vector::borrow(&data, i);
 
             set_field(uid, Key { slot: key }, type, optional, value, true);
             i = i + 1;
         };
+    }
 
-        dynamic_field::add(uid, SchemaID { }, schema::into_schema_id(schema));
+    // requires stored schema
+    public fun update_(
+        uid: &mut UID,
+        keys: vector<String>,
+        data: vector<vector<u8>>,
+        overwrite_existing: bool,
+        auth: &TxAuthority
+    ) {
+        let schema = dynamic_field::borrow<SchemaKey, Schema>(uid, SchemaKey { });
+        update_internal(uid, keys, data, schema, overwrite_existing, auth);
     }
 
     // If `overwrite_existing` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
@@ -64,14 +84,27 @@ module metadata::metadata {
     // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
     public fun update(
         uid: &mut UID,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>,
         schema: &Schema,
         overwrite_existing: bool,
         auth: &TxAuthority
     ) {
+        assert!(schema::equals_(old_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+
+        update_internal(uid, keys, data, schema, overwrite_existing, auth);
+    }
+
+    fun update_internal(
+        uid: &mut UID,
+        keys: vector<String>,
+        data: vector<vector<u8>>,
+        schema: &Schema,
+        overwrite_existing: bool,
+        auth: &TxAuthority
+    ) {
+        assert_valid_ownership(uid, schema, auth);
         assert!(vector::length(&keys) == vector::length(&data), EINCORRECT_DATA_LENGTH);
-        assert_valid_ownership_and_schema(uid, schema, auth);
 
         let i = 0;
         while (i < vector::length(&keys)) {
@@ -91,30 +124,68 @@ module metadata::metadata {
         };
     }
 
+    public fun set_field_manually(
+        uid: &mut UID,
+        value: vector<u8>,
+        new_field: Field,
+        old_field: Option<Field>,
+        auth: &TxAuthority
+    ) {
+        assert_valid_ownership(uid, auth);
+
+        if (option::is_some(old_field)) {
+            let (key, type_string, optional, _) = schema::field_into_components(
+                option::destroy_some(old_field));
+            drop_field(uid, key, type_string);
+        };
+
+        let (key, type_string, optional, _) = schema::field_into_components(new_field);
+        set_field(uid, Key { slot: key }, type_string, optional, value, true);
+    }
+
+    public fun remove_field_manually(uid: &mut UID, old_field: Field, auth: &TxAuthority) {
+        assert_valid_ownership(uid, auth);
+
+        let (key, type_string, _, _) = schema::into_components(old_field);
+        drop_field(uid, Key { slot: key }, type_string);
+    }
+
     // Useful if you want to borrow / borrow_mut but want to avoid an abort in case the value doesn't exist
-    public fun exists_(uid: &UID, key: ascii::String): bool {
+    public fun exists_(uid: &UID, key: String): bool {
         dynamic_field::exists_(uid, Key { slot: key } )
     }
 
     // We allow any metadata field to be read without any permission. T must be correct, otherwise this will abort
-    public fun borrow<T: store>(uid: &UID, key: ascii::String): &T {
+    public fun borrow<T: store>(uid: &UID, key: String): &T {
         dynamic_field::borrow<Key, T>(uid, Key { slot: key } )
     }
 
     // For atomic updates (like incrementing a counter) use this rather than an `overwrite` to ensure no
     // writes are lost. `T` must be the type corresponding to the schema, and the value must be defined, or
     // this will abort
-    public fun borrow_mut<T: store>(uid: &mut UID, key: ascii::String, auth: &TxAuthority): &mut T {
+    public fun borrow_mut<T: store>(uid: &mut UID, key: String, auth: &TxAuthority): &mut T {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { slot: key } )
     }
 
+    // Requires stored schema
+    public fun delete_optional_(uid: &mut UID, keys: vector<String>, auth: &TxAuthority) {
+        let schema = dynamic_field::borrow<SchemaKey, Schema>(uid, SchemaKey { });
+        delete_optional_internal(uid, keys, keys, schema, auth);
+    }
+
     // You can accomplish this by using `overwrite` with option bytes set to 0 (none) for all keys you
     // want to remove, but this function exists for convenience
-    public fun delete_optional(uid: &mut UID, keys: vector<ascii::String>, schema: &Schema, auth: &TxAuthority) {
-        assert_valid_ownership_and_schema(uid, schema, auth);
+    public fun delete_optional(uid: &mut UID, keys: vector<String>, schema: &Schema, auth: &TxAuthority) {
+        assert!(schema::equals_(old_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+
+        delete_optional_internal(uid, keys, keys, schema, auth);
+    }
+
+    fun delete_optional_internal(uid: &mut UID, keys: vector<String>, schema: &Schema, auth: &TxAuthority) {
+        assert_valid_ownership(uid, schema, auth);
 
         let i = 0;
         while (i < vector::length(&keys)) {
@@ -127,11 +198,24 @@ module metadata::metadata {
             i = i + 1;
         };
     }
+
+    // Requires stored schema
+    public fun detach_(uid: &mut UID, auth: &TxAuthority) {
+        let schema = dynamic_field2::remove<SchemaKey, Schema>(uid, SchemaKey { });
+        detach(uid, &schema, auth);
+    }
     
     // Wipes all metadata, including the schema. This allows you to start from scratch again using a new
     // schema and new data using attach().
-    public fun delete_all(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
-        assert_valid_ownership_and_schema(uid, schema, auth);
+    public fun detach(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
+        assert!(schema::equals_(old_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+
+        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
+        detach_internal(uid, schema, auth);
+    }
+
+    fun detach_internal(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
+        assert_valid_ownership(uid, schema, auth);
 
         let (i, items) = (0, schema::into_items(schema));
         while (i < vector::length(&items)) {
@@ -141,8 +225,31 @@ module metadata::metadata {
             drop_field(uid, Key { slot: key }, type);
             i = i + 1;
         };
+    }
 
-        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
+    public fun migrate_(
+        uid: &mut UID,
+        new_schema: &Schema,
+        keys: vector<String>,
+        data: vector<vector<u8>>,
+        auth: &TxAuthority
+    ) {
+        let old_schema = dynamic_field::remove<SchemaKey, Schema>(uid, SchemaKey { });
+        migrate_internal(uid, &old_schema, new_schema, keys, data, auth);
+        dynamic_field::add(uid, SchemaKey { }, new_schema);
+    }
+
+    public fun migrate(
+        uid: &mut UID,
+        old_schema: &Schema,
+        new_schema: &Schema,
+        keys: vector<String>,
+        data: vector<vector<u8>>,
+        auth: &TxAuthority
+    ) {
+        assert!(schema::equals_(old_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+        migrate_internal(uid, old_schema, new_schema, keys, data, auth);
+        dynamic_field2::set(uid, SchemaID { }, schema::into_schema_id(new_schema));
     }
 
     // Moves from old-schema -> new-schema.
@@ -152,15 +259,15 @@ module metadata::metadata {
     // You must supply [keys, data] for (1) any new fields, (2) any fields that were optional but are now
     // mandatory and are missing on this object, and (3) any fields whose types are changing in the new
     // schema
-    public fun migrate(
+    fun migrate_internal(
         uid: &mut UID,
         old_schema: &Schema,
         new_schema: &Schema,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>,
         auth: &TxAuthority
     ) {
-        assert_valid_ownership_and_schema(uid, old_schema, auth);
+        assert_valid_ownership(uid, old_schema, auth);
 
         // Drop all of the old_schema's fields which no longer exist in the new schema
         let items = schema::difference(old_schema, new_schema);
@@ -208,7 +315,7 @@ module metadata::metadata {
 
     // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
     // corresponding keys that were queried in order to deserialize the results.
-    public fun view(uid: &UID, keys: vector<ascii::String>, schema: &Schema): vector<u8> {
+    public fun view(uid: &UID, keys: vector<String>, schema: &Schema): vector<u8> {
         assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
@@ -222,10 +329,10 @@ module metadata::metadata {
         response
     }
 
-    // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object, or that the keys
-    // you've specified exist on your suppplied schema. Deserialize these results with the schema you supplied, not with the
-    // object's cannonical schema
-    public fun view_field(uid: &UID, slot: ascii::String, schema: &Schema): vector<u8> {
+    // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
+    // or that the keys  you've specified exist on your suppplied schema. Deserialize these results with the
+    // schema you supplied, not with the object's cannonical schema
+    public fun view_field(uid: &UID, slot: String, schema: &Schema): vector<u8> {
         let (type_maybe, optional_maybe) = schema::find_type_for_key(schema, slot);
 
         if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
@@ -261,7 +368,7 @@ module metadata::metadata {
         assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
         assert!(schema::equals_(object_schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
 
-        let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<ascii::String>());
+        let (reader_items, i, keys) = (schema::into_items(reader_schema), 0, vector::empty<String>());
 
         while (i < vector::length(&reader_items)) {
             let (key, _, _) = schema::item(vector::borrow(&reader_items, i));
@@ -286,7 +393,7 @@ module metadata::metadata {
     public fun view_with_default(
         uid: &UID,
         fallback: &UID,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         schema: &Schema,
         fallback_schema: &Schema,
     ): vector<u8> {
@@ -311,7 +418,11 @@ module metadata::metadata {
     }
 
     public fun schema_id(uid: &UID): vector<u8> {
-        *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
+        if (dynamic_field::exists_with_type<SchemaID, vector<u8>>(uid, SchemaID { } )) {
+            *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
+        } else {
+            vector<u8>[]
+        }
     }
 
     // ============ (de)serializes objects ============ 
@@ -324,12 +435,12 @@ module metadata::metadata {
     fun set_field(
         uid: &mut UID,
         key: Key,
-        type_string: ascii::String,
+        type_string: String,
         optional: bool,
         value: vector<u8>,
         overwrite: bool
     ) {
-        let type = ascii::into_bytes(type_string);
+        let type = *string::bytes(&type_string);
 
         // Empty byte-arrays are treated as undefined
         if (vector::length(&value) == 0) {
@@ -400,6 +511,11 @@ module metadata::metadata {
             let (string, _) = deserialize::string_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, string);
+        }
+        else if (type == b"Url") {
+            let (url, _) = deserialize::url_(&value, i);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, url);
         } 
         else if (type == b"vector<address>") {
             let (vec, _) = deserialize::vec_address(&value, i);
@@ -456,10 +572,20 @@ module metadata::metadata {
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, strings);
         }
+        else if (type == b"vector<Url>") {
+            let (urls, _) = deserialize::url_string(&value, i);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, urls);
+        }
         else if (type == b"VecMap") {
             let (vec_map, _) = deserialize::vec_map_string_string(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_map);
+        }
+        else if (type == b"vector<VecMap>") {
+            let (vec_maps, _) = deserialize::vec_vec_map_string_string(&value, i);
+            if (overwrite || !dynamic_field::exists_(uid, key))
+                dynamic_field2::set(uid, key, vec_maps);
         }
         else {
             abort EUNRECOGNIZED_TYPE
@@ -470,8 +596,8 @@ module metadata::metadata {
     // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
     // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
     // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
-    fun drop_field(uid: &mut UID, key: Key, type_string: ascii::String) {
-        let type = ascii::into_bytes(type_string);
+    fun drop_field(uid: &mut UID, key: Key, type_string: String) {
+        let type = *string::bytes(&type_string);
 
         if (type == b"address") {
             dynamic_field2::drop<Key, address>(uid, key);
@@ -493,6 +619,9 @@ module metadata::metadata {
         } 
         else if (type == b"String") {
             dynamic_field2::drop<Key, String>(uid, key);
+        }
+        else if (type == b"Url") {
+            dynamic_field2::drop<Key, Url>(uid, key);
         } 
         else if (type == b"vector<address>") {
             dynamic_field2::drop<Key, vector<address>>(uid, key);
@@ -515,8 +644,14 @@ module metadata::metadata {
         else if (type == b"vector<String>") {
             dynamic_field2::drop<Key, vector<String>>(uid, key);
         }
+        else if (type == b"vector<Url>") {
+            dynamic_field2::drop<Key, vector<Url>>(uid, key);
+        }
         else if (type == b"VecMap") {
             dynamic_field2::drop<Key, VecMap<String, String>>(uid, key);
+        }
+        else if (type == b"vector<VecMap>") {
+            dynamic_field2::drop<Key, vector<VecMap<String, String>>>(uid, key);
         }
         else {
             abort EUNRECOGNIZED_TYPE
@@ -524,11 +659,11 @@ module metadata::metadata {
     }
 
     // If we get dynamic_field::get_bcs_bytes we can simplify this down into 2 or 3 lines
-    public fun get_bcs_bytes(uid: &UID, slot: ascii::String, type_string: ascii::String): vector<u8> {
+    public fun get_bcs_bytes(uid: &UID, slot: String, type_string: String): vector<u8> {
         let key = Key { slot };
         assert!(dynamic_field::exists_(uid, key), EVALUE_UNDEFINED);
 
-        let type = ascii::into_bytes(type_string);
+        let type = *string::bytes(&type_string);
 
         if (type == b"address") {
             let addr = dynamic_field::borrow<Key, address>(uid, key);
@@ -557,6 +692,10 @@ module metadata::metadata {
         else if (type == b"String") {
             let string = dynamic_field::borrow<Key, String>(uid, key);
             bcs::to_bytes(string)
+        }
+        else if (type == b"Url") {
+            let url = dynamic_field::borrow<Key, Url>(uid, key);
+            bcs::to_bytes(url)
         } 
         else if (type == b"vector<address>") {
             let vec = dynamic_field::borrow<Key, vector<address>>(uid, key);
@@ -586,9 +725,17 @@ module metadata::metadata {
             let vec = dynamic_field::borrow<Key, vector<String>>(uid, key);
             bcs::to_bytes(vec)
         }
+        else if (type == b"vector<Url>") {
+            let vec = dynamic_field::borrow<Key, vector<Url>>(uid, key);
+            bcs::to_bytes(vec)
+        }
         else if (type == b"VecMap") {
             let vec_map = dynamic_field::borrow<Key, VecMap<String, String>>(uid, key);
             bcs::to_bytes(vec_map)
+        }
+        else if (type == b"vector<VecMap>") {
+            let vec_vec_map = dynamic_field::borrow<Key, vector<VecMap<String, String>>>(uid, key);
+            bcs::to_bytes(vec_vec_map)
         }
         else {
             abort EUNRECOGNIZED_TYPE
@@ -597,26 +744,28 @@ module metadata::metadata {
 
     // ========= Helper Functions ========= 
 
-    public fun assert_valid_ownership_and_schema(uid: &UID, schema: &Schema, auth: &TxAuthority) {
+    public fun assert_valid_ownership(uid: &UID, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(schema::equals_(schema, schema_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
     }
 }
 
 #[test_only]
 module metadata::metadata_tests {
-    use std::ascii::{String, string};
+    use std::string::{Self, String, utf8};
     use std::vector;
     use std::option;
+
     use sui::bcs;
     use sui::object::{Self, UID};
+    use sui::transfer;
     use sui::test_scenario;
+
     use metadata::metadata;
     use metadata::schema;
+
     use ownership::tx_authority;
     use ownership::ownership;
-    use sui::transfer;
 
     struct Witness has drop {}
 
@@ -664,7 +813,7 @@ module metadata::metadata_tests {
         let test_object = test_scenario::take_shared<TestObject>(scenario);
         {
             let uid = extend(&mut test_object);
-            metadata::view_field(uid, string(b"name"), &schema);
+            metadata::view_field(uid, utf8(b"name"), &schema);
 
             let keys = schema::into_keys(&schema);
             let i = 0;
@@ -685,10 +834,10 @@ module metadata::metadata_tests {
     #[test]
     public fun nft1() {
         let schema_data = vector<vector<String>>[ 
-            vector[string(b"name"), string(b"String")],
-            vector[string(b"description"), string(b"Option<String>")],
-            vector[string(b"image"), string(b"String")], 
-            vector[string(b"power_level"), string(b"u64")] 
+            vector[utf8(b"name"), utf8(b"String")],
+            vector[utf8(b"description"), utf8(b"Option<String>")],
+            vector[utf8(b"image"), utf8(b"String")], 
+            vector[utf8(b"power_level"), utf8(b"u64")] 
         ];
         let data = vector<vector<u8>>[ 
             bcs::to_bytes(&b"Kyrie"), 
@@ -703,11 +852,11 @@ module metadata::metadata_tests {
     #[test]
     public fun nft2() {
         let schema_data = vector[ 
-            vector[string(b"name"), string(b"String")], 
-            vector[string(b"description"), string(b"Option<String>")], 
-            vector[string(b"image"), string(b"String")], 
-            vector[string(b"power_level"), string(b"u64")], 
-            vector[string(b"attributes"), string(b"VecMap")] 
+            vector[utf8(b"name"), utf8(b"String")], 
+            vector[utf8(b"description"), utf8(b"Option<String>")], 
+            vector[utf8(b"image"), utf8(b"String")], 
+            vector[utf8(b"power_level"), utf8(b"u64")], 
+            vector[utf8(b"attributes"), utf8(b"VecMap")] 
         ];
 
         let data = vector[ 
@@ -724,10 +873,10 @@ module metadata::metadata_tests {
     #[test]
     public fun nft3() {
         let schema_data = vector[ 
-            vector[string(b"name"), string(b"String")], 
-            vector[string(b"description"), string(b"Option<String>")], 
-            vector[string(b"image"), string(b"String")], 
-            vector[string(b"attributes"), string(b"VecMap")] 
+            vector[utf8(b"name"), utf8(b"String")], 
+            vector[utf8(b"description"), utf8(b"Option<String>")], 
+            vector[utf8(b"image"), utf8(b"String")], 
+            vector[utf8(b"attributes"), utf8(b"VecMap")] 
         ];
 
         let data = vector[ 

@@ -28,7 +28,7 @@ module display::type {
     use ownership::tx_authority;
 
     use display::display;
-    use display::schema::{Self, Schema};
+    use display::schema::{Self, Schema, Field};
     use display::publish_receipt::{Self, PublishReceipt};
 
     friend display::abstract_type;
@@ -43,11 +43,10 @@ module display::type {
 
     // ========= Concrete Type =========
 
-    // Singleton, Owned root-level object. Cannot be destroyed.
+    // Singleton, owned, root-level object. Cannot be destroyed. Unique on `T`.
     struct Type<phantom T> has key {
         id: UID,
-        schema: Schema,
-        template: VecMap<String, String>
+        fields: vector<Field>
         // <display::Key { slot: String }> : <T: store> <- T conforms to the specified schema
     }
 
@@ -63,20 +62,24 @@ module display::type {
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        schema: &Schema,
+        fields: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let type = define_<T>(publisher, data, schema, ctx);
+        let type = define_<T>(publisher, data, fields, ctx);
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
     // `T` must not contain any generics. If it does, you must first use `define_abstract()` to create
     // an AbstractType object, which is then used with `define_from_abstract()` to define a concrete type
     // per instance of its generics.
+    //
+    // The `fields` input to this function is work just like the inputs to a Schema, and are structured like:
+    // [ [name, type, resolver], [name, type, resolver], ... ]
+    // Resolvers can be skipped
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        schema: &Schema,
+        fields: vector<vector<String>>,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -89,105 +92,99 @@ module display::type {
 
         dynamic_field::add(uid, key, true);
 
-        define_internal<T>(data, schema, ctx)
+        define_internal<T>(data, resolvers, fields, ctx)
     }
 
-    public(friend) fun define_internal<T>(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext): Type<T> {
+    // This is used by abstract_type as well, to define concrete types from abstract types
+    public(friend) fun define_internal<T>(
+        data: vector<vector<u8>>,
+        raw_fields: vector<vector<String>>,
+        ctx: &mut TxContext
+    ): Type<T> {
+        let (resolvers, i) = (vec_map::empty(), 0);
+        let fields = schema::from_fields(raw_fields);
+
         let type = Type {
             id: object::new(ctx),
-            schema: schema::duplicate(schema, ctx),
-            template: vec_map::empty()
+            fields: schema::into_fields(schema),
         };
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&type);
 
-        ownership::initialize_without_module_authority(&mut type.id, typed_id, &auth);
-        display::attach(&mut type.id, data, schema, &tx_authority::empty());
-        ownership::as_owned_object(&mut type.id, &tx_authority::empty());
+        ownership::initialize_with_module_authority(&mut type.id, typed_id, &auth);
+        display::attach_(&mut type.id, data, fields, &tx_authority::empty());
+        ownership::as_owned_object(&mut type.id, &auth);
 
         type
     }
 
-    // ====== Modify Template ======
-
-    // Sets values for the template. If a key is already defined, it will be overwritten.
-    // All keys used must already be defined for the type's schema.
-    public entry fun set_template<T>(
-        self: &mut Display<T>,
-        keys: vector<String>,
-        template_strings: vector<String>
+    // ====== Modify Schema and Resolvers ======
+    
+    // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
+    // it will be added.
+    public entry fun set_fields<T>(
+        self: &mut Type<T>,
+        new_fields: vector<vector<String>>,
+        data: vector<vector<u8>>,
     ) {
-        let (len, i) = (vector::length(&keys), 0);
-        assert!(len == vector::length(&values), EVEC_LENGTH_MISMATCH);
+        let (len, i) = (vector::length(&new_fields), 0);
 
         while (i < len) {
-            assert!(schema::has_key(&self.schema, key), EKEY_UNDEFINED_IN_SCHEMA);
-            vec_map2::set(&mut self.template, *vector::borrow(&keys, i), *vector::borrow(&template_strings, i));
+            let (new_field, j) = (schema::new_field(vector::borrow(&new_fields, i)), 0);
+            let (key, _, _, _) = schema::field_into_components(&new_field);
+            let old_field = option::none<Field>();
+
+            while (j < vector::length(&self.fields)) {
+                if (schema::is_field_key(*vector::borrow(&self.fields, j), key)) {
+                    old_field = option::some(*vector::borrow(&self.fields, j));
+                    vector::borrow_mut(&mut self.fields, j) = new_field;
+                    break
+                };
+                j = j + 1;
+            };
+
+            // Existing key not found
+            if (j == vector::length(&self.fields)) {
+                vector::push_back(&mut self.fields, new_field);
+            };
+
+            display::set_field_manually(
+                &mut self.id, *vector::borrow(data, i), new_field, old_field, tx_authority::empty());
+
             i = i + 1;
         };
     }
 
-    /// Remove the key from the Display.
-    public entry fun remove<T>(self: &mut Display<T>, keys: vector<String>) {
+    /// Remove keys from the Type Display.
+    public entry fun remove_fields<T>(self: &mut Display<T>, keys: vector<String>) {
         let (len, i) = (vector::length(&keys), 0);
 
         while (i < len) {
-            vec_map::remove(&mut self.template, *vector::borrow(&keys, i));
+            let key = vector::borrow(&keys, i);
+            let j = 0;
+            let old_field = option::none();
+
+            while (j < vector::length(&self.fields)) {
+                if (schema::is_field_key(*vector::borrow(&self.fields, j), key)) {
+                    old_field = option::some(vector::remove(&mut self.fields, j));
+                    break
+                };
+                j = j + 1;
+            };
+
+            if (option::is_some(old_field)) {
+                display::remove_field_manually(
+                    &mut self.id, option::destroy_some(old_field), tx_authority::empty());
+            };
+
             i = i + 1;
         };
     }
 
     // ======== Accessor Functions =====
 
-    public fun borrow_schema<T>(type: &Type<T>): &Schema {
-        &type.schema
-    }
-
-    public fun borrow_template<T>(type: &Type<T>): &VecMap<String, String> {
-        &type.template
-    }
-
-    public fun borrow_template_string<T>(type: &Type<T>, key: String): &String {
-        vec_map::borrow(&type.template, key)
-    }
-
-    public fun borrow_mut_template_string<T>(type: &mut Type<T>, key: String): &mut String {
-        vec_map::borrow_mut(&mut type.template, key)
-    }
-
-    // ======== Metadata Module's API =====
-    // For convenience, we replicate the Metadata Module's API here to make it easier to access Type's UID.
-    // Otherwise without these, the app-developer would have to deploy their own custom module that calls into
-    // type::extend to get `&mut UID` and then uses that reference to call into display::whatever().
-    //
-    // Once Sui supports scripts, these functions can all be removed.
-
-    public entry fun update<T>(
-        type: &mut Type<T>,
-        keys: vector<String>,
-        data: vector<vector<u8>>,
-        overwrite_existing: bool
-    ) {
-        display::update(&mut type.id, keys, data, &type.schema, overwrite_existing, &tx_authority::empty());
-    }
-
-    public entry fun delete_optional<T>(type: &mut Type<T>, keys: vector<String>) {
-        display::delete_optional(&mut type.id, keys, &type.schema, &tx_authority::empty());
-    }
-
-    // TO DO: should this be possible?
-    public entry fun delete_all<T>(type: &mut Type<T>) {
-        // Possibly set type.schema to empty?
-        display::delete_all(&mut type.id, &type.schema, &tx_authority::empty());
-    }
-
-    public entry fun migrate<T>(
-        type: &mut Type<T>,
-        new_schema: &Schema,
-        keys: vector<String>,
-        data: vector<vector<u8>>
-    ) {
-        display::migrate(&mut type.id, &type.schema, new_schema, keys, data, &tx_authority::empty());
+    public fun borrow_fields<T>(type: &Type<T>): &vector<Field> {
+        &type.fields
     }
 
     // ======== View Functions =====
@@ -202,6 +199,8 @@ module display::type {
     ): vector<u8> {
         let object_type = option::destroy_some(ownership::get_type(uid));
         assert!(struct_tag::get<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
+
+        let fallbac_schema = 
 
         display::view_with_default(uid, &fallback_type.id, keys, schema, fallback_schema)
     }
