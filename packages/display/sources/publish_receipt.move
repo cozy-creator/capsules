@@ -6,11 +6,10 @@
 // the same one-time witness, since we do not drop it here. We do this so that the one-time-witness can
 // be used for things like creating a 0x2::coin::create_currency.
 
-module metadata::publish_receipt {
+module display::publish_receipt {
     use sui::object::{Self, ID, UID};
     use sui::tx_context::TxContext;
     use sui::types::is_one_time_witness;
-    use sui::transfer;
 
     use sui_utils::encode;
 
@@ -20,8 +19,8 @@ module metadata::publish_receipt {
     struct PublishReceipt has key, store {
         id: UID,
         package: ID,
-        // metadata::type::Key{ slot: module_name::struct_name } -> bool
-        // metadata::creator::Key{ } -> bool
+        // display::type::Key{ slot: module_name::struct_name } -> bool
+        // display::creator::Key{ } -> bool
     }
 
     public fun claim<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): PublishReceipt {

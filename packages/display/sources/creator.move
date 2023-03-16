@@ -1,17 +1,17 @@
-module metadata::creator {
-    use std::ascii;
+module display::creator {
+    use std::string::String;
     use std::vector;
 
     use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID, ID};
+    use sui::object::{Self, UID};
     use sui::dynamic_field;
     use sui::transfer;
     use sui::typed_id;
 
-    use metadata::publish_receipt::{Self, PublishReceipt};
-    use metadata::metadata;
-    use metadata::schema::Schema;
-    use metadata::package::{Self, Package};
+    use display::publish_receipt::{Self, PublishReceipt};
+    use display::display;
+    use display::package::{Self, Package};
+    use display::schema::Schema;
     
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
@@ -44,10 +44,7 @@ module metadata::creator {
         schema: &Schema,
         ctx: &mut TxContext
     ) {
-        let creator = Creator { 
-            id: object::new(ctx),
-            packages: vector::empty()
-        };
+        let creator = Creator { id: object::new(ctx) };
 
         // Initialize owner and metadata
         let typed_id = typed_id::new(&creator);
@@ -56,7 +53,7 @@ module metadata::creator {
 
         ownership::initialize_without_module_authority(&mut creator.id, typed_id, &auth);
 
-        metadata::attach(&mut creator.id, data, schema, &auth);
+        display::attach(&mut creator.id, data, schema, &auth);
 
         ownership::as_shared_object<SimpleTransfer>(&mut creator.id, vector[owner], &auth);
 
@@ -87,6 +84,18 @@ module metadata::creator {
         package::define(package_id, object::id(creator), ctx)
     }
 
+    // Conveninece function
+    public entry fun change_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
+        change_creator_(package, creator, &tx_authority::begin(ctx));
+    }
+
+    // If you have control of the package object, you can redefine who the creator is
+    public fun change_creator_(package: &mut Package, creator: &Creator, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
+
+        package::set_creator(package, object::id(creator));
+    }
+
     // ======== Metadata Module's API =====
     // For convenience, we replicate the Metadata Module's API here to make it easier to access Creator's UID.
     // Once Sui supports Script transactions, we can remove these.
@@ -98,15 +107,15 @@ module metadata::creator {
         schema: &Schema,
         overwrite_existing: bool
     ) {
-        metadata::update(&mut creator.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
+        display::update(&mut creator.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
     public entry fun delete_optional(creator: &mut Creator, keys: vector<String>, schema: &Schema) {
-        metadata::delete_optional(&mut creator.id, keys, schema, &tx_authority::empty());
+        display::delete_optional(&mut creator.id, keys, schema, &tx_authority::empty());
     }
 
-    public entry fun delete_all(creator: &mut Creator, schema: &Schema) {
-        metadata::delete_all(&mut creator.id, schema, &tx_authority::empty());
+    public entry fun detach(creator: &mut Creator, schema: &Schema) {
+        display::detach(&mut creator.id, schema, &tx_authority::empty());
     }
 
     public entry fun migrate(
@@ -116,7 +125,7 @@ module metadata::creator {
         keys: vector<String>,
         data: vector<vector<u8>>
     ) {
-        metadata::migrate(&mut creator.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+        display::migrate(&mut creator.id, old_schema, new_schema, keys, data, &tx_authority::empty());
     }
 
     // ======== For Owners =====

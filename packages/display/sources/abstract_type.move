@@ -3,7 +3,7 @@
 // of concrete types, such as: Coin<0x2::sui::SUI> and Coin<0xc0ffee::diem::DIEM>
 
 module display::abstract_type {
-    use std::string::{Self, String};
+    use std::string::String;
     use std::option::{Self, Option};
     use std::vector;
 
@@ -12,6 +12,7 @@ module display::abstract_type {
     use sui::dynamic_field;
     use sui::transfer;
     use sui::typed_id;
+    use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
     use sui_utils::struct_tag::{Self, StructTag};
@@ -21,7 +22,7 @@ module display::abstract_type {
 
     use display::display;
     use display::publish_receipt::{Self, PublishReceipt};
-    use display::schema::{Self, Schema};
+    use display::schema::{Self, Schema, Field};
     use display::type::{Self, Type};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
@@ -80,12 +81,14 @@ module display::abstract_type {
         let key = Key { slot: encode::module_and_struct_name<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+
         dynamic_field::add(uid, key, true);
 
+        let fields = schema::fields_from_strings(raw_fields);
         let abstract_type = AbstractType { 
             id: object::new(ctx),
             type: struct_tag::get_abstract<T>(),
-            fields: schema::fields_from_strings(raw_fields)
+            fields
         };
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
@@ -114,7 +117,7 @@ module display::abstract_type {
         data: vector<vector<u8>>,
         ctx: &mut TxContext
     ) {
-        let type = define_from_abstract_<T>(abstract_type, data, raw_fields, tx_authority::begin(ctx), ctx);
+        let type = define_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
         type::transfer(type, tx_context::sender(ctx));
     }
 
@@ -125,7 +128,7 @@ module display::abstract_type {
     public fun define_from_abstract_<T>(
         abstract: &mut AbstractType,
         data: vector<vector<u8>>,
-        auth: TxAuthority,
+        auth: &TxAuthority,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
@@ -143,24 +146,33 @@ module display::abstract_type {
 
     // ====== Modify Schema and Resolvers ======
     // This is Abstract Type's own custom API for editing the display-data stored on the object.
-    
+
     public entry fun set_field(
         self: &mut AbstractType,
         data: vector<vector<u8>>,
         raw_fields: vector<vector<String>>,
-        auth: TxAuthority
+        ctx: &mut TxContext
     ) {
-        assert!(ownership::is_authorized_by_owner(&self.id, &auth), ENO_OWNER_AUTHORITY);
+        set_field_(self, data, raw_fields, &tx_authority::begin(ctx));
+    }
+    
+    public fun set_field_(
+        self: &mut AbstractType,
+        data: vector<vector<u8>>,
+        raw_fields: vector<vector<String>>,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         let (len, i) = (vector::length(&raw_fields), 0);
 
         while (i < len) {
             let (key, field) = schema::new_field(vector::borrow(&raw_fields, i));
-            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            let index_maybe = vec_map::get_idx_opt(&self.fields, &key);
             let old_field = if (option::is_some(&index_maybe)) {
-                let (_, field_ref) = vec_map::get_entry_by_idx_mut(&self.fields, option::destroy_some(index_maybe));
+                let (_, field_ref) = vec_map::get_entry_by_idx_mut(&mut self.fields, option::destroy_some(index_maybe));
                 let old_field = option::some(*field_ref);
-                field_ref = field;
+                *field_ref = field;
                 old_field
             } else {
                 vec_map::insert(&mut self.fields, key, field);
@@ -170,25 +182,29 @@ module display::abstract_type {
             display::set_field_manually(
                 &mut self.id,
                 key,
-                *vector::borrow(data, i),
+                *vector::borrow(&data, i),
                 field,
                 old_field,
-                tx_authority::begin_with_type(&Witness { })
+                &tx_authority::begin_with_type(&Witness { })
             );
 
             i = i + 1;
         };
     }
 
+    public entry fun remove_fields(self: &mut AbstractType, keys: vector<String>, ctx: &mut TxContext) {
+        remove_fields_(self, keys, &tx_authority::begin(ctx));
+    }
+
     /// Remove keys from the Type object
-    public entry fun remove_fields(self: &mut AbstractType, keys: vector<String>, auth: TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, &auth), ENO_OWNER_AUTHORITY);
+    public fun remove_fields_(self: &mut AbstractType, keys: vector<String>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         let (len, i) = (vector::length(&keys), 0);
 
         while (i < len) {
             let key = vector::borrow(&keys, i);
-            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            let index_maybe = vec_map::get_idx_opt(&self.fields, key);
             if (option::is_some(&index_maybe)) {
                 let (_, old_field) = vec_map::remove_entry_by_idx(
                     &mut self.fields,
@@ -197,9 +213,9 @@ module display::abstract_type {
 
                 display::remove_field_manually(
                     &mut self.id,
-                    key,
+                    *key,
                     old_field,
-                    tx_authority::begin_with_type(&Witness { })
+                    &tx_authority::begin_with_type(&Witness { })
                 );
             };
 
@@ -226,10 +242,8 @@ module display::abstract_type {
         assert!(
             struct_tag::is_same_abstract_type(&fallback_type.type, &struct_tag),
             EABSTRACT_DOES_NOT_MATCH_CONCRETE);
-        
-        let fallback_schema = schema::create_from_fields(&fallback_type.fields);
 
-        display::view_with_default(uid, &fallback_type.id, keys, schema, &fallback_schema)
+        display::view_with_default(uid, &fallback_type.id, keys, schema)
     }
 
     // ======== For Owners ========

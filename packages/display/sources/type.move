@@ -14,12 +14,14 @@
 module display::type {
     use std::string::String;
     use std::option;
+    use std::vector;
 
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
     use sui::typed_id;
+    use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
     use sui_utils::struct_tag;
@@ -132,11 +134,11 @@ module display::type {
 
         while (i < len) {
             let (key, field) = schema::new_field(vector::borrow(&raw_fields, i));
-            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            let index_maybe = vec_map::get_idx_opt(&self.fields, &key);
             let old_field = if (option::is_some(&index_maybe)) {
-                let (_, field_ref) = vec_map::get_entry_by_idx_mut(&self.fields, option::destroy_some(index_maybe));
+                let (_, field_ref) = vec_map::get_entry_by_idx_mut(&mut self.fields, option::destroy_some(index_maybe));
                 let old_field = option::some(*field_ref);
-                field_ref = field;
+                *field_ref = field;
                 old_field
             } else {
                 vec_map::insert(&mut self.fields, key, field);
@@ -146,10 +148,10 @@ module display::type {
             display::set_field_manually(
                 &mut self.id,
                 key,
-                *vector::borrow(data, i),
+                *vector::borrow(&data, i),
                 field,
                 old_field,
-                tx_authority::begin_with_type(&Witness { })
+                &tx_authority::begin_with_type(&Witness { })
             );
 
             i = i + 1;
@@ -162,7 +164,7 @@ module display::type {
 
         while (i < len) {
             let key = vector::borrow(&keys, i);
-            let index_maybe = schema::get_idx_opt(&self.fields, key);
+            let index_maybe = vec_map::get_idx_opt(&self.fields, key);
             if (option::is_some(&index_maybe)) {
                 let (_, old_field) = vec_map::remove_entry_by_idx(
                     &mut self.fields,
@@ -171,9 +173,9 @@ module display::type {
 
                 display::remove_field_manually(
                     &mut self.id,
-                    key,
+                    *key,
                     old_field,
-                    tx_authority::begin_with_type(&Witness { })
+                    &tx_authority::begin_with_type(&Witness { })
                 );
             };
 
@@ -199,9 +201,7 @@ module display::type {
         let object_type = option::destroy_some(ownership::get_type(uid));
         assert!(struct_tag::get<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
 
-        let fallback_schema = schema::create_from_fields(&fallback_type.fields);
-
-        display::view_with_default(uid, &fallback_type.id, keys, schema, &fallback_schema)
+        display::view_with_default(uid, &fallback_type.id, keys, schema)
     }
 
     // ======== For Owners ========

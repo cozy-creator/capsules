@@ -50,7 +50,7 @@ module sui_utils::deserialize {
         (string::utf8(string_bytes), start + len)
     }
 
-    public fun url_(bytes: &vector<u8>, start: u64): (String, u64) {
+    public fun url_(bytes: &vector<u8>, start: u64): (Url, u64) {
         let (len, start) = bcs2::uleb128_length(bytes, start);
         let url_bytes = vector2::slice(bytes, start, start + len);
 

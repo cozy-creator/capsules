@@ -1,4 +1,4 @@
-module metadata::schema {
+module display::schema {
     use std::string::{Self, String};
     use std::hash;
     use std::option::{Self, Option};
@@ -8,8 +8,10 @@ module metadata::schema {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
+    use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
+    use sui_utils::string2;
 
     // error constants
     const EMISMATCHED_LENGTHS_OF_INPUTS: u64 = 0;
@@ -37,7 +39,7 @@ module metadata::schema {
     // The resolver strings are optional and can be excluded. Example:
     // [ ["name", "Option<String>"], ["image", "Url"], ["balances", "vector<u64>"] ]
     public entry fun create(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
-        let schema = create_(schema_fields, ctx);
+        let schema = create_from_strings(schema_fields, ctx);
         transfer::freeze_object(schema);
     }
 
@@ -93,10 +95,10 @@ module metadata::schema {
             *vector::borrow(tuple, 2)
         } else { string2::empty() };
 
-        (*vector::borrow(&tuple, 0), Field { type, optional, resolver })
+        (*vector::borrow(tuple, 0), Field { type, optional, resolver })
     }
 
-    public fun freeze(schema: Schema) {
+    public fun freeze_(schema: Schema) {
         transfer::freeze_object(schema);
     }
 
@@ -117,18 +119,18 @@ module metadata::schema {
     // ========= Comparison Functions =========
 
     // Returns all of Schema1's keys that are not included in Schema2, i.e., Schema1 - Schema2
-    public fun difference(schema1: &Schema, schema2: &Schema): vector<Field> {
-        let (i, remaining_keys) = (0, vector::empty<String>());
+    public fun difference(schema1: &Schema, schema2: &Schema): VecMap<String, Field> {
+        let (i, remainder) = (0, vec_map::empty());
 
         while (i < vec_map::size(&schema1.fields)) {
-            let (key, _) = vec_map::get_entry_by_idx(&schema.fields, i);
-            if (!has_key(schema2, key)) {
-                vector::push_back(&mut remaining_keys, *key)
+            let (key, field) = vec_map::get_entry_by_idx(&schema1.fields, i);
+            if (!has_key(schema2, *key)) {
+                vec_map::insert(&mut remainder, *key, *field)
             };
             i = i + 1;
         };
 
-        remaining_keys
+        remainder
     }
 
     // Checks to see if two schemas are compatible, i.e., any overlapping fields map to the same type
@@ -138,7 +140,7 @@ module metadata::schema {
         let i = 0;
         while (i < vec_map::size(&schema1.fields)) {
             let (key, fields1) = vec_map::get_entry_by_idx(&schema1.fields, i);
-            let (type2_maybe, _) = find_type_for_key(schema2, key);
+            let (type2_maybe, _, _) = get_field(schema2, *key);
             if (option::is_some(&type2_maybe)) {
                 let type2 = option::destroy_some(type2_maybe);
                 if (fields1.type != type2) return false;
@@ -173,25 +175,25 @@ module metadata::schema {
     }
 
     public fun has_key(schema: &Schema, key: String): bool {
-        vec_map::contains(&schema.fields, key)
+        vec_map::contains(&schema.fields, &key)
     }
 
     // ============ Helper Function ============
 
     // Note that type strings are case-sensitive; we could change this potentially
     public fun is_supported_type(type: String): bool {
-        if (vector::contains(&SUPPORTED_TYPES, string::bytes(type))) true
+        if (vector::contains(&SUPPORTED_TYPES, string::bytes(&type))) true
         else {
             let option_type = encode::parse_option(type);
             if (string::is_empty(&option_type)) false
-            else if (vector::contains(&SUPPORTED_TYPES, string::bytes(option_type))) true
+            else if (vector::contains(&SUPPORTED_TYPES, string::bytes(&option_type))) true
             else false
         }
     }
 
     // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
     public fun get_field(schema: &Schema, key: String): (Option<String>, Option<bool>, Option<String>) {
-        let index_maybe = vec_map::get_idx_opt(&schema.fields, key);
+        let index_maybe = vec_map::get_idx_opt(&schema.fields, &key);
 
         if (option::is_some(&index_maybe)) {
             let index = option::destroy_some(index_maybe);
@@ -216,15 +218,15 @@ module metadata::schema {
     // Resolver strings are ignored for the purposes of computing the schema's hash_id
     // Note that the hash_id depends on the order of the fields
     public fun compute_hash_id(fields: VecMap<String, Field>): vector<u8> {
-        let (i, len) = (0, vec_map::size(fields));
+        let (i, len) = (0, vec_map::size(&fields));
 
         while (i < len) {
-            let (_, field) = vec_map::get_entry_by_idx_mut(fields, i);
+            let (_, field) = vec_map::get_entry_by_idx_mut(&mut fields, i);
             field.resolver = string2::empty();
             i = i + 1;
         };
 
-        let bytes = bcs::to_bytes(fields);
+        let bytes = bcs::to_bytes(&fields);
         hash::sha3_256(bytes)
     }
 

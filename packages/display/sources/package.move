@@ -1,5 +1,5 @@
-module dislpay::package {
-    use std::ascii;
+module display::package {
+    use std::string::String;
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
@@ -46,16 +46,9 @@ module dislpay::package {
         package
     }
 
-    // Conveninece function
-    public entry fun change_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
-        change_creator_(package, creator, tx_authority::begin(ctx));
-    }
-
-    // If you have control of the package object, you can redefine who the creator is
-    public fun change_creator_(package: &mut Package, creator: &Creator, auth: TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
-
-        package.creator = object::id(creator);
+    // Only display::creator can change the creator of a package
+    public(friend) fun set_creator(package: &mut Package, id: ID) {
+        package.creator = id;
     }
 
     // ======== Display Module API =====
@@ -68,7 +61,7 @@ module dislpay::package {
 
     public entry fun update(
         package: &mut Package,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>,
         schema: &Schema,
         overwrite_existing: bool
@@ -76,19 +69,19 @@ module dislpay::package {
         display::update(&mut package.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
     }
 
-    public entry fun delete_optional(package: &mut Package, keys: vector<ascii::String>, schema: &Schema) {
+    public entry fun delete_optional(package: &mut Package, keys: vector<String>, schema: &Schema) {
         display::delete_optional(&mut package.id, keys, schema, &tx_authority::empty());
     }
 
-    public entry fun delete_all(package: &mut Package, schema: &Schema) {
-        display::delete_all(&mut package.id, schema, &tx_authority::empty());
+    public entry fun detach(package: &mut Package, schema: &Schema) {
+        display::detach(&mut package.id, schema, &tx_authority::empty());
     }
 
     public entry fun migrate(
         package: &mut Package,
         old_schema: &Schema,
         new_schema: &Schema,
-        keys: vector<ascii::String>,
+        keys: vector<String>,
         data: vector<vector<u8>>
     ) {
         display::migrate(&mut package.id, old_schema, new_schema, keys, data, &tx_authority::empty());

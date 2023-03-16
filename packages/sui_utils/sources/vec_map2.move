@@ -21,9 +21,9 @@ module sui_utils::vec_map2 {
         output
     }
 
-    public fun set<K: copy, drop, V: drop>(self: &mut VecMap<K, V>, key: K, value: V) {
-        if (vec_map::contains(self, key)) {
-            vec_map::remove(self, key);
+    public fun set<K: copy + drop, V: drop>(self: &mut VecMap<K, V>, key: K, value: V) {
+        if (vec_map::contains(self, &key)) {
+            vec_map::remove(self, &key);
         };
         vec_map::insert(self, key, value);
     }
