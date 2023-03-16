@@ -1,6 +1,6 @@
 [package]
 name = "SuiDisplay"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
@@ -10,4 +10,4 @@ Ownership = { local = "../ownership" }
 TransferSystem = { local = "../transfer_system" }
 
 [addresses]
-display =  "0x0"
+display =  "0x51b5d18c350875a3b62997122723dfa24caac093"

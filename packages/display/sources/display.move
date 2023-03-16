@@ -1,9 +1,8 @@
-// Sui's On-Chain Metadata Program
-// On-chain metadata is stored in its deserialized state inside of dynamic fields attached to objects.
-// Schemas are root-level objects used to map field-names to types, which is necessary in the deserialization process.
+// ========== Sui's On-Chain Display-Metadata Program ==========
 //
-// Future to do:
-// - have a dedicated URL type rather than using just a string
+// On-chain display data is stored in its deserialized state inside of dynamic fields attached to objects.
+// Schemas are root-level objects used to map field-names to types, which is necessary in the deserialization
+// process.
 
 module display::display {
     use std::string::{Self, String};

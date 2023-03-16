@@ -30,7 +30,7 @@ module display::package {
     }
 
     // Only display::creator can create Package Display data
-    public(friend) fun define(package: ID, creator: ID, ctx: &mut TxContext): Package {
+    public(friend) fun claim(package: ID, creator: ID, ctx: &mut TxContext): Package {
         let package = Package { 
             id: object::new(ctx),
             package,

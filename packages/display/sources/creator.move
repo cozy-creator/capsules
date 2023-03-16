@@ -61,7 +61,11 @@ module display::creator {
     }
 
     // Convenience entry function
-    public entry fun claim_package(creator: &mut Creator, receipt: &mut PublishReceipt, ctx: &mut TxContext) {
+    public entry fun claim_package(
+        creator: &mut Creator,
+        receipt: &mut PublishReceipt,
+        ctx: &mut TxContext
+    ) {
         let package_object = claim_package_(creator, receipt, &tx_authority::begin(ctx), ctx);
         package::transfer(package_object, tx_context::sender(ctx));
     }
@@ -81,7 +85,7 @@ module display::creator {
         dynamic_field::add(receipt_uid, Key { }, true);
 
         let package_id = publish_receipt::into_package_id(receipt);
-        package::define(package_id, object::id(creator), ctx)
+        package::claim(package_id, object::id(creator), ctx)
     }
 
     // Conveninece function

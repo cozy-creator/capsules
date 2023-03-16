@@ -7,8 +7,8 @@ authors = ["Paul Fidika (paul@fidika.com)"]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../../../packages/sui_utils" }
 Ownership = { local = "../../../packages/ownership" }
-SuiMetadata = { local = "../../../packages/metadata" }
+SuiDisplay = { local = "../../../packages/display" }
 TransferSystem = { local = "../../../packages/transfer_system" }
 
 [addresses]
-outlaw_sky = "0x0b0bbca283777a702829486f8435a870b6ab33bf"
+outlaw_sky = "0x0"

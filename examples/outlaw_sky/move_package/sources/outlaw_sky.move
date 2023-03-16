@@ -9,9 +9,9 @@ module outlaw_sky::outlaw_sky {
     use sui::vec_map::{Self, VecMap};
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
-    use metadata::metadata;
-    use metadata::schema::Schema;
-    use metadata::publish_receipt;
+    use display::display;
+    use display::schema::Schema;
+    use display::publish_receipt;
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     // Error constants
@@ -36,7 +36,7 @@ module outlaw_sky::outlaw_sky {
 
         ownership::initialize_with_module_authority(&mut outlaw.id, typed_id, &auth);
 
-        metadata::attach(&mut outlaw.id, data, schema, &auth);
+        display::attach(&mut outlaw.id, data, schema, &auth);
 
         let owner = vector[tx_context::sender(ctx)];
         ownership::as_shared_object<SimpleTransfer>(&mut outlaw.id, owner, &auth);
@@ -46,7 +46,7 @@ module outlaw_sky::outlaw_sky {
 
     // This function is needed until we can use UID's directly in devInspect transactions
     public fun view_all(outlaw: &Outlaw, schema: &Schema): vector<u8> {
-        metadata::view_all(&outlaw.id, schema)
+        display::view_all(&outlaw.id, schema)
     }
 
     // We need this wrapper because (1) we need &mut outlaw.id from an entry function, which is not possible until
@@ -54,13 +54,13 @@ module outlaw_sky::outlaw_sky {
     // on all changes to metadata.
     public entry fun update(outlaw: &mut Outlaw, keys: vector<ascii::String>, data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
+        display::update(&mut outlaw.id, keys, data, schema, true, &auth);
     }
 
     // We cannot delete shared objects yet, like the Outlaw itself, but we _can_ delete metadata
-    public entry fun delete_all(outlaw: &mut Outlaw, schema: &Schema, ctx: &mut TxContext) {
+    public entry fun detach(outlaw: &mut Outlaw, schema: &Schema, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        metadata::delete_all(&mut outlaw.id, schema, &auth);
+        display::detach(&mut outlaw.id, schema, &auth);
     }
 
     public fun load_dispenser() { 
@@ -90,19 +90,19 @@ module outlaw_sky::outlaw_sky {
         let data = vector[bcs::to_bytes(&new_name)];
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
 
-        metadata::update(&mut outlaw.id, keys, data, schema, true, &auth);
+        display::update(&mut outlaw.id, keys, data, schema, true, &auth);
     }
 
     // This is a sample of how atomic updates work, versus overwrite-updates
     public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = metadata::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        let attributes = display::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
         vec_map::insert(attributes, key, value);
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = metadata::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
+        let attributes = display::borrow_mut<VecMap<String, String>>(&mut outlaw.id, ascii::string(b"attributes"), &auth);
         vec_map::remove(attributes, &key);
     }
 
@@ -110,7 +110,7 @@ module outlaw_sky::outlaw_sky {
         let slot = ascii::string(b"power_level");
         let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
 
-        let power_level = metadata::borrow_mut<u64>(&mut outlaw.id, slot, &auth);
+        let power_level = display::borrow_mut<u64>(&mut outlaw.id, slot, &auth);
 
         *power_level = *power_level + 1;
     }
@@ -121,8 +121,8 @@ module outlaw_sky::tests {
     use std::string::{Self, String};
     use std::ascii::Self;
     use sui::test_scenario;
-    use metadata::schema;
-    use metadata::metadata;
+    use display::schema;
+    use display::metadata;
     use outlaw_sky::outlaw_sky;
     use ownership::tx_authority;
 
@@ -151,7 +151,7 @@ module outlaw_sky::tests {
             outlaw_sky::rename(&mut outlaw, ascii::string(b"New Name"), &schema, ctx);
             let auth = tx_authority::begin(ctx);
             let uid = outlaw_sky::extend(&mut outlaw, &auth);
-            let name = metadata::borrow<String>(uid, ascii::string(b"name"));
+            let name = display::borrow<String>(uid, ascii::string(b"name"));
             assert!(*name == string::utf8(b"New Name"), 0);
 
             test_scenario::return_shared(outlaw);
