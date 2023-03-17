@@ -1,0 +1,13 @@
+{
+  "name": "capsules",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/capsule-craft/capsules.git",
+  "author": "bytedeveloperr <abdulrahmanyusuf125@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@mysten/sui.js": "^0.29.1",
+    "sui-carton": "^0.0.2-alpha",
+    "superstruct": "^1.0.3"
+  }
+}

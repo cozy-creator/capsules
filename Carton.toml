@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "packages/*", 
+    "examples/y00ts",
     "examples/**/move_package"
 ]
 
@@ -10,5 +11,5 @@ env = "devnet"
 config = "~/.sui/sui_config/client.yaml"
 
 [envs]
-devnet = { url = "https://fullnode.devnet.sui.io:443/" }
+devnet = { url = "https://fullnode.devnet.vincagame.com:443/" }
 testnet = { url = "https://fullnode.testnet.sui.io/" }
