@@ -691,16 +691,17 @@ module display::display {
 
 #[test_only]
 module display::metadata_tests {
-    use std::string::{Self, String, utf8};
+    use std::string::{String, utf8};
     use std::vector;
     use std::option;
 
     use sui::bcs;
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::test_scenario;
+    use sui::test_scenario::{Self, Scenario};
+    use sui::typed_id;
 
-    use display::metadata;
+    use display::display;
     use display::schema;
 
     use ownership::tx_authority;
@@ -717,11 +718,11 @@ module display::metadata_tests {
 
     const SENDER: address = @0x99;
 
-    public entry fun extend(test_object: &mut TestObject): &mut UID {
+    public fun extend(test_object: &mut TestObject): &mut UID {
         &mut test_object.id
     }
 
-    public fun assert_correct_serialization(data: vector<vector<u8>>, schema_data: vector<vector<String>>) {
+    public fun assert_correct_serialization(data: vector<vector<u8>>, schema_data: vector<vector<String>>): Scenario {
         // Tx1: Create a schema
         let scenario_val = test_scenario::begin(SENDER);
         let scenario = &mut scenario_val;
@@ -738,9 +739,9 @@ module display::metadata_tests {
 
             let object = TestObject { id: object::new(ctx) };
             let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let typed_id = typed_id::new(&object);
 
-            let proof = ownership::setup(&object);
-            ownership::initialize(&mut object.id, proof, &auth);
+            ownership::initialize_with_module_authority(&mut object.id, typed_id, &auth);
 
             display::attach(&mut object.id, data, &schema, &auth);
 
@@ -767,7 +768,7 @@ module display::metadata_tests {
         test_scenario::return_immutable(schema);
         test_scenario::return_shared(test_object);
 
-        test_scenario::end(scenario_val);
+        scenario_val
     }
 
     #[test]
@@ -785,7 +786,7 @@ module display::metadata_tests {
             bcs::to_bytes(&19999u64) 
         ];
 
-        assert_correct_serialization(data, schema_data);
+        test_scenario::end(assert_correct_serialization(data, schema_data));
     }
 
     #[test]
@@ -806,7 +807,7 @@ module display::metadata_tests {
             vector[ 0 ]
         ];
 
-        assert_correct_serialization(data, schema_data);
+        test_scenario::end(assert_correct_serialization(data, schema_data));
     }
 
     #[test]
@@ -824,6 +825,41 @@ module display::metadata_tests {
             vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
             vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101,   8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116,   4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
 
-        assert_correct_serialization(data, schema_data);
+        test_scenario::end(assert_correct_serialization(data, schema_data));
+    }
+
+    #[test]
+    public fun test_update() {
+        let schema_data = vector[ 
+            vector[utf8(b"name"), utf8(b"String")], 
+            vector[utf8(b"url"), utf8(b"Url")], 
+            vector[utf8(b"attributes"), utf8(b"VecMap")] 
+        ];
+
+        let data = vector[ 
+            vector[10, 121, 48, 48, 116, 32,  35, 56, 49,  55, 51], 
+            vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
+            vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101, 8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116, 4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
+        
+        let scenario_val = assert_correct_serialization(data, schema_data);
+        let scenario = &mut scenario_val;
+
+        // Tx4: Update the display data
+        test_scenario::next_tx(scenario, SENDER);
+        let schema = test_scenario::take_immutable<schema::Schema>(scenario);
+        let test_object = test_scenario::take_shared<TestObject>(scenario);
+        {
+            let new_data = bcs::to_bytes(&utf8(b"New Name"));
+            let auth = tx_authority::begin_with_type(&Witness {});
+            let uid = extend(&mut test_object);
+            display::update(uid, vector[utf8(b"name")], vector[new_data], &schema, true, &auth);
+
+            let bcs_bytes = display::view_field(uid, utf8(b"name"), &schema);
+            assert!(bcs_bytes == new_data, EINVALID_METADATA);
+        };
+        test_scenario::return_immutable(schema);
+        test_scenario::return_shared(test_object);
+
+        test_scenario::end(scenario_val);
     }
 }

@@ -228,7 +228,7 @@ module display::type_tests {
     use sui::test_scenario;
     use sui::transfer;
     use sui::tx_context;
-    use type::type;
+    use display::type;
     use display::display;
     use display::publish_receipt;
     use display::schema;
@@ -258,7 +258,7 @@ module display::type_tests {
             let ctx = test_scenario::ctx(scenario);
             let publisher = publish_receipt::test_claim(&TEST_OTW {}, ctx);
 
-            type::define<TestDisplay>(&mut publisher, data, &schema, ctx);
+            type::define<TestDisplay>(&mut publisher, data, schema_fields, ctx);
 
             test_scenario::return_immutable(schema);
             transfer::transfer(publisher, tx_context::sender(ctx));

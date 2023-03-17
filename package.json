@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "repository": "https://github.com/capsule-craft/capsules.git",
-  "author": "bytedeveloperr <abdulrahmanyusuf125@gmail.com>",
+  "author": "bytedeveloper <abdulrahmanyusuf125@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@mysten/sui.js": "^0.29.1",
