@@ -100,8 +100,8 @@ module display::creator {
         package::set_creator(package, object::id(creator));
     }
 
-    // ======== Metadata Module's API =====
-    // For convenience, we replicate the Metadata Module's API here to make it easier to access Creator's UID.
+    // ======== Display Module's API =====
+    // For convenience, we replicate the Display Module's API here to make it easier to access Creator's UID.
     // Once Sui supports Script transactions, we can remove these.
 
     public entry fun update(
@@ -109,17 +109,18 @@ module display::creator {
         keys: vector<String>,
         data: vector<vector<u8>>,
         schema: &Schema,
-        overwrite_existing: bool
+        overwrite_existing: bool,
+        ctx: &TxContext
     ) {
-        display::update(&mut creator.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
+        display::update(&mut creator.id, keys, data, schema, overwrite_existing, &tx_authority::begin(ctx));
     }
 
-    public entry fun delete_optional(creator: &mut Creator, keys: vector<String>, schema: &Schema) {
-        display::delete_optional(&mut creator.id, keys, schema, &tx_authority::empty());
+    public entry fun delete_optional(creator: &mut Creator, keys: vector<String>, schema: &Schema, ctx: &TxContext) {
+        display::delete_optional(&mut creator.id, keys, schema, &tx_authority::begin(ctx));
     }
 
-    public entry fun detach(creator: &mut Creator, schema: &Schema) {
-        display::detach(&mut creator.id, schema, &tx_authority::empty());
+    public entry fun detach(creator: &mut Creator, schema: &Schema, ctx: &TxContext) {
+        display::detach(&mut creator.id, schema, &tx_authority::begin(ctx));
     }
 
     public entry fun migrate(
@@ -127,9 +128,10 @@ module display::creator {
         old_schema: &Schema,
         new_schema: &Schema,
         keys: vector<String>,
-        data: vector<vector<u8>>
+        data: vector<vector<u8>>,
+        ctx: &TxContext
     ) {
-        display::migrate(&mut creator.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+        display::migrate(&mut creator.id, old_schema, new_schema, keys, data, &tx_authority::begin(ctx));
     }
 
     // ======== For Owners =====

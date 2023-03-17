@@ -10,4 +10,4 @@ Ownership = { local = "../ownership" }
 TransferSystem = { local = "../transfer_system" }
 
 [addresses]
-display =  "0x51b5d18c350875a3b62997122723dfa24caac093"
+display =  "0xc3238c1d8bbadb0f367924249ea7a74455ce5b91"

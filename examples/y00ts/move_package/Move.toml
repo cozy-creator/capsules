@@ -1,0 +1,14 @@
+[package]
+name = "Y00t"
+version = "0.1.0"
+authors = ["Paul Fidika (paul@fidika.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../../../packages/sui_utils" }
+Ownership = { local = "../../../packages/ownership" }
+SuiDisplay = { local = "../../../packages/display" }
+TransferSystem = { local = "../../../packages/transfer_system" }
+
+[addresses]
+y00t = "0x0"

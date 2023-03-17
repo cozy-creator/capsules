@@ -20,18 +20,19 @@ const PRIVATE_KEY_ENV_VAR = 'PRIVATE_KEY';
 export const provider = new JsonRpcProvider(
   new Connection({
     fullnode: 'https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd',
-    faucet: 'https://fullnode.devnet.sui.io:443'
+    faucet: 'https://faucet.devnet.sui.io:443/gas'
   })
 );
 
 async function requestFromFaucet(address: string) {
   try {
     const response = await provider.requestSuiFromFaucet(address);
+    console.log('========== Sui Airdrop Received ==========');
     return response.transferred_gas_objects;
   } catch (error) {
     console.log('Request to faucet failed');
     // @ts-ignore
-    console.log(util.inspect(error.message, { showHidden: false, depth: null, colors: true }));
+    console.log(util.inspect(error.message, { showHidden: false, depth: 2, colors: true }));
 
     return [];
   }
@@ -109,7 +110,6 @@ async function loadKeypair(env_path: string) {
 async function fetchSuiCoinsForAddress(address: string) {
   console.log(`fetching coins for ${address}`);
   const coins = await provider.getCoins(address, '0x2::sui::SUI');
-  console.log(coins);
   return coins.data;
 }
 
@@ -136,8 +136,6 @@ export async function getSigner(env_path: string): Promise<RawSigner> {
     console.log('========== Sui Airdrop Requested ==========');
 
     await requestFromFaucet(address);
-
-    console.log('========== Sui Airdrop Received ==========');
   }
 
   return new RawSigner(keypair, provider);
