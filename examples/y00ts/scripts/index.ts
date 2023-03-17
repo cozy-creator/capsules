@@ -154,7 +154,7 @@ async function main() {
     typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<u8>`],
     arguments: [
       y00tPublishReceipt,
-      signerAddress,
+      [signerAddress], // seems we have to pass option params as vector
       serializeByField(bcs, y00tDefault, y00tSchema),
       Object.entries(y00tSchema).map(([key, value]) => [key, value]),
     ],
