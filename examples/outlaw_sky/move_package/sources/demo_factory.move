@@ -42,7 +42,8 @@ module outlaw_sky::demo_factory {
 
     // Event
     struct MetadataUpdated has copy, drop {
-        for: ID
+        for: ID,
+        metadata: OutlawMetadata
     }
 
     const URL_TEMPLATE: vector<u8> = b"https://d23f0jexolvu5k.cloudfront.net/";
@@ -86,7 +87,8 @@ module outlaw_sky::demo_factory {
         dynamic_field::add(&mut id, b"metadata", metadata);
 
         event::emit(MetadataUpdated {
-            for: object::uid_to_inner(&id)
+            for: object::uid_to_inner(&id),
+            metadata
         });
 
         Outlaw {
