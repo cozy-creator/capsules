@@ -11,7 +11,6 @@ module display::schema {
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
-    use sui_utils::string2;
 
     // error constants
     const EMISMATCHED_LENGTHS_OF_INPUTS: u64 = 0;
@@ -29,14 +28,13 @@ module display::schema {
 
     struct Field has store, copy, drop {
         type: String,
-        optional: bool,
-        resolver: String
+        optional: bool
     }
 
     // The input to this funtion should be shaped like:
-    // [ [name, type, resolver], [name, type, resolver], ... ]
+    // [ [name, type], [name, type], ... ]
     //
-    // The resolver strings are optional and can be excluded. Example:
+    // Example:
     // [ ["name", "Option<String>"], ["image", "Url"], ["balances", "vector<u64>"] ]
     public entry fun create(schema_fields: vector<vector<String>>, ctx: &mut TxContext) {
         let schema = create_from_strings(schema_fields, ctx);
@@ -70,7 +68,7 @@ module display::schema {
         let (i, fields) = (0, vec_map::empty<String, Field>());
         while (i < len) {
             let tuple = vector::borrow(&schema_fields, i);
-            let (key, field) = new_field(tuple);
+            let (key, field) = create_field(tuple);
             vec_map::insert(&mut fields, key, field);
             i = i + 1;
         };
@@ -79,8 +77,8 @@ module display::schema {
     }
 
     // Creates a `Field` from a vector of Strings
-    // input strings: [ name, type, resolver ]
-    public fun new_field(tuple: &vector<String>): (String, Field) {
+    // input strings: [ key, type ] returns => (key, { type, optional })
+    public fun create_field(tuple: &vector<String>): (String, Field) {
         let type_raw = *vector::borrow(tuple, 1);
         let type_parsed = encode::parse_option(type_raw);
         let (type, optional) = if (string::is_empty(&type_parsed)) {
@@ -91,11 +89,7 @@ module display::schema {
 
         assert!(is_supported_type(type), EUNSUPPORTED_TYPE);
 
-        let resolver = if (vector::length(tuple) >= 3) {
-            *vector::borrow(tuple, 2)
-        } else { string2::empty() };
-
-        (*vector::borrow(tuple, 0), Field { type, optional, resolver })
+        (*vector::borrow(tuple, 0), Field { type, optional })
     }
 
     public fun freeze_(schema: Schema) {
@@ -140,7 +134,7 @@ module display::schema {
         let i = 0;
         while (i < vec_map::size(&schema1.fields)) {
             let (key, fields1) = vec_map::get_entry_by_idx(&schema1.fields, i);
-            let (type2_maybe, _, _) = get_field(schema2, *key);
+            let (type2_maybe, _) = get_field(schema2, *key);
             if (option::is_some(&type2_maybe)) {
                 let type2 = option::destroy_some(type2_maybe);
                 if (fields1.type != type2) return false;
@@ -157,13 +151,26 @@ module display::schema {
         *&schema.fields
     }
 
+    // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
+    public fun get_field(schema: &Schema, key: String): (Option<String>, Option<bool>) {
+        let index_maybe = vec_map::get_idx_opt(&schema.fields, &key);
+
+        if (option::is_some(&index_maybe)) {
+            let index = option::destroy_some(index_maybe);
+            let (_, field) = vec_map::get_entry_by_idx(&schema.fields, index);
+            (option::some(field.type), option::some(field.optional))
+        } else {
+            (option::none(), option::none())
+        }
+    }
+
     public fun get_hash_id(schema: &Schema): vector<u8> {
         schema.hash_id
     }
 
     // Breaks a field down into its components
-    public fun field_into_components(field: &Field): (String, bool, String) {
-        (field.type, field.optional, field.resolver)
+    public fun field_into_components(field: &Field): (String, bool) {
+        (field.type, field.optional)
     }
 
     public fun length(schema: &Schema): u64 {
@@ -191,19 +198,6 @@ module display::schema {
         }
     }
 
-    // We find the type corresponding to the given key in a Schema, if it exists. Returns option::none() if it doesn't.
-    public fun get_field(schema: &Schema, key: String): (Option<String>, Option<bool>, Option<String>) {
-        let index_maybe = vec_map::get_idx_opt(&schema.fields, &key);
-
-        if (option::is_some(&index_maybe)) {
-            let index = option::destroy_some(index_maybe);
-            let (_, field) = vec_map::get_entry_by_idx(&schema.fields, index);
-            (option::some(field.type), option::some(field.optional), option::some(field.resolver))
-        } else {
-            (option::none(), option::none(), option::none())
-        }
-    }
-
     // ======= Schema Hash ID =======
     // We use the hash of a schema's fields to uniquely identify a schema, rather than its object-id.
 
@@ -215,17 +209,8 @@ module display::schema {
         (schema.hash_id == hash_id)
     }
 
-    // Resolver strings are ignored for the purposes of computing the schema's hash_id
     // Note that the hash_id depends on the order of the fields
     public fun compute_hash_id(fields: VecMap<String, Field>): vector<u8> {
-        let (i, len) = (0, vec_map::size(&fields));
-
-        while (i < len) {
-            let (_, field) = vec_map::get_entry_by_idx_mut(&mut fields, i);
-            field.resolver = string2::empty();
-            i = i + 1;
-        };
-
         let bytes = bcs::to_bytes(&fields);
         hash::sha3_256(bytes)
     }

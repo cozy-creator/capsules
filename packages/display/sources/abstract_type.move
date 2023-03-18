@@ -23,7 +23,6 @@ module display::abstract_type {
     use display::display;
     use display::publish_receipt::{Self, PublishReceipt};
     use display::schema::{Self, Schema, Field};
-    use display::type::{Self, Type};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -35,6 +34,7 @@ module display::abstract_type {
     const EINCORRECT_SCHEMA_SUPPLIED: u64 = 4;
     const EINVALID_SCHEMA_ID: u64 = 5;
     const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 6;
+    const EUNDEFINED_KEY: u64 = 7;
 
     // Singleton, shared root-level object. Cannot be destroyed. Unique on its `type` field.
     struct AbstractType has key {
@@ -42,14 +42,12 @@ module display::abstract_type {
         type: StructTag,
         // These will be used as the default schema and display template when defining a concrete type based on
         // this abstract type
-        fields: VecMap<String, Field>
+        resolvers: VecMap<String, String>,
+        fields: VecMap<String, Field>,
     }
 
     // Added to publish receipt to ensure an abstract type is only defined once
     struct Key has store, copy, drop { slot: String }
-
-    // Added to abstract-type to ensure that each concrete type (set of generics) is only ever defined once
-    struct KeyGenerics has store, copy, drop { slot: vector<String> }
 
     // Module authority
     struct Witness has drop { }
@@ -61,17 +59,19 @@ module display::abstract_type {
         publisher: &mut PublishReceipt,
         owner: Option<address>,
         data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
+        resolver_strings: vector<vector<String>>,
+        schema_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let abstract_type = define_<T>(publisher, data, raw_fields, ctx);
+        let abstract_type = define_<T>(publisher, data, resolver_strings, schema_fields, ctx);
         return_and_share(abstract_type, owner, ctx);
     }
 
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
+        resolver_strings: vector<vector<String>>,
+        schema_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ): AbstractType {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -81,13 +81,15 @@ module display::abstract_type {
         let key = Key { slot: encode::module_and_struct_name<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
-
         dynamic_field::add(uid, key, true);
 
-        let fields = schema::fields_from_strings(raw_fields);
+        let fields = schema::fields_from_strings(schema_fields);
+        let resolvers = parse_resolvers(resolver_strings, &fields);
+
         let abstract_type = AbstractType { 
             id: object::new(ctx),
             type: struct_tag::get_abstract<T>(),
+            resolvers,
             fields
         };
         let auth = tx_authority::begin_with_type(&Witness { });
@@ -106,42 +108,10 @@ module display::abstract_type {
             tx_context::sender(ctx)
         };
 
-        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, vector[owner], &tx_authority::empty());
+        let auth = tx_authority::begin_with_type(&Witness { });
+        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, vector[owner], &auth);
 
         transfer::share_object(abstract_type);
-    }
-
-    // Convenience entry function
-    public entry fun define_from_abstract<T>(
-        abstract_type: &mut AbstractType,
-        data: vector<vector<u8>>,
-        ctx: &mut TxContext
-    ) {
-        let type = define_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
-        type::transfer(type, tx_context::sender(ctx));
-    }
-
-    // Returns a concrete type based on an abstract type, like Type<Coin<0x2::sui::SUI>> from
-    // AbstractType Coin<T>
-    // The raw_fields supplied will be used as a Schema to define the concrete type's display, and must be the same 
-    // schema specified in the abstract type's `schema_id` field
-    public fun define_from_abstract_<T>(
-        abstract: &mut AbstractType,
-        data: vector<vector<u8>>,
-        auth: &TxAuthority,
-        ctx: &mut TxContext
-    ): Type<T> {
-        assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
-        let struct_tag = struct_tag::get<T>();
-        assert!(struct_tag::is_same_abstract_type(&abstract.type, &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
-
-        // Ensures that this concrete type can only ever be created once
-        let generics = struct_tag::generics(&struct_tag);
-        let key = KeyGenerics { slot: generics };
-        assert!(!dynamic_field::exists_(&abstract.id, key), ETYPE_ALREADY_DEFINED);
-        dynamic_field::add(&mut abstract.id, key, true);
-
-        type::define_internal<T>(data, abstract.fields, ctx)
     }
 
     // ====== Modify Schema and Resolvers ======
@@ -167,7 +137,7 @@ module display::abstract_type {
         let (len, i) = (vector::length(&raw_fields), 0);
 
         while (i < len) {
-            let (key, field) = schema::new_field(vector::borrow(&raw_fields, i));
+            let (key, field) = schema::create_field(vector::borrow(&raw_fields, i));
             let index_maybe = vec_map::get_idx_opt(&self.fields, &key);
             let old_field = if (option::is_some(&index_maybe)) {
                 let (_, field_ref) = vec_map::get_entry_by_idx_mut(&mut self.fields, option::destroy_some(index_maybe));
@@ -223,10 +193,37 @@ module display::abstract_type {
         };
     }
 
+    // ======== Helper Functions ======== 
+
+    public fun parse_resolvers(
+        resolver_strings: vector<vector<String>>,
+        fields: &VecMap<String, Field>
+    ): VecMap<String, String> {
+        let (i, resolvers) = (0, vec_map::empty<String, String>());
+        while (i < vector::length(&resolver_strings)) {
+            let item = vector::borrow(&resolver_strings, i);
+            let (key, resolver) = (vector::borrow(item, 0), vector::borrow(item, 1));
+            assert!(vec_map::contains(fields, key), EUNDEFINED_KEY);
+
+            vec_map::insert(&mut resolvers, *key, *resolver);
+            i = i + 1;
+        };
+
+        resolvers
+    }
+
     // ======== Accessor Functions =====
+
+    public fun borrow_resolvers(type: &AbstractType): &VecMap<String, String> {
+        &type.resolvers
+    }
 
     public fun borrow_fields(type: &AbstractType): &VecMap<String, Field> {
         &type.fields
+    }
+
+    public fun into_struct_tag(type: &AbstractType): StructTag {
+        type.type
     }
 
     // ======== View Functions =====
@@ -248,7 +245,7 @@ module display::abstract_type {
 
     // ======== For Owners ========
 
-    public fun extend<T: store>(abstract: &mut AbstractType, auth: &TxAuthority): &mut UID {
+    public fun extend(abstract: &mut AbstractType, auth: &TxAuthority): &mut UID {
         assert!(ownership::is_authorized_by_owner(&abstract.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut abstract.id

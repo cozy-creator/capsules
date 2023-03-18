@@ -57,7 +57,7 @@ module display::display {
         let i = 0;
         while (i < vec_map::size(&fields)) {
             let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, optional, _) = schema::field_into_components(field);
+            let (type, optional) = schema::field_into_components(field);
             let value = *vector::borrow(&data, i);
 
             set_field(uid, Key { slot: *key }, type, optional, value, true);
@@ -84,7 +84,7 @@ module display::display {
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe, _) = schema::get_field(schema, key);
+            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             let value = *vector::borrow(&data, i);
 
@@ -132,7 +132,7 @@ module display::display {
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe, _) = schema::get_field(schema, key);
+            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
             if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
             if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
 
@@ -150,7 +150,7 @@ module display::display {
         let (i, fields) = (0, schema::get_fields(schema));
         while (i < vec_map::size(&fields)) {
             let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _, _) = schema::field_into_components(field);
+            let (type, _) = schema::field_into_components(field);
 
             drop_field(uid, Key { slot: *key }, type);
             i = i + 1;
@@ -182,7 +182,7 @@ module display::display {
         let i = 0;
         while (i < vec_map::size(&fields)) {
             let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _, _) = schema::field_into_components(field);
+            let (type, _) = schema::field_into_components(field);
             drop_field(uid, Key { slot: *key }, type);
         };
 
@@ -191,8 +191,8 @@ module display::display {
         let i = 0;
         while (i < vec_map::size(&new_fields)) {
             let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (type, _, _) = schema::field_into_components(field);
-            let (old_type_maybe, _, _) = schema::get_field(old_schema, *key);
+            let (type, _) = schema::field_into_components(field);
+            let (old_type_maybe, _) = schema::get_field(old_schema, *key);
             if (option::is_some(&old_type_maybe)) {
                 let old_type = option::destroy_some(old_type_maybe);
                 if (old_type != type) drop_field(uid, Key { slot: *key }, old_type);
@@ -209,7 +209,7 @@ module display::display {
         let i = 0;
         while (i < vec_map::size(&new_fields)) {
             let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (_, optional, _) = schema::field_into_components(field);
+            let (_, optional) = schema::field_into_components(field);
             if (!optional) {
                 assert!(dynamic_field::exists_(uid, Key { slot: *key }), EMISSING_VALUES_NEEDED_FOR_MIGRATION);
             };
@@ -232,18 +232,18 @@ module display::display {
         assert_valid_ownership(uid, auth);
 
         if (option::is_some(&old_field)) {
-            let (type, _, _) = schema::field_into_components(&option::destroy_some(old_field));
+            let (type, _) = schema::field_into_components(&option::destroy_some(old_field));
             drop_field(uid, Key { slot: key }, type);
         };
 
-        let (type, optional, _) = schema::field_into_components(&new_field);
+        let (type, optional) = schema::field_into_components(&new_field);
         set_field(uid, Key { slot: key }, type, optional, value, true);
     }
 
     public fun remove_field_manually(uid: &mut UID, key: String, old_field: Field, auth: &TxAuthority) {
         assert_valid_ownership(uid, auth);
 
-        let (type, _, _) = schema::field_into_components(&old_field);
+        let (type, _) = schema::field_into_components(&old_field);
         drop_field(uid, Key { slot: key }, type);
     }
 
@@ -256,9 +256,11 @@ module display::display {
 
     // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
     // corresponding keys that were queried in order to deserialize the results.
+    //
+    // We don't assert that you have to be using the correct schema, although this will almost certainly abort
+    // if you use the wrong schema.
     public fun view(uid: &UID, keys: vector<String>, schema: &Schema): vector<u8> {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-
+        // assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
@@ -270,11 +272,25 @@ module display::display {
         response
     }
 
+    // Same as above, but vector<vector<u8>> rather than appending all the values into a single vector<u8>
+    // This only matters for on-chain responses; for off-chain responses, they'll be appended together anyway
+    public fun view_parsed(uid: &UID, keys: vector<String>, fields: &VecMap<String, Field>): vector<vector<u8>> {
+        let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
+
+        while (i < len) {
+            let slot = *vector::borrow(&keys, i);
+            vector::push_back(&mut response, view_field_(uid, slot, fields));
+            i = i + 1;
+        };
+
+        response
+    }
+
     // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
     // or that the keys  you've specified exist on your suppplied schema. Deserialize these results with the
     // schema you supplied, not with the object's cannonical schema
     public fun view_field(uid: &UID, slot: String, schema: &Schema): vector<u8> {
-        let (type_maybe, optional_maybe, _) = schema::get_field(schema, slot);
+        let (type_maybe, optional_maybe) = schema::get_field(schema, slot);
 
         if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
             let type = option::destroy_some(type_maybe);
@@ -291,6 +307,30 @@ module display::display {
             bytes
         } else if (option::is_some(&type_maybe)) {
             vector[0u8] // option::is_none
+        } else {
+            abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
+        }
+    }
+
+    public fun view_field_(uid: &UID, slot: String, fields: &VecMap<String, Field>): vector<u8> {
+        if (vec_map::contains(fields, &slot)) {
+            if (!dynamic_field::exists_(uid, Key { slot })) {
+                return vector[0u8] // option::is_none
+            };
+
+            let field = vec_map::get(fields, &slot);
+            let (type, optional) = schema::field_into_components(field);
+
+            // We only prepend option-bytes if the key is optional
+            let bytes = if (optional) { 
+                vector[1u8] // option::is_some
+            } else {
+                vector::empty<u8>()
+            };
+
+            vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
+
+            bytes
         } else {
             abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
         }

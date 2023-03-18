@@ -1,4 +1,10 @@
-import { JSTypes, bcs, serializeByField, getSigner } from '../../../../sdk/typescript/src';
+import {
+  JSTypes,
+  bcs,
+  serializeByField,
+  getSigner,
+  getCreatedObjects
+} from '../../../../sdk/typescript/src';
 import { RawSigner } from '@mysten/sui.js';
 import { execSync } from 'child_process';
 import path from 'path';
@@ -10,25 +16,12 @@ const PACKAGE_PATH = '../move_package';
 
 const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
-const displayPackageID = '0x7c381602ac2f75d896b3fbaeb94acc17307de88b';
-
-interface CreatedObject {
-  owner:
-    | {
-        ObjectOwner?: string;
-        AddressOwner?: string;
-      }
-    | 'Immutable'
-    | 'Shared';
-  reference: {
-    objectId: string;
-    version: number;
-    digest: string;
-  };
-}
+const displayPackageID = '0xddcad84f0d79d96535f3970fc01150a15bcbc2fd';
 
 async function main(signer: RawSigner) {
   // This is a publish transaction; requires the Sui CLI to be installed on this machine however
+
+  let signerAddress = '0x' + (await signer.getAddress());
 
   // ======= Publish Package =======
   console.log('Publishing Y00t package...');
@@ -39,19 +32,14 @@ async function main(signer: RawSigner) {
     })
   );
 
-  let response = await signer.publish({
+  let moveCallTxn0 = await signer.publish({
     compiledModules: modulesInBase64,
     gasBudget: 3000
   });
 
-  // @ts-ignore because typescript doesn't think response.effects exists -- why?
-  let y00tPackageID: string = response.effects.effects.created.find(
-    (object: CreatedObject) => object.owner == 'Immutable'
-  )?.reference.objectId;
-  // @ts-ignore
-  let y00tPublishReceipt: string = response.effects.effects.created.find(
-    (object: CreatedObject) => object.owner.AddressOwner
-  )?.reference.objectId;
+  let createdObjects = getCreatedObjects(moveCallTxn0);
+  let y00tPackageID = createdObjects.Immutable[0];
+  let y00tPublishReceipt = createdObjects.AddressOwner[0];
 
   // ======= Define Creator Object =======
   console.log('Making a creator object...');
@@ -75,8 +63,7 @@ async function main(signer: RawSigner) {
     gasBudget: 2000
   });
 
-  // @ts-ignore
-  let creatorSchemaObjectID = moveCallTxn1.effects.effects.created[0].reference.objectId as string;
+  let creatorSchemaObjectID = getCreatedObjects(moveCallTxn1).Immutable[0];
 
   type Creator = JSTypes<typeof creatorSchema>;
 
@@ -84,8 +71,6 @@ async function main(signer: RawSigner) {
     name: 'Dust Labs',
     url: 'https://www.dustlabs.com/'
   };
-
-  let signerAddress = '0x' + (await signer.getAddress());
 
   // Make a creator object, add display data to it using a creator-display schema
   const moveCallTxn2 = await signer.executeMoveCall({
@@ -101,10 +86,7 @@ async function main(signer: RawSigner) {
     gasBudget: 3000
   });
 
-  // @ts-ignore
-  let creatorObjectID: string = moveCallTxn2.effects.effects.created.find(
-    (object: CreatedObject) => object.owner == 'Shared'
-  )?.reference.objectId;
+  let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
 
   // ======= Update Creator object's display data =======
   console.log('Updating creator object...');
@@ -112,9 +94,7 @@ async function main(signer: RawSigner) {
   creatorObject.name = 'Y00t Labs';
   let fieldsChanged = ['name'];
 
-  // This fails; function needs to be debugged on-chain
-
-  const moveCallTxn3 = await signer.executeMoveCall({
+  const _moveCallTxn3 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
     module: 'creator',
     function: 'update',
@@ -141,11 +121,7 @@ async function main(signer: RawSigner) {
     gasBudget: 3000
   });
 
-  // @ts-ignore
-  let packageObjectID: string = moveCallTxn2.effects.effects.created.find(
-    // @ts-ignore
-    (object: CreatedObject) => object.owner?.AddressOwner
-  )?.reference.objectId;
+  let packageObjectID = getCreatedObjects(moveCallTxn4).AddressOwner[0];
 
   // Add some display data for our package object using a package-display schema
 
@@ -163,10 +139,15 @@ async function main(signer: RawSigner) {
 
   const y00tDefault: Y00t = {
     name: 'y00t',
-    description: { some: 'These guys are great' },
-    image: 'https://metadata.y00ts.com/y/8172.png',
+    description: {
+      some: 'y00ts is a generative art project of 15,000 NFTs. y00topia is a curated community of builders and creators. Each y00t was designed by De Labs in Los Angeles, CA.'
+    },
+    image:
+      'https://bafkreidc5co72clgqor54gpugde6tr4otrubjfqanj4vx4ivjwxnhqgaai.ipfs.nftstorage.link/',
     attributes: {}
   };
+
+  // This use up way too much gas; optimize
 
   const moveCallTxn6 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
@@ -177,19 +158,27 @@ async function main(signer: RawSigner) {
       y00tPublishReceipt,
       [signerAddress],
       serializeByField(bcs, y00tDefault, y00tSchema),
+      [], // We leave resolvers undefined for now
       Object.entries(y00tSchema).map(([key, value]) => [key, value])
     ],
-    gasBudget: 3000
+    gasBudget: 6000
   });
 
-  // @ts-ignore
-  let abstractTypeObjectID: string = moveCallTxn6.effects.effects.created.find(
-    (object: CreatedObject) => object.owner == 'Shared'
-  )?.reference.objectId;
+  let abstractTypeObjectID = getCreatedObjects(moveCallTxn6).Shared[0];
 
-  console.log(abstractTypeObjectID);
+  // ====== Produce a concrete type from our AbstractType =======
+  console.log('Producing concrete type from abstract...');
 
-  // Produce a concrete type from our AbstractType
+  // This is too expensive for gas; optimize
+
+  const moveCallTxn7 = await signer.executeMoveCall({
+    packageObjectId: displayPackageID,
+    module: 'type',
+    function: 'define_from_abstract',
+    typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<vector<u8>>`],
+    arguments: [abstractTypeObjectID, []], // We leave data undefined
+    gasBudget: 7000
+  });
 
   // Claim a Type for our Y00t using our publisher-receipt
 

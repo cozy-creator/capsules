@@ -27,13 +27,12 @@ module display::type {
     use sui_utils::struct_tag;
 
     use ownership::ownership;
-    use ownership::tx_authority;
+    use ownership::tx_authority::{Self, TxAuthority};
 
     use display::display;
     use display::schema::{Self, Schema, Field};
     use display::publish_receipt::{Self, PublishReceipt};
-
-    friend display::abstract_type;
+    use display::abstract_type::{Self, AbstractType};
 
     // error enums
     const EINVALID_PUBLISH_RECEIPT: u64 = 0;
@@ -42,18 +41,24 @@ module display::type {
     const ETYPE_IS_NOT_CONCRETE: u64 = 3;
     const EKEY_UNDEFINED_IN_SCHEMA: u64 = 4;
     const EVEC_LENGTH_MISMATCH: u64 = 5;
+    const ENO_OWNER_AUTHORITY: u64 = 6;
+    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 7;
 
     // ========= Concrete Type =========
 
     // Singleton, owned, root-level object. Cannot be destroyed. Unique on `T`.
     struct Type<phantom T> has key {
         id: UID,
+        resolvers: VecMap<String, String>,
         fields: VecMap<String, Field>
         // <display::Key { slot: String }> : <T: store> <- T conforms to the schema specified in .fields
     }
 
     // Added to publish receipt
     struct Key has store, copy, drop { slot: String } // slot is a type-name, value is boolean
+
+    // Added to abstract-type to ensure that each concrete type (set of generics) is only ever defined once
+    struct KeyGenerics has store, copy, drop { slot: vector<String> }
     
     // Module authority
     struct Witness has drop { }
@@ -64,10 +69,11 @@ module display::type {
     public entry fun define<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
+        resolver_strings: vector<vector<String>>,
+        schema_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let type = define_<T>(publisher, data, raw_fields, ctx);
+        let type = define_<T>(publisher, data, resolver_strings, schema_fields, ctx);
         transfer::transfer(type, tx_context::sender(ctx));
     }
 
@@ -81,7 +87,8 @@ module display::type {
     public fun define_<T>(
         publisher: &mut PublishReceipt,
         data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
+        resolver_strings: vector<vector<String>>,
+        schema_fields: vector<vector<String>>,
         ctx: &mut TxContext
     ): Type<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
@@ -91,23 +98,73 @@ module display::type {
         let key = Key { slot: encode::module_and_struct_name<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
-
         dynamic_field::add(uid, key, true);
 
-        let fields = schema::fields_from_strings(raw_fields);
-        define_internal<T>(data, fields, ctx)
+        let fields = schema::fields_from_strings(schema_fields);
+        let resolvers = abstract_type::parse_resolvers(resolver_strings, &fields);
+        define_internal<T>(data, resolvers, fields, ctx)
+    }
+
+    // Convenience entry function
+    public entry fun define_from_abstract<T>(
+        abstract_type: &mut AbstractType,
+        data: vector<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        let type = define_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
+        transfer(type, tx_context::sender(ctx));
+    }
+
+    // Returns a concrete type based on an abstract type, like Type<Coin<0x2::sui::SUI>> from
+    // AbstractType Coin<T>
+    // The raw_fields supplied will be used as a Schema to define the concrete type's display, and must be the same 
+    // schema specified in the abstract type's `schema_id` field
+    public fun define_from_abstract_<T>(
+        abstract: &mut AbstractType,
+        data: vector<vector<u8>>,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ): Type<T> {
+        let struct_tag = struct_tag::get<T>();
+        assert!(struct_tag::is_same_abstract_type(
+            &abstract_type::into_struct_tag(abstract), &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
+
+        // We use the existing resolvers and fields from the abstract type
+        let resolvers = *abstract_type::borrow_resolvers(abstract);
+        let fields = *abstract_type::borrow_fields(abstract);
+
+        // Ownership check for abstract type
+        let uid = abstract_type::extend(abstract, auth);
+        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+
+        // Ensures that this concrete type can only ever be created once
+        let generics = struct_tag::generics(&struct_tag);
+        let key = KeyGenerics { slot: generics };
+        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+        dynamic_field::add(uid, key, true);
+
+        // We use the abstract type's existing data as default data for the concrete type's data,
+        // assuming we haven't been supplied any data
+        if (vector::length(&data) == 0) {
+            data = display::view_parsed(uid, vec_map::keys(&fields), &fields);
+        };
+
+        define_internal<T>(data, resolvers, fields, ctx)
     }
 
     // This is used by abstract_type as well, to define concrete types from abstract types
-    public(friend) fun define_internal<T>(
+    fun define_internal<T>(
         data: vector<vector<u8>>,
+        resolvers: VecMap<String, String>,
         fields: VecMap<String, Field>,
         ctx: &mut TxContext
     ): Type<T> {
         let type = Type {
             id: object::new(ctx),
+            resolvers,
             fields,
         };
+
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&type);
 
@@ -133,7 +190,7 @@ module display::type {
         let (len, i) = (vector::length(&raw_fields), 0);
 
         while (i < len) {
-            let (key, field) = schema::new_field(vector::borrow(&raw_fields, i));
+            let (key, field) = schema::create_field(vector::borrow(&raw_fields, i));
             let index_maybe = vec_map::get_idx_opt(&self.fields, &key);
             let old_field = if (option::is_some(&index_maybe)) {
                 let (_, field_ref) = vec_map::get_entry_by_idx_mut(&mut self.fields, option::destroy_some(index_maybe));
@@ -258,7 +315,7 @@ module display::type_tests {
             let ctx = test_scenario::ctx(scenario);
             let publisher = publish_receipt::test_claim(&TEST_OTW {}, ctx);
 
-            type::define<TestDisplay>(&mut publisher, data, schema_fields, ctx);
+            type::define<TestDisplay>(&mut publisher, data, vector<vector<String>>[], schema_fields, ctx);
 
             test_scenario::return_immutable(schema);
             transfer::transfer(publisher, tx_context::sender(ctx));
