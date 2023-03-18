@@ -629,7 +629,7 @@ module metadata::metadata_tests {
 
     const SENDER: address = @0x99;
 
-    public entry fun extend(test_object: &mut TestObject): &mut UID {
+    public fun extend(test_object: &mut TestObject): &mut UID {
         &mut test_object.id
     }
 

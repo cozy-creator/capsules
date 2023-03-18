@@ -8,9 +8,12 @@
 module sui_utils::deserialize {
     use std::string::{Self, String};
     use std::vector;
+
     use sui::address;
     use sui::object::{Self, ID};
     use sui::vec_map::{Self, VecMap};
+    use sui::url::{Self, Url};
+
     use sui_utils::bcs2;
     use sui_utils::vector2;
 
@@ -45,6 +48,13 @@ module sui_utils::deserialize {
         let string_bytes = vector2::slice(bytes, start, start + len);
 
         (string::utf8(string_bytes), start + len)
+    }
+
+    public fun url_(bytes: &vector<u8>, start: u64): (Url, u64) {
+        let (len, start) = bcs2::uleb128_length(bytes, start);
+        let url_bytes = vector2::slice(bytes, start, start + len);
+
+        (url::new_unsafe_from_bytes(url_bytes), start + len)
     }
 
     public fun u16_(bytes: &vector<u8>, start: u64): (u16, u64) {
@@ -232,6 +242,19 @@ module sui_utils::deserialize {
         (result, start)
     }
 
+    public fun vec_url(bytes: &vector<u8>, start: u64): (vector<Url>, u64) {
+        let (len, start) = bcs2::uleb128_length(bytes, start);
+        let (result, i) = (vector::empty<Url>(), 0);
+        while (i < len) {
+            let (value, new_start) = url_(bytes, start);
+            vector::push_back(&mut result, value);
+            start = new_start;
+            i = i + 1;
+        };
+
+        (result, start)
+    }
+
     // Turns [ 2, 3, 75, 101, 121, 5, 86, 97, 108, 117, 101 ] into VecMap { contents: [ Entry { k: Key, v: Value } ] }
     public fun vec_map_string_string(bytes: &vector<u8>, start: u64): (VecMap<String, String>, u64) {
         let (len, start) = bcs2::uleb128_length(bytes, start);
@@ -240,6 +263,19 @@ module sui_utils::deserialize {
             let (key, new_start) = string_(bytes, start);
             let (value, new_start) = string_(bytes, new_start);
             vec_map::insert(&mut result, key, value);
+            start = new_start;
+            i = i + 1;
+        };
+
+        (result, start)
+    }
+
+    public fun vec_vec_map_string_string(bytes: &vector<u8>, start: u64): (vector<VecMap<String, String>>, u64) {
+        let (len, start) = bcs2::uleb128_length(bytes, start);
+        let (result, i) = (vector::empty<VecMap<String, String>>(), 0);
+        while (i < len) {
+            let (value, new_start) = vec_map_string_string(bytes, start);
+            vector::push_back(&mut result, value);
             start = new_start;
             i = i + 1;
         };

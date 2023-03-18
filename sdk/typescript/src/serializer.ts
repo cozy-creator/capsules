@@ -27,6 +27,7 @@ let supportedTypes = [
   'u128',
   'u256',
   'String',
+  'Url',
   'vector<u8>',
   'VecMap'
 ];
@@ -48,9 +49,6 @@ supportedTypes.forEach(typeName => {
     none: null,
     some: typeName
   };
-
-  // Option<vector<VecMap<String,String>>> is not supported
-  if (typeName == 'VecMap') return;
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
@@ -82,6 +80,21 @@ bcs.registerType(
     return new TextDecoder('utf8').decode(bytes);
   },
   value => is(value, MoveToStruct['String'])
+);
+
+// This is identical to the String writer / reader
+bcs.registerType(
+  'Url',
+  (writer, data: string) => {
+    let bytes = new TextEncoder().encode(data);
+    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    return writer;
+  },
+  (reader: BcsReader) => {
+    let bytes = reader.readBytes(reader.readULEB());
+    return new TextDecoder('utf8').decode(bytes);
+  },
+  value => is(value, MoveToStruct['Url'])
 );
 
 // This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than
@@ -140,6 +153,7 @@ type MoveToJSTypes = {
   u128: bigint;
   u256: bigint;
   String: string;
+  Url: string;
   'vector<address>': Uint8Array[];
   'vector<bool>': boolean[];
   'vector<id>': Uint8Array[];
@@ -150,6 +164,7 @@ type MoveToJSTypes = {
   'vector<u128>': BigInt[];
   'vector<u256>': BigInt[];
   'vector<String>': string[];
+  'vector<Url>': string[];
   'vector<vector<u8>>': Uint8Array[];
   VecMap: Record<string, string>;
   'Option<address>': { none: null } | { some: Uint8Array };
@@ -162,6 +177,7 @@ type MoveToJSTypes = {
   'Option<u128>': { none: null } | { some: bigint };
   'Option<u256>': { none: null } | { some: bigint };
   'Option<String>': { none: null } | { some: string };
+  'Option<Url>': { none: null } | { some: string };
   'Option<vector<address>>': { none: null } | { some: Uint8Array[] };
   'Option<vector<bool>>': { none: null } | { some: boolean[] };
   'Option<vector<id>>': { none: null } | { some: Uint8Array[] };
@@ -172,6 +188,7 @@ type MoveToJSTypes = {
   'Option<vector<u128>>': { none: null } | { some: BigInt[] };
   'Option<vector<u256>>': { none: null } | { some: BigInt[] };
   'Option<vector<String>>': { none: null } | { some: string[] };
+  'Option<vector<Url>>': { none: null } | { some: string[] };
   'Option<vector<vector<u8>>>': { none: null } | { some: Uint8Array[] };
   'Option<VecMap>': { none: null } | { some: Record<string, string> };
 };
@@ -186,7 +203,8 @@ const MoveToStruct: Record<string, Struct<any, any>> = {
   u64: bigint(),
   u128: bigint(),
   u256: bigint(),
-  String: string()
+  String: string(),
+  Url: string()
 };
 
 Object.keys(MoveToStruct).map(field => {
@@ -243,16 +261,16 @@ function serializeByField(
   data: Record<string, SupportedType>,
   schema: Record<string, string>,
   onlyKeys?: string[]
-): Uint8Array[] {
-  const serializedData: Uint8Array[] = [];
+): number[][] {
+  const serializedData: number[][] = [];
   if (!onlyKeys) {
     for (const [key, keyType] of Object.entries(schema)) {
-      const bytesArray = bcs.ser(keyType, data[key]).toBytes();
+      const bytesArray = Array.from(bcs.ser(keyType, data[key]).toBytes());
       serializedData.push(bytesArray);
     }
   } else {
     onlyKeys.forEach(key => {
-      const bytesArray = bcs.ser(schema[key], data[key]).toBytes();
+      const bytesArray = Array.from(bcs.ser(schema[key], data[key]).toBytes());
       serializedData.push(bytesArray);
     });
   }

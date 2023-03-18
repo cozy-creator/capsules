@@ -1,27 +1,17 @@
-import {
-  JSTypes,
-  bcs,
-  serializeByField,
-  getSigner,
-  getCreatedObjects
-} from '../../../../sdk/typescript/src';
-import { RawSigner } from '@mysten/sui.js';
+import { JSTypes, bcs, serializeByField } from '../../../../sdk/typescript/src';
 import { execSync } from 'child_process';
-import path from 'path';
+import { carton } from 'sui-carton';
 
+const { signer } = carton;
 // const CLI_PATH = "/Users/bytedeveloper/.cargo/bin/sui";
 // const PACKAGE_PATH = "/Users/bytedeveloper/Documents/Projects/0xCapsules/capsules/examples/y00ts";
-const CLI_PATH = '/home/paul/.cargo/bin/sui';
-const PACKAGE_PATH = '../move_package';
+const CLI_PATH = 'C:\\Users\\Fidik\\.cargo\\bin\\sui.exe';
+const PACKAGE_PATH = 'C:\\Git\\capsules\\examples\\y00ts\\move_package';
 
-const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
+const displayPackageID = '0xc3238c1d8bbadb0f367924249ea7a74455ce5b91';
 
-const displayPackageID = '0xddcad84f0d79d96535f3970fc01150a15bcbc2fd';
-
-async function main(signer: RawSigner) {
+async function main() {
   // This is a publish transaction; requires the Sui CLI to be installed on this machine however
-
-  let signerAddress = '0x' + (await signer.getAddress());
 
   // ======= Publish Package =======
   console.log('Publishing Y00t package...');
@@ -32,28 +22,27 @@ async function main(signer: RawSigner) {
     })
   );
 
-  let moveCallTxn0 = await signer.publish({
+  let response = await signer.publish({
     compiledModules: modulesInBase64,
     gasBudget: 3000
   });
 
-  let createdObjects = getCreatedObjects(moveCallTxn0);
-  let y00tPackageID = createdObjects.Immutable[0];
-  let y00tPublishReceipt = createdObjects.AddressOwner[0];
+  // @ts-ignore because typescript doesn't think response.effects exists -- why?
+  let y00tPackageID = response.effects.effects.created[0].reference.objectId as string;
+  // @ts-ignore
+  let y00tPublishReceipt = response.effects.effects.created[1].reference.objectId as string;
 
   // ======= Define Creator Object =======
-  console.log('Making a creator object...');
 
-  // Fetch an on-chain existing creator schema -- commented out for now
+  // Fetch an on-chain existing creator schema
   // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
 
   const creatorSchema = {
     name: 'String',
     url: 'Url'
   } as const;
+  // const creatorValidator = moveStructValidator(creatorSchema);
 
-  // Create a schema object to be used for the creator object
-  // Normally you'd just use one that already exists...
   const moveCallTxn1 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
     module: 'schema',
@@ -63,7 +52,9 @@ async function main(signer: RawSigner) {
     gasBudget: 2000
   });
 
-  let creatorSchemaObjectID = getCreatedObjects(moveCallTxn1).Immutable[0];
+  // @ts-ignore
+  let creatorSchemaObjectID = moveCallTxn1.effects.effects.created[0].reference.objectId as string;
+  console.log(creatorSchemaObjectID);
 
   type Creator = JSTypes<typeof creatorSchema>;
 
@@ -71,6 +62,8 @@ async function main(signer: RawSigner) {
     name: 'Dust Labs',
     url: 'https://www.dustlabs.com/'
   };
+
+  let signerAddress = '0x' + (await signer.getAddress());
 
   // Make a creator object, add display data to it using a creator-display schema
   const moveCallTxn2 = await signer.executeMoveCall({
@@ -86,47 +79,61 @@ async function main(signer: RawSigner) {
     gasBudget: 3000
   });
 
-  let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
+  console.log('making creator object');
+  // @ts-ignore
+  console.log(moveCallTxn2.effects.effects);
+
+  // @ts-ignore
+  // let creatorObjectID = moveCallTxn2.effects.effects.created[0].reference.objectId as string;
+
+  // console.log(creatorObjectID);
 
   // ======= Update Creator object's display data =======
-  console.log('Updating creator object...');
 
   creatorObject.name = 'Y00t Labs';
-  let fieldsChanged = ['name'];
 
-  const _moveCallTxn3 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'creator',
-    function: 'update',
-    typeArguments: [],
-    arguments: [
-      creatorObjectID,
-      fieldsChanged,
-      serializeByField(bcs, creatorObject, creatorSchema, fieldsChanged),
-      creatorSchemaObjectID,
-      true
-    ],
-    gasBudget: 3000
-  });
+  // This fails; function needs to be debugged on-chain
+
+  // const moveCallTxn3 = await signer.executeMoveCall({
+  //   packageObjectId: displayPackageID,
+  //   module: 'creator',
+  //   function: 'update',
+  //   typeArguments: [],
+  //   arguments: [
+  //     creatorObjectID,
+  //     ['name'],
+  //     serializeByField(bcs, creatorObject, creatorSchema, ['name']),
+  //     creatorSchemaObjectID,
+  //     true
+  //   ],
+  //   gasBudget: 3000
+  // });
+
+  console.log('updating creator object');
 
   // ======= Claim a package object using our publish-receipt + creator object =======
-  console.log('Claiming package object...');
 
-  const moveCallTxn4 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'creator',
-    function: 'claim_package',
-    typeArguments: [],
-    arguments: [creatorObjectID, y00tPublishReceipt],
-    gasBudget: 3000
-  });
+  // This fails
 
-  let packageObjectID = getCreatedObjects(moveCallTxn4).AddressOwner[0];
+  // const moveCallTxn4 = await signer.executeMoveCall({
+  //   packageObjectId: displayPackageID,
+  //   module: 'creator',
+  //   function: 'claim_package',
+  //   typeArguments: [],
+  //   arguments: [creatorObjectID, y00tPublishReceipt],
+  //   gasBudget: 3000
+  // });
+
+  console.log('claiming package object');
+
+  // @ts-ignore
+  // let packageObjectID = moveCallTxn4.effects.effects.created[0].reference.objectId as string;
+
+  // console.log(packageObjectID);
 
   // Add some display data for our package object using a package-display schema
 
   // ======= Define an abstract type from our Publish Receipt =======
-  console.log('Defining abstract type...');
 
   const y00tSchema = {
     name: 'String',
@@ -139,15 +146,10 @@ async function main(signer: RawSigner) {
 
   const y00tDefault: Y00t = {
     name: 'y00t',
-    description: {
-      some: 'y00ts is a generative art project of 15,000 NFTs. y00topia is a curated community of builders and creators. Each y00t was designed by De Labs in Los Angeles, CA.'
-    },
-    image:
-      'https://bafkreidc5co72clgqor54gpugde6tr4otrubjfqanj4vx4ivjwxnhqgaai.ipfs.nftstorage.link/',
+    description: { some: 'These guys are great' },
+    image: 'https://metadata.y00ts.com/y/8172.png',
     attributes: {}
   };
-
-  // This use up way too much gas; optimize
 
   const moveCallTxn6 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
@@ -156,29 +158,18 @@ async function main(signer: RawSigner) {
     typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<u8>`],
     arguments: [
       y00tPublishReceipt,
-      [signerAddress],
+      [signerAddress], // seems we have to pass option params as vector
       serializeByField(bcs, y00tDefault, y00tSchema),
-      [], // We leave resolvers undefined for now
       Object.entries(y00tSchema).map(([key, value]) => [key, value])
     ],
-    gasBudget: 6000
+    gasBudget: 3000
   });
 
-  let abstractTypeObjectID = getCreatedObjects(moveCallTxn6).Shared[0];
+  console.log('defining abstract type');
 
-  // ====== Produce a concrete type from our AbstractType =======
-  console.log('Producing concrete type from abstract...');
+  console.log(moveCallTxn6);
 
-  // This is too expensive for gas; optimize
-
-  const moveCallTxn7 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'type',
-    function: 'define_from_abstract',
-    typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<vector<u8>>`],
-    arguments: [abstractTypeObjectID, []], // We leave data undefined
-    gasBudget: 7000
-  });
+  // Produce a concrete type from our AbstractType
 
   // Claim a Type for our Y00t using our publisher-receipt
 
@@ -230,4 +221,4 @@ let bytes = serializeByField(bcs, y00t, NFTSchema);
 
 console.dir(bytes, { maxArrayLength: null });
 
-getSigner(ENV_PATH).then(signer => main(signer));
+main();

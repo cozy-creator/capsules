@@ -1,6 +1,6 @@
 [package]
-name = "OutlawSky"
-version = "0.2.0"
+name = "Y00t"
+version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
@@ -11,4 +11,4 @@ SuiDisplay = { local = "../../../packages/display" }
 TransferSystem = { local = "../../../packages/transfer_system" }
 
 [addresses]
-outlaw_sky = "0x9068e5747939c54df068111fcb3fbe836010020f"
+y00t = "0x0"
