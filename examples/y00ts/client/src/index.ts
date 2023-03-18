@@ -12,6 +12,21 @@ const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
 const displayPackageID = '0x7c381602ac2f75d896b3fbaeb94acc17307de88b';
 
+interface CreatedObject {
+  owner:
+    | {
+        ObjectOwner?: string;
+        AddressOwner?: string;
+      }
+    | 'Immutable'
+    | 'Shared';
+  reference: {
+    objectId: string;
+    version: number;
+    digest: string;
+  };
+}
+
 async function main(signer: RawSigner) {
   // This is a publish transaction; requires the Sui CLI to be installed on this machine however
 
@@ -30,14 +45,18 @@ async function main(signer: RawSigner) {
   });
 
   // @ts-ignore because typescript doesn't think response.effects exists -- why?
-  let y00tPackageID = response.effects.effects.created[0].reference.objectId as string;
+  let y00tPackageID: string = response.effects.effects.created.find(
+    (object: CreatedObject) => object.owner == 'Immutable'
+  )?.reference.objectId;
   // @ts-ignore
-  let y00tPublishReceipt = response.effects.effects.created[1].reference.objectId as string;
+  let y00tPublishReceipt: string = response.effects.effects.created.find(
+    (object: CreatedObject) => object.owner.AddressOwner
+  )?.reference.objectId;
 
   // ======= Define Creator Object =======
   console.log('Making a creator object...');
 
-  // Fetch an on-chain existing creator schema
+  // Fetch an on-chain existing creator schema -- commented out for now
   // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
 
   const creatorSchema = {
@@ -83,7 +102,9 @@ async function main(signer: RawSigner) {
   });
 
   // @ts-ignore
-  let creatorObjectID = moveCallTxn2.effects.effects.created[0].reference.objectId as string;
+  let creatorObjectID: string = moveCallTxn2.effects.effects.created.find(
+    (object: CreatedObject) => object.owner == 'Shared'
+  )?.reference.objectId;
 
   // ======= Update Creator object's display data =======
   console.log('Updating creator object...');
@@ -109,9 +130,7 @@ async function main(signer: RawSigner) {
   });
 
   // ======= Claim a package object using our publish-receipt + creator object =======
-  console.log('claiming package object');
-
-  // This fails
+  console.log('Claiming package object...');
 
   const moveCallTxn4 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
@@ -123,9 +142,10 @@ async function main(signer: RawSigner) {
   });
 
   // @ts-ignore
-  let packageObjectID = moveCallTxn4.effects.effects.created[0].reference.objectId as string;
-
-  console.log(packageObjectID);
+  let packageObjectID: string = moveCallTxn2.effects.effects.created.find(
+    // @ts-ignore
+    (object: CreatedObject) => object.owner?.AddressOwner
+  )?.reference.objectId;
 
   // Add some display data for our package object using a package-display schema
 
@@ -162,7 +182,12 @@ async function main(signer: RawSigner) {
     gasBudget: 3000
   });
 
-  console.log(moveCallTxn6);
+  // @ts-ignore
+  let abstractTypeObjectID: string = moveCallTxn6.effects.effects.created.find(
+    (object: CreatedObject) => object.owner == 'Shared'
+  )?.reference.objectId;
+
+  console.log(abstractTypeObjectID);
 
   // Produce a concrete type from our AbstractType
 
