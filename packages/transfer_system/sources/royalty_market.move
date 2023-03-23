@@ -27,20 +27,6 @@ module transfer_system::royalty_market {
         royalty_id: ID
     }
 
-    struct SellOffer<phantom T, phantom C> has key, store {
-        id: UID,
-        price: u64,
-        item_id: ID,
-        seller: address,
-    }
-
-    struct BuyOffer<phantom T, phantom C> has key, store {
-        id: UID,
-        buyer: address,
-        offer: Balance<C>,
-        item_id: Option<ID>,
-    }
-
     struct Key has store, copy, drop {}
 
     struct Witness has drop {}
@@ -48,15 +34,13 @@ module transfer_system::royalty_market {
 
     // ========== Error constants==========
 
-    const ENotItemOwner: u64 = 0;
-    const ERoyaltyCapMismatch: u64 = 1;
-    const ERoyaltyNotFound: u64 = 2;
-    const EItemRoyaltyMismatch: u64 = 3;
-    const EItemIdMismatch: u64 = 1;
+    const ENO_OWNER_AUTHORITY: u64 = 0;
+    const ENO_ROYALTY_AUTHORITY: u64 = 1;
+    const ENO_ROYALTY_FOUND: u64 = 2;
 
     // ========== Other contants ==========
 
-    const BASE_BPS: u16 = 10_000;
+    const BPS_BASE: u16 = 10_000;
 
 
     /// Attaches the royalty (`Royalty`) to an object which uid (`UID`) is passed as a mutable reference.
@@ -65,7 +49,7 @@ module transfer_system::royalty_market {
     /// If a the object is not owned by the transaction sender.
     public fun attach(uid: &mut UID, royalty: Royalty, ctx: &mut TxContext) {
         let auth = tx_authority::begin(ctx);
-        assert!(ownership::is_authorized_by_owner(uid, &auth), ENotItemOwner);
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
         dof::add(uid, Key { }, royalty);
     }
@@ -76,10 +60,10 @@ module transfer_system::royalty_market {
     /// If royalty is not attached before.
     /// If royalty cap and the royalty do not matching IDs
     public fun detach(uid: &mut UID, royalty_cap: &RoyaltyCap): Royalty {
-        assert!(owns_royalty(uid, royalty_cap.royalty_id), EItemRoyaltyMismatch);
+        assert!(owns_royalty(uid, royalty_cap.royalty_id), ENO_ROYALTY_AUTHORITY);
 
         let royalty = dof::remove<Key, Royalty>(uid, Key { });
-        assert!(royalty_cap.royalty_id == object::id(&royalty), ERoyaltyCapMismatch);
+        assert!(royalty_cap.royalty_id == object::id(&royalty), ENO_ROYALTY_AUTHORITY);
 
         royalty
     }
@@ -89,7 +73,7 @@ module transfer_system::royalty_market {
     /// - Aborts
     /// If royalty cap and the royalty do not matching IDs
     public fun destroy(royalty_cap: RoyaltyCap, royalty: Royalty) {
-        assert!(royalty_cap.royalty_id == object::id(&royalty), ERoyaltyCapMismatch);
+        assert!(royalty_cap.royalty_id == object::id(&royalty), ENO_ROYALTY_AUTHORITY);
 
         let Royalty { id: royalty_id, royalty_bps: _, recipient: _ } = royalty;
         object::delete(royalty_id);
@@ -109,6 +93,22 @@ module transfer_system::royalty_market {
         destroy(royalty_cap, royalty)
     }
 
+    public fun transfer_with_coin<C>(uid: &mut UID, source: &mut Coin<C>, new_owner: vector<address>, ctx: &mut TxContext) {
+        let royalty = borrow_royalty(uid);
+
+        // collects the royalty value from the source coin and transfers it to the royalty recipient
+        collect_from_coin(royalty, source, ctx);
+        transfer(uid, new_owner, ctx)
+    }
+
+    public fun transfer_with_balance<C>(uid: &mut UID, source: &mut Balance<C>, new_owner: vector<address>, ctx: &mut TxContext) {
+        let royalty = borrow_royalty(uid);
+
+        // collects the royalty value from the source balance and transfers it to the royalty recipient
+        collect_from_balance(royalty, source, ctx);
+        transfer(uid, new_owner, ctx)
+    }
+
     /// Creates a new royalty (`Royalty`) object and a royalty cap (`RoyaltyCap`) object
     public fun create_royalty_and_cap(royalty_bps: u16, recipient: address, ctx: &mut TxContext):  (Royalty, RoyaltyCap) {
          let royalty = create_royalty(royalty_bps, recipient, ctx);
@@ -116,7 +116,6 @@ module transfer_system::royalty_market {
 
          (royalty, royalty_cap)
     }
-
 
     /// Creates a new royalty (`Royalty`) object
     public fun create_royalty(royalty_bps: u16, recipient: address, ctx: &mut TxContext):  Royalty {
@@ -135,116 +134,6 @@ module transfer_system::royalty_market {
         }
     }
 
-    /// Collects royalty value from balance `Balance` of type `C`
-    /// It then converts it to a coin `Coin` of type `C` and transfers it to the royalty recipient
-    public fun collect_from_balance<C>(royalty: &Royalty, source: &mut Balance<C>, ctx: &mut TxContext) {
-        let value = balance::value(source);
-        let royalty_value = calculate_royalty_value(royalty, value);
-        let royalty_coin = coin::take(source, royalty_value, ctx);
-
-        transfer::transfer(royalty_coin, royalty.recipient)
-    }
-
-    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
-    public fun collect_from_coin<C>(royalty: &Royalty, source: &mut Coin<C>, ctx: &mut TxContext) {
-        let value = coin::value(source);
-        let royalty_value = calculate_royalty_value(royalty, value);
-        let royalty_coin = coin::split(source, royalty_value, ctx);
-
-        transfer::transfer(royalty_coin, royalty.recipient)
-    }
-
-    /// Creates a sell offer for an item of type `T`
-    public fun create_sell_offer<T, C>(uid: &UID, price: u64, seller: Option<address>, ctx: &mut TxContext): SellOffer<T, C> {
-        let seller = extract_sender(seller, ctx);
-        create_sell_offer_(uid, seller, price, ctx)
-    }
-
-    public fun create_sell_offer_<T, C>(uid: &UID, seller: address, price: u64, ctx: &mut TxContext): SellOffer<T, C> {
-        let auth = tx_authority::begin(ctx);
-        let item_id = object::uid_to_inner(uid);
-
-        assert!(ownership::is_authorized_by_owner(uid, &auth), ENotItemOwner);
-
-        SellOffer { id: object::new(ctx), item_id, seller, price }
-    }
-
-    public fun fill_sell_offer<T, C>(uid: &mut UID, offer: &SellOffer<T, C>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
-        let coin = merge_coins(coins);
-        let sell_coin = coin::split(&mut coin, offer.price, ctx);
-
-        // If object has royalty, collect and transfer the royalty value to the recipient
-        if(has_royalty(uid)) {
-            let royalty = borrow_royalty(uid);
-            collect_from_coin(royalty, &mut sell_coin, ctx);
-        };
-
-        // TODO: add marketplace fee collection
-
-
-        // Transfer the remaining sell coin to the seller
-        transfer::transfer(sell_coin, offer.seller);
-
-        // Keep the remainining original coin with the tx sender
-        pay::keep(coin, ctx);
-
-        // TODO: transfer asset to buyer (tx sender)
-    }
-
-    /// Creates a buy offer for an item of type `T`
-    public fun create_buy_offer<T, C>(
-        item_id: Option<ID>, 
-        price: u64, 
-        buyer: Option<address>,
-        coins: vector<Coin<C>>,
-        ctx: &mut TxContext
-    ): BuyOffer<T, C> {
-        let buyer = extract_sender(buyer, ctx);
-        create_buy_offer_(item_id, buyer, price, coins, ctx)
-    }
-
-    public fun create_buy_offer_<T, C>(
-        item_id: Option<ID>, 
-        buyer: address, 
-        price: u64, 
-        coins: vector<Coin<C>>, 
-        ctx: &mut TxContext
-    ): BuyOffer<T, C> {
-        let coin = merge_coins(coins);
-        let offer = coin::into_balance(coin::split(&mut coin, price, ctx));
-
-        pay::keep(coin, ctx);
-
-        BuyOffer { id: object::new(ctx), item_id, buyer, offer }
-    }
-
-    public fun fill_buy_offer<T, C>(uid: &mut UID, offer: &mut BuyOffer<T, C>, ctx: &mut TxContext) {
-        let auth = tx_authority::begin(ctx);
-        assert!(ownership::is_authorized_by_owner(uid, &auth), ENotItemOwner);
-
-        if(option::is_some(&offer.item_id)) {
-            assert!(object::uid_as_inner(uid) == option::borrow(&offer.item_id), EItemIdMismatch)
-        };
-
-        let offer_value = balance::value(&offer.offer);
-        let buy_coin = coin::take(&mut offer.offer, offer_value, ctx);
-
-        // If object has royalty, collect and transfer the royalty value to the recipient
-        if(has_royalty(uid)) {
-            let royalty = borrow_royalty(uid);
-            collect_from_coin(royalty, &mut buy_coin, ctx);
-        };
-
-        // TODO: add marketplace fee collection
-
-
-        // Transfer the remaining buy coin to the seller (tx sender)
-        pay::keep(buy_coin, ctx);
-
-        // TODO: transfer asset to buyer (offer.buyer)
-    }
-
-
     // ==================== Getter function =====================
 
     public fun royalty_id(royalty: &Royalty): ID {
@@ -253,7 +142,7 @@ module transfer_system::royalty_market {
 
     /// Returns whether an object which uid `UID` reference is passed owns the royalty whose id `ID` is passed
     public fun owns_royalty(uid: &UID, royalty_id: ID): bool {
-        assert!(dof::exists_(uid, Key { }), ERoyaltyNotFound);
+        assert!(dof::exists_(uid, Key { }), ENO_ROYALTY_FOUND);
 
         let royalty = dof::borrow<Key, Royalty>(uid, Key { });
         object::id(royalty) == royalty_id
@@ -265,14 +154,41 @@ module transfer_system::royalty_market {
     }
 
     public fun borrow_royalty(uid: &UID): &Royalty {
-        assert!(dof::exists_(uid, Key { }), ERoyaltyNotFound);
+        assert!(dof::exists_(uid, Key { }), ENO_ROYALTY_FOUND);
         dof::borrow<Key, Royalty>(uid, Key { })
     }
 
+
     // ==================== Helper functions ====================
 
+    public fun transfer(uid: &mut UID, new_owner: vector<address>, ctx: &TxContext) {
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
+
+        ownership::transfer(uid, new_owner, &auth);
+    }
+
+    /// Collects royalty value from balance `Balance` of type `C`
+    /// It then converts it to a coin `Coin` of type `C` and transfers it to the royalty recipient
+    fun collect_from_balance<C>(royalty: &Royalty, source: &mut Balance<C>, ctx: &mut TxContext) {
+        let value = balance::value(source);
+        let royalty_value = calculate_royalty_value(royalty, value);
+        let royalty_coin = coin::take(source, royalty_value, ctx);
+
+        transfer::public_transfer(royalty_coin, royalty.recipient)
+    }
+
+    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
+    fun collect_from_coin<C>(royalty: &Royalty, source: &mut Coin<C>, ctx: &mut TxContext) {
+        let value = coin::value(source);
+        let royalty_value = calculate_royalty_value(royalty, value);
+        let royalty_coin = coin::split(source, royalty_value, ctx);
+
+        transfer::public_transfer(royalty_coin, royalty.recipient)
+    }
+
     fun calculate_royalty_value(royalty: &Royalty, value: u64): u64 {
-        let share = royalty.royalty_bps / BASE_BPS;
+        let share = royalty.royalty_bps / BPS_BASE;
         value * (share as u64)
     }
 
