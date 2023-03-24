@@ -15,18 +15,18 @@ module transfer_system::exchange {
     use ownership::ownership;
     use ownership::tx_authority;
 
-    struct SellOffer<phantom C> has key, store {
+    struct SellOffer<phantom T, phantom C> has key, store {
         id: UID,
         price: u64,
         item_id: ID,
         seller: address,
     }
 
-    struct BuyOffer<phantom C> has key, store {
+    struct BuyOffer<phantom T, phantom C> has key, store {
         id: UID,
-        item_id: ID,
         buyer: address,
-        offer: Balance<C>
+        offer: Balance<C>,
+        item_id: Option<ID>,
     }
 
     struct Witness has drop {}
@@ -34,12 +34,12 @@ module transfer_system::exchange {
     const ENotItemOwner: u64 = 0;
 
     /// Creates a sell offer for an item with royalty
-    public fun create_sell_offer<C>(uid: &UID, price: u64, seller: Option<address>, ctx: &mut TxContext): SellOffer<C> {
+    public fun create_sell_offer<T, C>(uid: &UID, price: u64, seller: Option<address>, ctx: &mut TxContext): SellOffer<T, C> {
         let seller = extract_seller(seller, ctx);
         create_sell_offer_(uid, seller, price, ctx)
     }
 
-    public fun create_sell_offer_<C>(uid: &UID, seller: address, price: u64, ctx: &mut TxContext): SellOffer<C> {
+    public fun create_sell_offer_<T, C>(uid: &UID, seller: address, price: u64, ctx: &mut TxContext): SellOffer<T, C> {
         let auth = tx_authority::begin(ctx);
         let item_id = object::uid_to_inner(uid);
 
@@ -48,7 +48,7 @@ module transfer_system::exchange {
         SellOffer { id: object::new(ctx), item_id, seller, price }
     }
 
-    public fun fill_sell_offer<C>(uid: &mut UID, offer: &SellOffer<C>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
+    public fun fill_sell_offer<T, C>(uid: &mut UID, offer: &SellOffer<T, C>, coins: vector<Coin<C>>, ctx: &mut TxContext) {
         let coin = merge_coins(coins);
         let sell_coin = coin::split(&mut coin, offer.price, ctx);
 
@@ -66,6 +66,8 @@ module transfer_system::exchange {
 
         // Keep the remainining original coin with the tx sender
         pay::keep(coin, ctx);
+
+        // TODO: transfer asset to buyer (tx sender)
     }
 
     // ========== Helper functions =========
