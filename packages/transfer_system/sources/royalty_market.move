@@ -140,7 +140,7 @@ module transfer_system::royalty_market {
     public fun collect_from_balance<C>(royalty: &Royalty, source: &mut Balance<C>, ctx: &mut TxContext) {
         let value = balance::value(source);
         let royalty_value = calculate_royalty_value(royalty, value);
-        let royalty_coin = coin::from_balance(balance::split(source, royalty_value), ctx);
+        let royalty_coin = coin::take(source, royalty_value, ctx);
 
         transfer::transfer(royalty_coin, royalty.recipient)
     }
@@ -227,7 +227,7 @@ module transfer_system::royalty_market {
         };
 
         let offer_value = balance::value(&offer.offer);
-        let buy_coin = coin::from_balance(balance::split(&mut offer.offer, offer_value), ctx);
+        let buy_coin = coin::take(&mut offer.offer, offer_value, ctx);
 
         // If object has royalty, collect and transfer the royalty value to the recipient
         if(has_royalty(uid)) {
