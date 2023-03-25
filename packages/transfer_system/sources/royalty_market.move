@@ -99,6 +99,16 @@ module transfer_system::royalty_market {
         object::delete(cap_id);
     }
 
+    /// Detaches and destroys royalty that is attached to an object which uid (`UID`) is passed as a mutable reference.
+    /// 
+    /// - Aborts
+    /// If royalty is not attached before.
+    /// If royalty cap and the royalty do not matching IDs
+    public fun detach_and_destroy(uid: &mut UID, royalty_cap: RoyaltyCap) {
+        let royalty = detach(uid, &royalty_cap);
+        destroy(royalty_cap, royalty)
+    }
+
     /// Creates a new royalty (`Royalty`) object and a royalty cap (`RoyaltyCap`) object
     public fun create_royalty_and_cap(royalty_bps: u16, recipient: address, ctx: &mut TxContext):  (Royalty, RoyaltyCap) {
          let royalty = create_royalty(royalty_bps, recipient, ctx);
