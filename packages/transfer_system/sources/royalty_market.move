@@ -70,15 +70,25 @@ module transfer_system::royalty_market {
         dof::add(uid, Key { }, royalty);
     }
 
-    /// Detaches and deletes royalty that is attached to an object which uid (`UID`) is passed as a mutable reference.
+    /// Detaches royalty that is attached to an object which uid (`UID`) is passed as a mutable reference.
     /// 
     /// - Aborts
     /// If royalty is not attached before.
     /// If royalty cap and the royalty do not matching IDs
-    public fun detach(uid: &mut UID, royalty_cap: RoyaltyCap) {
+    public fun detach(uid: &mut UID, royalty_cap: &RoyaltyCap): Royalty {
         assert!(owns_royalty(uid, royalty_cap.royalty_id), EItemRoyaltyMismatch);
 
         let royalty = dof::remove<Key, Royalty>(uid, Key { });
+        assert!(royalty_cap.royalty_id == object::id(&royalty), ERoyaltyCapMismatch);
+
+        royalty
+    }
+
+    /// Destroys a royalty object and it's royalty cap
+    /// 
+    /// - Aborts
+    /// If royalty cap and the royalty do not matching IDs
+    public fun destroy(royalty_cap: RoyaltyCap, royalty: Royalty) {
         assert!(royalty_cap.royalty_id == object::id(&royalty), ERoyaltyCapMismatch);
 
         let Royalty { id: royalty_id, royalty_bps: _, recipient: _ } = royalty;
