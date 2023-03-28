@@ -1,10 +1,10 @@
 [package]
 name = "SuiUtils"
 version = "0.11.0"
-published-at = "0x6903e3f70a6f3b48de4c9c35b760222f4b7ffd3fdecae976c51cdea251a98625"
+published-at = "0x40506e580de22465de9ec9db204fc0dc4664eb0cf27c1436236d078b77adc714"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "main" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 
 [addresses]
-sui_utils =  "0x6903e3f70a6f3b48de4c9c35b760222f4b7ffd3fdecae976c51cdea251a98625"
+sui_utils =  "0x40506e580de22465de9ec9db204fc0dc4664eb0cf27c1436236d078b77adc714"

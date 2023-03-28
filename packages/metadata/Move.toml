@@ -4,10 +4,10 @@ version = "0.3.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 TransferSystem = { local = "../transfer_system" }
 
 [addresses]
-metadata =  "0xda9c939657391dc29566e67c95a4e91610e85e75"
+metadata =  "0x0"

@@ -2,12 +2,13 @@
 name = "SuiDisplay"
 version = "0.5.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
+published-at = "0xb3bdac7009f029c2ce26bfcbd712f5e6ee4e5b5c06714e6beb36b407c294c786"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 TransferSystem = { local = "../transfer_system" }
 
 [addresses]
-display =  "0xddcad84f0d79d96535f3970fc01150a15bcbc2fd"
+display =  "0xb3bdac7009f029c2ce26bfcbd712f5e6ee4e5b5c06714e6beb36b407c294c786"
