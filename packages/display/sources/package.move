@@ -3,13 +3,14 @@ module display::package {
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
-    use sui::typed_id;
 
     use display::display;
     use display::schema::Schema;
     
     use ownership::ownership;
     use ownership::tx_authority;
+
+    use sui_utils::typed_id;
 
     friend display::creator;
 
