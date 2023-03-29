@@ -180,7 +180,7 @@ module transfer_system::royalty_market {
 
     // ==================== Helper functions ====================
 
-    public fun transfer(uid: &mut UID, new_owner: vector<address>, ctx: &TxContext) {
+    fun transfer(uid: &mut UID, new_owner: vector<address>, ctx: &TxContext) {
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
         assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
@@ -198,12 +198,5 @@ module transfer_system::royalty_market {
         } else {
             tx_context::sender(ctx)
         }
-    }
-
-    fun merge_coins<C>(coins: vector<Coin<C>>): Coin<C> {
-        let coin = vector::pop_back(&mut coins);
-        pay::join_vec(&mut coin, coins);
-
-        coin
     }
 }
