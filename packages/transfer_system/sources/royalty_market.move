@@ -93,6 +93,25 @@ module transfer_system::royalty_market {
         destroy(royalty_cap, royalty)
     }
 
+    /// Collects royalty value from balance `Balance` of type `C`
+    /// It then converts it to a coin `Coin` of type `C` and transfers it to the royalty recipient
+    public fun collect_from_balance<C>(royalty: &Royalty, source: &mut Balance<C>, ctx: &mut TxContext) {
+        let value = balance::value(source);
+        let royalty_value = calculate_royalty_value(royalty, value);
+        let royalty_coin = coin::take(source, royalty_value, ctx);
+
+        transfer::public_transfer(royalty_coin, royalty.recipient)
+    }
+
+    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
+    public fun collect_from_coin<C>(royalty: &Royalty, source: &mut Coin<C>, ctx: &mut TxContext) {
+        let value = coin::value(source);
+        let royalty_value = calculate_royalty_value(royalty, value);
+        let royalty_coin = coin::split(source, royalty_value, ctx);
+
+        transfer::public_transfer(royalty_coin, royalty.recipient)
+    }
+
     public fun transfer_with_coin<C>(uid: &mut UID, source: &mut Coin<C>, new_owner: vector<address>, ctx: &mut TxContext) {
         let royalty = borrow_royalty(uid);
 
@@ -166,25 +185,6 @@ module transfer_system::royalty_market {
         assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
         ownership::transfer(uid, new_owner, &auth);
-    }
-
-    /// Collects royalty value from balance `Balance` of type `C`
-    /// It then converts it to a coin `Coin` of type `C` and transfers it to the royalty recipient
-    fun collect_from_balance<C>(royalty: &Royalty, source: &mut Balance<C>, ctx: &mut TxContext) {
-        let value = balance::value(source);
-        let royalty_value = calculate_royalty_value(royalty, value);
-        let royalty_coin = coin::take(source, royalty_value, ctx);
-
-        transfer::public_transfer(royalty_coin, royalty.recipient)
-    }
-
-    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
-    fun collect_from_coin<C>(royalty: &Royalty, source: &mut Coin<C>, ctx: &mut TxContext) {
-        let value = coin::value(source);
-        let royalty_value = calculate_royalty_value(royalty, value);
-        let royalty_coin = coin::split(source, royalty_value, ctx);
-
-        transfer::public_transfer(royalty_coin, royalty.recipient)
     }
 
     fun calculate_royalty_value(royalty: &Royalty, value: u64): u64 {
