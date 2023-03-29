@@ -180,9 +180,66 @@ async function main(signer: RawSigner) {
     gasBudget: 7000
   });
 
+  let concreteFromAbstractTypeID = getCreatedObjects(moveCallTxn7).AddressOwner[0];
+
   // Claim a Type for our Y00t using our publisher-receipt
+  console.log('Claiming a Type for Y00t...');
+
+  const moveCallTxn8 = await signer.executeMoveCall({
+    packageObjectId: displayPackageID,
+    module: 'type',
+    function: 'define',
+    typeArguments: [`${y00tPackageID}::y00t::Y00t`],
+    arguments: [
+      y00tPublishReceipt,
+      serializeByField(bcs, y00tDefault, y00tSchema),
+      [], // We leave resolvers undefined for now
+      Object.entries(y00tSchema).map(([key, value]) => [key, value])
+    ],
+    gasBudget: 7000
+  });
+
+  let typeObjectID = getCreatedObjects(moveCallTxn8).AddressOwner[0];
 
   // Modify some fields on our Type
+  console.log('Modifying fields on our Y00t Type...');
+
+  // Let's create a new schema, and change to that
+  const y00tSchema2 = {
+    name: 'String',
+    symbol: 'String',
+    description: 'Option<String>',
+    image: 'Url',
+    attributes: 'VecMap'
+  } as const;
+
+  type Y00t2 = JSTypes<typeof y00tSchema2>;
+
+  const y00tDefault2: Y00t2 = {
+    name: 'unknown y00t',
+    symbol: 'Y00T'
+  };
+
+
+      public entry fun set_fields<T>(
+        self: &mut Type<T>,
+        data: vector<vector<u8>>,
+        raw_fields: vector<vector<String>>,
+    ) {
+
+  const moveCallTxn9 = await signer.executeMoveCall({
+    packageObjectId: displayPackageID,
+    module: 'type',
+    function: 'set_fields',
+    typeArguments: [`${y00tPackageID}::y00t::Y00t`],
+    arguments: [
+      typeObjectID,
+      serializeByField(bcs, y00tDefault, y00tSchema),
+      [], // We leave resolvers undefined for now
+      Object.entries(y00tSchema).map(([key, value]) => [key, value])
+    ],
+    gasBudget: 2000
+  });
 
   // Create a Y00t, attaching display data to it
 

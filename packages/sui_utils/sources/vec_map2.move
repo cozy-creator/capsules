@@ -1,12 +1,12 @@
 module sui_utils::vec_map2 {
-    use std::string::{String as UTF8, utf8};
+    use std::string::{String, utf8};
     use std::vector;
     use sui::vec_map::{Self, VecMap};
 
     // This will fail if there is an odd number of entries in the first vector
     // It will also fail if the bytes are not utf8 strings
-    public fun to_string_string_vec_map(bytes: &vector<vector<u8>>): VecMap<UTF8, UTF8> {
-        let output = vec_map::empty<UTF8, UTF8>();
+    public fun to_string_string_vec_map(bytes: &vector<vector<u8>>): VecMap<String, String> {
+        let output = vec_map::empty<String, String>();
         let i = 0;
 
         while (i < vector::length(bytes)) {
