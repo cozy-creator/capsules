@@ -11,10 +11,10 @@ module display::abstract_type {
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
-    use sui::typed_id;
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
+    use sui_utils::typed_id;
     use sui_utils::struct_tag::{Self, StructTag};
 
     use ownership::ownership;

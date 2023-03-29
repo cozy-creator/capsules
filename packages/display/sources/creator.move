@@ -6,7 +6,6 @@ module display::creator {
     use sui::object::{Self, UID};
     use sui::dynamic_field;
     use sui::transfer;
-    use sui::typed_id;
 
     use display::publish_receipt::{Self, PublishReceipt};
     use display::display;
@@ -18,6 +17,7 @@ module display::creator {
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
+    use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
 
     // Error enums
