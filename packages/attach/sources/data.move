@@ -1,8 +1,12 @@
-// ========== Sui's On-Chain Display-Metadata Program ==========
+// ========== Sui's Data-Attaching System ==========
 //
-// On-chain display data is stored in its deserialized state inside of dynamic fields attached to objects.
-// Schemas are root-level objects used to map field-names to types, which is necessary in the deserialization
-// process.
+// Attach supported data-types to arbitrary objects using dynamic fields, and manage access to them
+// using a namespace system. Any module can read from any other module's namespace, but modules can
+// only write to their own namespaces, unless the other module delegates them permission to do so.
+//
+// Native-modules do not require ownership-authority to write to their namespace; they can always
+// produce a &mut UID for their native-objects. On the other hand, Foreign-modules require
+// ownership-authority for writes.
 
 module attach::data {
     use std::string::{Self, String};
@@ -15,8 +19,6 @@ module attach::data {
     use sui::vec_map::{Self, VecMap};
     use sui::url::Url;
 
-    use display::schema::{Self, Schema, Field};
-
     use sui_utils::encode;
     use sui_utils::deserialize;
     use sui_utils::dynamic_field2;
@@ -24,20 +26,13 @@ module attach::data {
     use ownership::ownership;
     use ownership::tx_authority::TxAuthority;
 
-    // Error enums
-    const EINCORRECT_DATA_LENGTH: u64 = 0;
-    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 2;
-    const EINCOMPATIBLE_READER_SCHEMA: u64 = 3;
-    const EINCOMPATIBLE_FALLBACK: u64 = 4;
-    const ENO_MODULE_AUTHORITY: u64 = 5;
-    const ENO_OWNER_AUTHORITY: u64 = 6;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 7;
-    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 8;
-    const EKEY_IS_NOT_OPTIONAL: u64 = 9;
-    const EUNRECOGNIZED_TYPE: u64 = 10;
-    const EVALUE_UNDEFINED: u64 = 11;
+    use attach::schema::{Self, Schema, Field};
 
-    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 12;
+    // Error enums
+    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
+    const EINCORRECT_DATA_LENGTH: u64 = 1;
+    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 2;
+    const EUNRECOGNIZED_TYPE: u64 = 3;
 
     // Key used to store data on an object for a given namespace + key
     struct Key has store, copy, drop { namespace: address, key: String }
@@ -224,13 +219,25 @@ module attach::data {
         fields: &mut vector<vector<String>>,
         default: String
     ): String {
-        let (exists, i) = vector::index_of(&fields, &key);
-        if (!exists) {
+        // Search for `key` in the fields vector
+        let len = vector::length(fields);
+        let (i, j) = (0, len);
+        while (i < len) {
+            let field = vector::borrow(fields, i);
+            if (vector::borrow(field, 0) == &key) {
+                j = i;
+                break;
+            };
+            i = i + 1;
+        };
+
+        // Key was not found
+        if (j == len) {
             return default;
         };
 
-        let value = vector::swap_remove(&mut data, i);
-        let _field = vector::swap_remove(&mut fields, i);
+        let value = vector::swap_remove(data, j);
+        let _field = vector::swap_remove(fields, j);
 
         string::utf8(value)
     }
@@ -242,19 +249,33 @@ module attach::data {
         view(uid, namespace, schema::into_keys(uid, namespace))
     }
 
-    // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
-    // corresponding keys that were queried in order to deserialize the results.
-    //
-    // We don't assert that you have to be using the correct schema, although this will almost certainly abort
-    // if you use the wrong schema.
+    // The response is raw BCS bytes; the client app will need to consult this object's schema for the
+    // specified namespace + specified keys order to deserialize the results.
     public fun view(uid: &UID, namespace: address, keys: vector<String>): vector<u8> {
         let schema = schema::borrow(uid, namespace);
+        let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
+        while (i < len) {
+            vector::append(
+                &mut response,
+                get_bcs_bytes(uid, namespace, *vector::borrow(&keys, i))
+            );
+            i = i + 1;
+        };
+
+        response
+    }
+
+    // Same as above, except we fill in undefined values with the default object's values
+    public fun view_with_default(uid: &UID, default: &UID, namespace: address, keys: vector<String>): vector<u8> {
+        let schema = schema::borrow(uid, namespace);
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
             let key = *vector::borrow(&keys, i);
-            vector::append(&mut response, get_bcs_bytes(uid, namespace, key));
+            let bytes = get_bcs_bytes(uid, namespace, key);
+            if (bytes == vector[0u8]) bytes = get_bcs_bytes(default, namespace, key);
+            vector::append(&mut response, bytes);
             i = i + 1;
         };
 
@@ -263,126 +284,67 @@ module attach::data {
 
     // Same as above, but vector<vector<u8>> rather than appending all the values into a single vector<u8>
     // This only matters for on-chain responses; for off-chain responses, they'll be appended together anyway
-    public fun view_parsed(uid: &UID, keys: vector<String>, fields: &VecMap<String, Field>): vector<vector<u8>> {
-        let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
+    // public fun view_parsed(uid: &UID, keys: vector<String>, fields: &VecMap<String, Field>): vector<vector<u8>> {
+    //     let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
 
-        while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            vector::push_back(&mut response, view_field_(uid, slot, fields));
-            i = i + 1;
-        };
+    //     while (i < len) {
+    //         let slot = *vector::borrow(&keys, i);
+    //         vector::push_back(&mut response, view_field_(uid, slot, fields));
+    //         i = i + 1;
+    //     };
 
-        response
-    }
+    //     response
+    // }
 
     // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
     // or that the keys  you've specified exist on your suppplied schema. Deserialize these results with the
     // schema you supplied, not with the object's cannonical schema
-    public fun view_field(uid: &UID, slot: String, schema: &Schema): vector<u8> {
-        let (type_maybe, optional_maybe) = schema::get_field(schema, slot);
+    // public fun view_field(uid: &UID, slot: String, schema: &Schema): vector<u8> {
+    //     let (type_maybe, optional_maybe) = schema::get_field(schema, slot);
 
-        if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
-            let type = option::destroy_some(type_maybe);
+    //     if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
+    //         let type = option::destroy_some(type_maybe);
 
-            // We only prepend option-bytes if the key is optional
-            let bytes = if (option::destroy_some(optional_maybe)) { 
-                vector[1u8] // option::is_some
-            } else {
-                vector::empty<u8>()
-            };
+    //         // We only prepend option-bytes if the key is optional
+    //         let bytes = if (option::destroy_some(optional_maybe)) { 
+    //             vector[1u8] // option::is_some
+    //         } else {
+    //             vector::empty<u8>()
+    //         };
 
-            vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
+    //         vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
 
-            bytes
-        } else if (option::is_some(&type_maybe)) {
-            vector[0u8] // option::is_none
-        } else {
-            abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
-        }
-    }
+    //         bytes
+    //     } else if (option::is_some(&type_maybe)) {
+    //         vector[0u8] // option::is_none
+    //     } else {
+    //         abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
+    //     }
+    // }
 
-    public fun view_field_(uid: &UID, slot: String, fields: &VecMap<String, Field>): vector<u8> {
-        if (vec_map::contains(fields, &slot)) {
-            if (!dynamic_field::exists_(uid, Key { slot })) {
-                return vector[0u8] // option::is_none
-            };
+    // public fun view_field_(uid: &UID, slot: String, fields: &VecMap<String, Field>): vector<u8> {
+    //     if (vec_map::contains(fields, &slot)) {
+    //         if (!dynamic_field::exists_(uid, Key { slot })) {
+    //             return vector[0u8] // option::is_none
+    //         };
 
-            let field = vec_map::get(fields, &slot);
-            let (type, optional) = schema::field_into_components(field);
+    //         let field = vec_map::get(fields, &slot);
+    //         let (type, optional) = schema::field_into_components(field);
 
-            // We only prepend option-bytes if the key is optional
-            let bytes = if (optional) { 
-                vector[1u8] // option::is_some
-            } else {
-                vector::empty<u8>()
-            };
+    //         // We only prepend option-bytes if the key is optional
+    //         let bytes = if (optional) { 
+    //             vector[1u8] // option::is_some
+    //         } else {
+    //             vector::empty<u8>()
+    //         };
 
-            vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
+    //         vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
 
-            bytes
-        } else {
-            abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
-        }
-    }
-
-    // Query all keys specified inside of `reader_schema`
-    // Note that the reader_schema and the object's own schema must be compatible, in the sense that any key
-    // overlaps are the same type.
-    // Maybe we could take into account optionality or do some sort of type coercian to relax this compatability
-    // requirement? I.e., turn a u8 into a u64
-    public fun view_with_reader_schema(
-        uid: &UID,
-        reader_schema: &Schema,
-        object_schema: &Schema
-    ): vector<u8> {
-        assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
-        assert!(schema::equals_(object_schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-
-        let (reader_fields, i, keys) = (schema::get_fields(reader_schema), 0, vector::empty<String>());
-
-        while (i < vec_map::size(&reader_fields)) {
-            let (key, _) = vec_map::get_entry_by_idx(&reader_fields, i);
-            vector::push_back(&mut keys, *key);
-            i = i + 1;
-        };
-
-        view(uid, keys, object_schema)
-    }
-
-    public fun view_all_with_default(
-        uid: &UID,
-        fallback: &UID,
-        schema: &Schema
-    ): vector<u8> {
-        view_with_default(uid, fallback, schema::into_keys(schema), schema)
-    }
-
-    // If the fallback object uses a schema that is not compatible with the object's schema,
-    // this may abort if one of the keys is undefined on the main-object, but defined on the fallback object
-    // and of a different type
-    public fun view_with_default(
-        uid: &UID,
-        fallback: &UID,
-        keys: vector<String>,
-        schema: &Schema,
-    ): vector<u8> {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-
-        let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-
-        while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            let res = view_field(uid, slot, schema);
-            if (res != vector[0u8]) {
-                vector::append(&mut response, view_field(uid, slot, schema));
-            } else {
-                vector::append(&mut response, view_field(fallback, slot, schema));
-            };
-            i = i + 1;
-        };
-
-        response
-    }
+    //         bytes
+    //     } else {
+    //         abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
+    //     }
+    // }
 
     // ============ (de)serializes objects ============ 
 
@@ -399,7 +361,7 @@ module attach::data {
         value: vector<u8>,
         overwrite: bool
     ) {
-        if (!string::is_empty(old_type) && old_type != type_string) {
+        if (!string::is_empty(&old_type) && old_type != type_string) {
             // Type is changing; drop the old field
             drop_field(uid, key, old_type);
         };
@@ -416,6 +378,8 @@ module attach::data {
                 return
             };
         };
+
+        let i = 0;
 
         if (type == b"address") {
             let (addr, _) = deserialize::address_(&value, i);
@@ -554,58 +518,58 @@ module attach::data {
         let type = *string::bytes(&type_string);
 
         if (type == b"address") {
-            dynamic_field2::drop<Key, address>(uid, key);
+            dynamic_field2::drop<T, address>(uid, key);
         } 
         else if (type == b"bool") {
-            dynamic_field2::drop<Key, bool>(uid, key);
+            dynamic_field2::drop<T, bool>(uid, key);
         } 
         else if (type == b"id") {
-            dynamic_field2::drop<Key, ID>(uid, key);
+            dynamic_field2::drop<T, ID>(uid, key);
         } 
         else if (type == b"u8") {
-            dynamic_field2::drop<Key, u8>(uid, key);
+            dynamic_field2::drop<T, u8>(uid, key);
         } 
         else if (type == b"u64") {
-            dynamic_field2::drop<Key, u64>(uid, key);
+            dynamic_field2::drop<T, u64>(uid, key);
         } 
         else if (type == b"u128") {
-            dynamic_field2::drop<Key, u128>(uid, key);
+            dynamic_field2::drop<T, u128>(uid, key);
         } 
         else if (type == b"String") {
-            dynamic_field2::drop<Key, String>(uid, key);
+            dynamic_field2::drop<T, String>(uid, key);
         }
         else if (type == b"Url") {
-            dynamic_field2::drop<Key, Url>(uid, key);
+            dynamic_field2::drop<T, Url>(uid, key);
         } 
         else if (type == b"vector<address>") {
-            dynamic_field2::drop<Key, vector<address>>(uid, key);
+            dynamic_field2::drop<T, vector<address>>(uid, key);
         }
         else if (type == b"vector<bool>") {
-            dynamic_field2::drop<Key, vector<bool>>(uid, key);
+            dynamic_field2::drop<T, vector<bool>>(uid, key);
         }
         else if (type == b"vector<id>") {
-            dynamic_field2::drop<Key, vector<ID>>(uid, key);
+            dynamic_field2::drop<T, vector<ID>>(uid, key);
         }
         else if (type == b"vector<u8>") {
-            dynamic_field2::drop<Key, vector<u8>>(uid, key);
+            dynamic_field2::drop<T, vector<u8>>(uid, key);
         }
         else if (type == b"vector<u64>") {
-            dynamic_field2::drop<Key, vector<u64>>(uid, key);
+            dynamic_field2::drop<T, vector<u64>>(uid, key);
         }
         else if (type == b"vector<u128>") {
-            dynamic_field2::drop<Key, vector<u128>>(uid, key);
+            dynamic_field2::drop<T, vector<u128>>(uid, key);
         }
         else if (type == b"vector<String>") {
-            dynamic_field2::drop<Key, vector<String>>(uid, key);
+            dynamic_field2::drop<T, vector<String>>(uid, key);
         }
         else if (type == b"vector<Url>") {
-            dynamic_field2::drop<Key, vector<Url>>(uid, key);
+            dynamic_field2::drop<T, vector<Url>>(uid, key);
         }
         else if (type == b"VecMap") {
-            dynamic_field2::drop<Key, VecMap<String, String>>(uid, key);
+            dynamic_field2::drop<T, VecMap<String, String>>(uid, key);
         }
         else if (type == b"vector<VecMap>") {
-            dynamic_field2::drop<Key, vector<VecMap<String, String>>>(uid, key);
+            dynamic_field2::drop<T, vector<VecMap<String, String>>>(uid, key);
         }
         else {
             abort EUNRECOGNIZED_TYPE
@@ -614,11 +578,14 @@ module attach::data {
 
     // If we get dynamic_field::get_bcs_bytes we can simplify this down into 2 or 3 lines
     public fun get_bcs_bytes(uid: &UID, namespace: address, key: String): vector<u8> {
-        let key = Key { namespace, key };
-        assert!(dynamic_field::exists_(uid, key), EVALUE_UNDEFINED);
-
         let type_maybe = schema::get_type(uid, namespace, key);
+        // if (option::is_none(type_maybe)) {
+        //     return vector[0u8]; // option::none in BCS
+        // }
+        // we might want to append vector[1u8] as option::some here
         let type = *string::bytes(&option::destroy_some(type_maybe));
+
+        let key = Key { namespace, key };
 
         if (type == b"address") {
             let addr = dynamic_field::borrow<Key, address>(uid, key);

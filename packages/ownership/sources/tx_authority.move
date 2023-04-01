@@ -3,16 +3,14 @@
 // carefully guard access to it, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
-    use std::address;
     use std::string::{Self, String};
-    use std::hash;
     use std::vector;
 
     use sui::bcs;
+    use sui::hash;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
 
-    use sui_utils::vector2;
     use sui_utils::encode;
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";

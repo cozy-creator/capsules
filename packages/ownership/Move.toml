@@ -1,12 +1,20 @@
 [package]
 name = "Ownership"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 published-at = "0x6d203c00a02630cc8f9094e8381fb2881fbcfa3227bc9851c84d42b08dfbfc89"
 
 [dependencies]
+<<<<<<< HEAD
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 
 [addresses]
 ownership = "0x6d203c00a02630cc8f9094e8381fb2881fbcfa3227bc9851c84d42b08dfbfc89"
+=======
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "82c9c80" }
+SuiUtils = { local = "../sui_utils" }
+
+[addresses]
+ownership = "0x0"
+>>>>>>> b57e302 (sui-framework moved; updated some of the Move.toml files to reference the new location. Also looks like you can no longer reference branches, only commit-hashes)

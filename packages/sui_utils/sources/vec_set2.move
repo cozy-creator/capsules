@@ -8,7 +8,7 @@ module sui::vec_set2 {
     /// All operations are O(N) in the size of the set--the intention of this data structure is only to provide
     /// the convenience of programming against a set API.
     /// Sets that need sorted iteration rather than insertion order iteration should be handwritten.
-    struct VecSet2<K: copy + drop> has store, copy, drop {
+    struct VecSet<K: copy + drop> has store, copy, drop {
         contents: vector<K>,
     }
 
@@ -24,7 +24,7 @@ module sui::vec_set2 {
 
     /// Insert a `key` into self. Does nothing if the key is already present
     public fun add<K: copy + drop>(self: &mut VecSet<K>, key: K) {
-        if (option::is_none(&get_index(self, &key))) {
+        if (option::is_none(&get_index(self, key))) {
             vector::push_back(&mut self.contents, key);
         };
     }
@@ -48,7 +48,7 @@ module sui::vec_set2 {
     public fun get_index<K: copy + drop>(self: &VecSet<K>, key: K): Option<u64> {
         let i = 0;
         while (i < size(self)) {
-            if (vector::borrow(&self.contents, i) == key) {
+            if (vector::borrow(&self.contents, i) == &key) {
                 return option::some(i)
             };
             i = i + 1;

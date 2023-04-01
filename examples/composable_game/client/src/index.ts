@@ -90,6 +90,7 @@ async function create(
   return moveCallTxn;
 }
 
+// TO DO: we need to figure out how to deserialize these responses...
 async function read(carrierObjectID: string) {
   const tx = new TransactionBlock();
 
@@ -104,6 +105,8 @@ async function read(carrierObjectID: string) {
   const moveCallTxn = await getSigner(ENV_PATH).then(signer =>
     signer.devInspectTransactionBlock({ transactionBlock: tx })
   );
+
+  console.log(moveCallTxn);
 
   return moveCallTxn;
 }

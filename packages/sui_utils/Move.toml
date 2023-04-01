@@ -4,7 +4,14 @@ version = "0.11.0"
 published-at = "0x40506e580de22465de9ec9db204fc0dc4664eb0cf27c1436236d078b77adc714"
 
 [dependencies]
+<<<<<<< HEAD
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 
 [addresses]
 sui_utils =  "0x40506e580de22465de9ec9db204fc0dc4664eb0cf27c1436236d078b77adc714"
+=======
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "82c9c80" }
+
+[addresses]
+sui_utils =  "0x0"
+>>>>>>> b57e302 (sui-framework moved; updated some of the Move.toml files to reference the new location. Also looks like you can no longer reference branches, only commit-hashes)
