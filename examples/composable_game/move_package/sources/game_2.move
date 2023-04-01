@@ -1,8 +1,8 @@
 module composable_game::aircraft {
-
-    // Owned object. Owned by a player
+    // Owned object. Owned by a player. Stackable
     struct Aircraft has key, store {
-        id: UID
+        id: UID,
+        quantity: u64
     }
 
     // Shared, root-level object. Owned by the game-master

@@ -4,7 +4,7 @@
 // Schemas are root-level objects used to map field-names to types, which is necessary in the deserialization
 // process.
 
-module display::display {
+module attach::data {
     use std::string::{Self, String};
     use std::option::{Self, Option};
     use std::vector;
@@ -37,221 +37,209 @@ module display::display {
     const EUNRECOGNIZED_TYPE: u64 = 10;
     const EVALUE_UNDEFINED: u64 = 11;
 
-    struct SchemaID has store, copy, drop { } // vector<u8>, the ID of an external schema
-    struct Key has store, copy, drop { slot: String }
+    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 12;
 
-    // `data` is an array of BCS-serialized values. Such as [ [3, 0, 0, 0], [2, 99, 100] ]
-    // All variable-length types are prepended with a ULEB18 length. The Schema object is
-    // needed to deserialize the data.
-    public fun attach(uid: &mut UID, data: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
-        dynamic_field::add(uid, SchemaID { }, schema::get_hash_id(schema));
-        attach_(uid, data, schema::get_fields(schema), auth);
+    // Key used to store data on an object for a given namespace + key
+    struct Key has store, copy, drop { namespace: address, key: String }
+
+    // Convenience function
+    public fun set<Namespace, T: store + copy + drop>(
+        uid: &mut UID,
+        keys: vector<String>,
+        values: vector<T>,
+        auth: &TxAuthority
+    ) {
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        set_(uid, namespace_addr, key, value, auth);
     }
 
-    // If you attach dispay-data directly without storing a schema ID, it's up to the client to
-    // understand which fields exist and what their value-types are
-    public fun attach_(uid: &mut UID, data: vector<vector<u8>>, fields: VecMap<String, Field>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+    // Because of the ergonomics of Sui, all values added must be the same Type. If you have to add mixed types,
+    // like u64's and Strings, that will require two separate calls.
+    public fun set_<T: store + copy + drop>(
+        uid: &mut UID,
+        namespace: address,
+        keys: vector<String>,
+        values: vector<T>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
+
+        let type = schema::simple_type_name<T>();
+        let old_types_to_drop = schema::update_object_schema_(uid, namespace, keys, type);
 
         let i = 0;
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, optional) = schema::field_into_components(field);
-            let value = *vector::borrow(&data, i);
+        while (i < vector::length(&fields)) {
+            let key = *vector::borrow(&keys, i);
+            let old_type = vector::borrow(&old_types_to_drop, i);
 
-            set_field(uid, Key { slot: *key }, type, optional, value, true);
+            set_field(uid, Key { namespace, key }, type, old_type, value, true);
             i = i + 1;
         };
     }
 
-    // If `overwrite_existing` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
-    // data will only be written if (1) it is missing, or (2) if the existing data is of the wrong type.
-    // This is strict on keys, in the sense that if you specify keys that do not exist on the schema, this
-    // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
-    public fun update(
+    // Convenience function
+    public fun deserialize_and_set<Namespace>(
         uid: &mut UID,
-        keys: vector<String>,
         data: vector<vector<u8>>,
-        schema: &Schema,
-        overwrite_existing: bool,
+        fields: vector<vector<String>>,
         auth: &TxAuthority
     ) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
-        assert!(vector::length(&keys) == vector::length(&data), EINCORRECT_DATA_LENGTH);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        deserialize_and_set_(uid, namespace_addr, data, fields, auth);
+    }
+
+    // This is a powerful function that allows client applications to serialize arbitrary objects
+    // (that consist of supported primitive types), submit them as a transaction, then deserialize +
+    // attach all fields to an arbitrary object with a single function call. This is part of our Sui ORM
+    // system.
+    public fun deserialize_and_set_(
+        uid: &mut UID,
+        namespace: address,
+        data: vector<vector<u8>>,
+        fields: vector<vector<String>>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(vector::length(&data) == vector::length(&fields), EINCORRECT_DATA_LENGTH);
+        
+        let old_types_to_drop = schema::update_object_schema(uid, namespace, fields);
+
+        let i = 0;
+        while (i < vector::length(&fields)) {
+            let field = vector::borrow(&fields, i);
+            let key = *vector::borrow(field, 0);
+            let type = schema::parse_type_string(vector::borrow(field, 1));
+            let old_type = vector::borrow(&old_types_to_drop, i);
+
+            set_field(uid, Key { namespace, key }, type, old_type, value, true);
+            i = i + 1;
+        };
+    }
+
+    public fun remove<T: store + copy + drop>(
+        uid: &mut UID,
+        namespace: address,
+        keys: vector<String>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+
+        let old_types = schema::remove(uid, namespace, keys);
 
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
-            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
-            let value = *vector::borrow(&data, i);
+            let old_type = vector::borrow(&old_types, i);
 
-            set_field(
-                uid,
-                Key { slot: key },
-                option::destroy_some(type_maybe),
-                option::destroy_some(optional_maybe),
-                value,
-                overwrite_existing);
+            if (!string::is_empty(old_type)) {
+                drop_field(uid, key, old_type);
+            };
+
             i = i + 1;
         };
     }
 
-    // Useful if you want to borrow / borrow_mut but want to avoid an abort in case the value doesn't exist
-    public fun exists_(uid: &UID, key: String): bool {
-        dynamic_field::exists_(uid, Key { slot: key } )
-    }
+    public fun remove_all<T: store + copy + drop>(
+        uid: &mut UID,
+        namespace: address,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-    public fun exists_with_type<T: store>(uid: &UID, key: String): bool {
-        dynamic_field::exists_with_type<Key, T>(uid, Key { slot: key } )
-    }
-
-    // We allow any metadata field to be read without any permission. T must be correct, otherwise this will abort
-    public fun borrow<T: store>(uid: &UID, key: String): &T {
-        dynamic_field::borrow<Key, T>(uid, Key { slot: key } )
-    }
-
-    // For atomic updates (like incrementing a counter) use this rather than an `overwrite` to ensure no
-    // writes are lost. `T` must be the type corresponding to the schema, and the value must be defined, or
-    // this will abort
-    public fun borrow_mut<T: store>(uid: &mut UID, key: String, auth: &TxAuthority): &mut T {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-
-        dynamic_field::borrow_mut<Key, T>(uid, Key { slot: key } )
-    }
-
-    // You can accomplish this by using `overwrite` with option bytes set to 0 (none) for all keys you
-    // want to remove, but this function exists for convenience
-    public fun delete_optional(uid: &mut UID, keys: vector<String>, schema: &Schema, auth: &TxAuthority) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
+        let (keys, types) = schema::remove_all(uid, namespace, keys);
 
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
-            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
-            if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
+            let type = vector::borrow(&types, i);
 
-            drop_field(uid, Key { slot: key }, option::destroy_some(type_maybe));
+            drop_field(uid, key, type);
+
             i = i + 1;
         };
     }
-    
-    // Wipes all metadata, including the schema. This allows you to start from scratch again using a new
-    // schema and new data using attach().
-    public fun detach(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
 
-        let (i, fields) = (0, schema::get_fields(schema));
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _) = schema::field_into_components(field);
+    // ===== Accessor Functions =====
 
-            drop_field(uid, Key { slot: *key }, type);
-            i = i + 1;
-        };
-
-        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
+    public fun exists_(uid: &UID, namespace: address, key: String): bool {
+        dynamic_field::exists_(uid, Key { namespace, key })
     }
 
-    // Moves from old-schema -> new-schema.
-    // Keys and data act as fill-ins; i.e., if there is already a value at 'name' of the type specified in
-    // new_schema, then the old view will be left in place. However, if the value is missing, or if the type
-    // is different from the one specified in new_schema, the data will be used to fill it in.
-    // You must supply [keys, data] for (1) any new fields, (2) any fields that were optional but are now
-    // mandatory and are missing on this object, and (3) any fields whose types are changing in the new
-    // schema
-    public fun migrate(
+    // Hint: use schema::get_type(uid, namespace, key) to get the type of the value as an Option<String>.
+    public fun exists_with_type<T>(uid: &UID, namespace: address, key: String): bool {
+        dynamic_field::exists_with_type<Key, T>(uid, Key { namespace, key })
+    }
+
+    // Requires no namespace authorization; any module can read any value. We chose to do this for reads to
+    // encourage composability between projects, rather than keeping data private between namespaces.
+    // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
+    // will abort.
+    public fun borrow<T: store>(uid: &UID, namespace: address, key: String): &T {
+        dynamic_field::borrow<Key, T>(uid, Key { namespace, key })
+    }
+
+    // Requires namespace authority to write.
+    // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
+    // will abort.
+    public fun borrow_mut<T: store>(uid: &mut UID, namespace: address, key: String, auth: &TxAuthority): &mut T {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+
+        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
+    }
+
+    // Ensures that the specified value exists and is of the specified type by filling it with the default value
+    // if it does not.
+    public fun borrow_mut_fill<T: store + drop>(
         uid: &mut UID,
-        old_schema: &Schema,
-        new_schema: &Schema,
-        keys: vector<String>,
-        data: vector<vector<u8>>,
-        auth: &TxAuthority
-    ) {
-        assert!(schema::equals_(old_schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
-
-        // Drop all of the old_schema's fields which no longer exist in the new schema
-        let fields = schema::difference(old_schema, new_schema);
-        let i = 0;
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _) = schema::field_into_components(field);
-            drop_field(uid, Key { slot: *key }, type);
-        };
-
-        // Drop any of the fields whose types are changing
-        let new_fields = schema::get_fields(new_schema);
-        let i = 0;
-        while (i < vec_map::size(&new_fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (type, _) = schema::field_into_components(field);
-            let (old_type_maybe, _) = schema::get_field(old_schema, *key);
-            if (option::is_some(&old_type_maybe)) {
-                let old_type = option::destroy_some(old_type_maybe);
-                if (old_type != type) drop_field(uid, Key { slot: *key }, old_type);
-            };
-            i = i + 1;
-        };
-
-        dynamic_field2::set(uid, SchemaID { }, schema::get_hash_id(new_schema));
-
-        // Fill-in all the newly supplied values
-        update(uid, keys, data, new_schema, false, auth);
-
-        // Check to make sure that all required fields are defined
-        let i = 0;
-        while (i < vec_map::size(&new_fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (_, optional) = schema::field_into_components(field);
-            if (!optional) {
-                assert!(dynamic_field::exists_(uid, Key { slot: *key }), EMISSING_VALUES_NEEDED_FOR_MIGRATION);
-            };
-            i = i + 1;
-        };
-    }
-
-    // ====== Manual Editing of Fields ======
-    // Instead of using a stored schema ID, you can operate on the fields directly using your own
-    // fields. It's up to the application to properly track fields that exist and their types.
-
-    public fun set_field_manually(
-        uid: &mut UID,
+        namespace: address,
         key: String,
-        value: vector<u8>,
-        new_field: Field,
-        old_field: Option<Field>,
+        default: T,
         auth: &TxAuthority
-    ) {
-        assert_valid_ownership(uid, auth);
+    ): T {
+        assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-        if (option::is_some(&old_field)) {
-            let (type, _) = schema::field_into_components(&option::destroy_some(old_field));
-            drop_field(uid, Key { slot: key }, type);
+        if (!exists_with_type<Key, T>(uid, namespace, key)) {
+            set(uid, namespace, vector[key], vector[default], auth);
         };
 
-        let (type, optional) = schema::field_into_components(&new_field);
-        set_field(uid, Key { slot: key }, type, optional, value, true);
+        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
 
-    public fun remove_field_manually(uid: &mut UID, key: String, old_field: Field, auth: &TxAuthority) {
-        assert_valid_ownership(uid, auth);
+    // ==== Specialty Functions ====
 
-        let (type, _) = schema::field_into_components(&old_field);
-        drop_field(uid, Key { slot: key }, type);
+    // Note that this changes the ordering of the fields in `data` and `fields`, which
+    // shouldn't matter to the function calling this, because data[x] still corresponds to
+    // fields[x] for all values of x.
+    //
+    // It's impossible to implement a general 'deserialize_and_take_field' function in Sui, because Move
+    // must know all types statically at compile-time; types cannot vary at runtime. That's why this
+    // is limited to only String types. We plan to create a native function within Sui that
+    // allows for general deserialization of primitive types, like:
+    //      deserialize<T>(data: vector<u8>): T
+    // But until something like that exists, we're limited.
+    public fun deserialize_and_take_string(
+        key: String,
+        data: &mut vector<vector<u8>>,
+        fields: &mut vector<vector<String>>,
+        default: String
+    ): String {
+        let (exists, i) = vector::index_of(&fields, &key);
+        if (!exists) {
+            return default;
+        };
+
+        let value = vector::swap_remove(&mut data, i);
+        let _field = vector::swap_remove(&mut fields, i);
+
+        string::utf8(value)
     }
 
-    // ============= devInspect (view) Functions ============= 
+    // ============= devInspect (view) Functions =============
 
     // This is the same as calling `view` with all the keys in its schema
-    public fun view_all(uid: &UID, schema: &Schema): vector<u8> {
-        view(uid, schema::into_keys(schema), schema)
+    public fun view_all(uid: &UID, namespace: address): vector<u8> {
+        view(uid, namespace, schema::into_keys(uid, namespace))
     }
 
     // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
@@ -259,13 +247,14 @@ module display::display {
     //
     // We don't assert that you have to be using the correct schema, although this will almost certainly abort
     // if you use the wrong schema.
-    public fun view(uid: &UID, keys: vector<String>, schema: &Schema): vector<u8> {
-        // assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+    public fun view(uid: &UID, namespace: address, keys: vector<String>): vector<u8> {
+        let schema = schema::borrow(uid, namespace);
+
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            vector::append(&mut response, view_field(uid, slot, schema));
+            let key = *vector::borrow(&keys, i);
+            vector::append(&mut response, get_bcs_bytes(uid, namespace, key));
             i = i + 1;
         };
 
@@ -395,59 +384,38 @@ module display::display {
         response
     }
 
-    // ========= Helper Functions ========= 
-
-    // Gets the hash_id of the schema that is bound to this object, if any
-    public fun get_schema_hash_id(uid: &UID): vector<u8> {
-        if (dynamic_field::exists_with_type<SchemaID, vector<u8>>(uid, SchemaID { } )) {
-            *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
-        } else {
-            vector<u8>[]
-        }
-    }
-
-    public fun assert_valid_ownership(uid: &UID, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-    }
-
     // ============ (de)serializes objects ============ 
 
-    // Two of these are private functions only useable within Display so that the schema cannot be bypassed
-    // Aborts if the type is incorrect because the bcs deserialization will fail
+    // Aborts if `type_string` does not match `value` (the binary data) supplied, because the bcs
+    // deserialization will fail
     //
     // Supported types: address, bool, objectID, u8, u16, u32, u64, u128, u256, String (utf8),
     // VecMap<String, String>, Url, and vectors of these types, as well as vector<vector<u8>>
-
-    fun set_field(
+    public fun set_field<T: store + copy + drop>(
         uid: &mut UID,
-        key: Key,
+        key: T,
         type_string: String,
-        optional: bool,
+        old_type: String, // May be an empty string
         value: vector<u8>,
         overwrite: bool
     ) {
+        if (!string::is_empty(old_type) && old_type != type_string) {
+            // Type is changing; drop the old field
+            drop_field(uid, key, old_type);
+        };
+
         let type = *string::bytes(&type_string);
 
         // Empty byte-arrays are treated as undefined
         if (vector::length(&value) == 0) {
-            if (optional) {
+            // These types are allowed to be empty arrays and still count as being "defined"
+            if ( type == b"String" || type == b"VecMap" || encode::is_vector(type_string) ) {
+                value = vector[0u8];
+            } else { 
                 drop_field(uid, key, type_string);
                 return
-            // These types are allowed to be empty arrays and still count as being "defined"
-            } else if ( type == b"String" || type == b"VecMap" || encode::is_vector(type_string) ) {
-                value = if (optional) { vector[1u8, 0u8] } else { vector[0u8] };
-            } else { abort EKEY_IS_NOT_OPTIONAL };
+            };
         };
-
-        // Field is optional and undefined
-        if (optional && *vector::borrow(&value, 0) == 0u8) {
-            drop_field(uid, key, type_string);
-            return
-        };
-
-        // Index to start deserializing
-        let i = if (optional) { 1 } else { 0 };
 
         if (type == b"address") {
             let (addr, _) = deserialize::address_(&value, i);
@@ -582,7 +550,7 @@ module display::display {
     // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
     // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
     // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
-    fun drop_field(uid: &mut UID, key: Key, type_string: String) {
+    public fun drop_field<T: store + copy + drop>(uid: &mut UID, key: T, type_string: String) {
         let type = *string::bytes(&type_string);
 
         if (type == b"address") {
@@ -645,11 +613,12 @@ module display::display {
     }
 
     // If we get dynamic_field::get_bcs_bytes we can simplify this down into 2 or 3 lines
-    public fun get_bcs_bytes(uid: &UID, slot: String, type_string: String): vector<u8> {
-        let key = Key { slot };
+    public fun get_bcs_bytes(uid: &UID, namespace: address, key: String): vector<u8> {
+        let key = Key { namespace, key };
         assert!(dynamic_field::exists_(uid, key), EVALUE_UNDEFINED);
 
-        let type = *string::bytes(&type_string);
+        let type_maybe = schema::get_type(uid, namespace, key);
+        let type = *string::bytes(&option::destroy_some(type_maybe));
 
         if (type == b"address") {
             let addr = dynamic_field::borrow<Key, address>(uid, key);
@@ -730,7 +699,7 @@ module display::display {
 }
 
 #[test_only]
-module display::metadata_tests {
+module attach::data_tests {
     use std::string::{String, utf8};
     use std::vector;
     use std::option;

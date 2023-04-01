@@ -1,0 +1,3 @@
+module attach::inventory {
+    
+}

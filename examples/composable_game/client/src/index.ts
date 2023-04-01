@@ -13,8 +13,9 @@ import {
   SupportedJSTypes,
   SupportedMoveTypes
 } from '../../../../sdk/typescript/src/';
-import { carrierConfigObjectID, carrierPackageID } from './config';
+import { carrierConfigObjectID, carrierPackageID, scriptTxPackageID } from './config';
 import path from 'path';
+import { blake2bHex } from 'blakejs';
 
 const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
@@ -86,8 +87,30 @@ async function create(
   const moveCallTxn = await getSigner(ENV_PATH).then(signer =>
     signer.signAndExecuteTransactionBlock({ transactionBlock: tx })
   );
+  return moveCallTxn;
+}
+
+async function read(carrierObjectID: string) {
+  const tx = new TransactionBlock();
+
+  tx.moveCall({
+    target: `0x${scriptTxPackageID}::script_tx::view_all`,
+    arguments: [
+      tx.object(carrierObjectID),
+      tx.pure(getNamespace(carrierPackageID, 'aircraft_carrier'))
+    ]
+  });
+
+  const moveCallTxn = await getSigner(ENV_PATH).then(signer =>
+    signer.devInspectTransactionBlock({ transactionBlock: tx })
+  );
 
   return moveCallTxn;
+}
+
+// TO DO: check to make sure this is the same as the address generated on-chain
+function getNamespace(packageID: string, moduleName: string): string {
+  return blake2bHex(`${packageID}::${moduleName}::Witness`, undefined, 32);
 }
 
 // // Register the new type `Carrier` to bcs

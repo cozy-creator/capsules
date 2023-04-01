@@ -107,10 +107,10 @@ module ownership::tx_authority {
     }
 
     public fun type_string_into_address(type: String): address {
-        let typename_bytes = bcs::to_bytes(&type);
-        let hashed_typename = hash::sha3_256(typename_bytes);
-        let truncated = vector2::slice(&hashed_typename, 0, address::length());
-        bcs::peel_address(&mut bcs::new(truncated))
+        let typename_bytes = string::bytes(&type);
+        let hashed_typename = hash::blake2b256(typename_bytes);
+        // let truncated = vector2::slice(&hashed_typename, 0, address::length());
+        bcs::peel_address(&mut bcs::new(hashed_typename))
     }
 
     // ========= Module-Signing Witness =========
