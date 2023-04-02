@@ -19,9 +19,9 @@ module display::abstract_type {
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::publish_receipt::{Self, PublishReceipt};
 
     use display::display;
-    use display::publish_receipt::{Self, PublishReceipt};
     use display::schema::{Self, Schema, Field};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;

@@ -2,7 +2,7 @@
 name = "TransferSystem"
 version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
-published-at = "0x3beedd685c7b3f71b379ec77e094aacfd702209496b57de9b3ac1842659603fc"
+published-at = "0x114b8988bb3e083e02bd2bf8e28be47720b68b88a72fb11671b0bb05a960f977"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -10,4 +10,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-transfer_system = "0x3beedd685c7b3f71b379ec77e094aacfd702209496b57de9b3ac1842659603fc"
+transfer_system = "0x114b8988bb3e083e02bd2bf8e28be47720b68b88a72fb11671b0bb05a960f977"
