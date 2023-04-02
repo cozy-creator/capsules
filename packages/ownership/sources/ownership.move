@@ -7,7 +7,6 @@ module ownership::ownership {
 
     use sui_utils::typed_id::{Self, TypedID};
     use sui_utils::struct_tag::{Self, StructTag};
-    use sui_utils::typed_id::{Self, TypedID};
     
     use ownership::tx_authority::{Self, TxAuthority};
 

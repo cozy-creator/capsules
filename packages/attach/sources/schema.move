@@ -115,32 +115,35 @@ module attach::schema {
     }
 
     // ==== Accessor Functions ====
+
+    public fun exists_(uid: &UID, namespace: address): bool {
+        dynamic_field::exists_(uid, Key { namespace })
+    }
     
     public fun borrow(uid: &UID, namespace: address): &VecMap<String, String> {
-        let key = Key { namespace };
-        if (!dynamic_field::exists_(uid, key)) {
-            &vec_map::empty()
-        } else {
-            dynamic_field::borrow<Key, VecMap<String, String>>(uid, Key { namespace })
-        }
+        dynamic_field::borrow<Key, VecMap<String, String>>(uid, Key { namespace })
     }
 
     public fun length(uid: &UID, namespace: address): u64 {
+        if (!exists_(uid, namespace)) { return 0 };
         let schema = borrow(uid, namespace);
         vec_map::size(schema)
     }
 
     public fun into_keys(uid: &UID, namespace: address): vector<String> {
+        if (!exists_(uid, namespace)) { return vector::empty() };
         let schema = borrow(uid, namespace);
         vec_map::keys(schema)
     }
 
     public fun has_key(uid: &UID, namespace: address, key: String): bool {
+        if (!exists_(uid, namespace)) { return false };
         let schema = borrow(uid, namespace);
         vec_map::contains(schema, &key)
     }
 
     public fun get_type(uid: &UID, namespace: address, key: String): Option<String> {
+        if (!exists_(uid, namespace)) { return option::none() };
         let schema = borrow(uid, namespace);
         vec_map2::get_maybe(schema, key)
     }

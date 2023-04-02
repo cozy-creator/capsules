@@ -10,23 +10,22 @@
 
 module attach::data {
     use std::string::{Self, String};
-    use std::option::{Self, Option};
+    use std::option;
     use std::vector;
 
     use sui::bcs::{Self};
     use sui::dynamic_field;
     use sui::object::{UID, ID};
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::VecMap;
     use sui::url::Url;
 
     use sui_utils::encode;
     use sui_utils::deserialize;
     use sui_utils::dynamic_field2;
 
-    use ownership::ownership;
-    use ownership::tx_authority::TxAuthority;
+    use ownership::tx_authority::{Self, TxAuthority};
 
-    use attach::schema::{Self, Schema, Field};
+    use attach::schema;
 
     // Error enums
     const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
@@ -45,12 +44,12 @@ module attach::data {
         auth: &TxAuthority
     ) {
         let namespace_addr = tx_authority::type_into_address<Namespace>();
-        set_(uid, namespace_addr, key, value, auth);
+        set_(uid, namespace_addr, keys, values, auth);
     }
 
     // Because of the ergonomics of Sui, all values added must be the same Type. If you have to add mixed types,
     // like u64's and Strings, that will require two separate calls.
-    public fun set_<T: store + copy + drop>(
+    public fun set_<T: store + drop>(
         uid: &mut UID,
         namespace: address,
         keys: vector<String>,
@@ -63,13 +62,12 @@ module attach::data {
         let type = schema::simple_type_name<T>();
         let old_types_to_drop = schema::update_object_schema_(uid, namespace, keys, type);
 
-        let i = 0;
-        while (i < vector::length(&fields)) {
-            let key = *vector::borrow(&keys, i);
-            let old_type = vector::borrow(&old_types_to_drop, i);
+        while (vector::length(&keys) > 0) {
+            let key = vector::pop_back(&mut keys);
+            let value = vector::pop_back(&mut values);
+            let old_type = vector::pop_back(&mut old_types_to_drop);
 
-            set_field(uid, Key { namespace, key }, type, old_type, value, true);
-            i = i + 1;
+            set_field_(uid, Key { namespace, key }, type, old_type, value, true);
         };
     }
 
@@ -102,10 +100,10 @@ module attach::data {
 
         let i = 0;
         while (i < vector::length(&fields)) {
-            let field = vector::borrow(&fields, i);
-            let key = *vector::borrow(field, 0);
-            let type = schema::parse_type_string(vector::borrow(field, 1));
-            let old_type = vector::borrow(&old_types_to_drop, i);
+            let field = *vector::borrow(&fields, i);
+            let value = *vector::borrow(&data, i);
+            let (key, type) = schema::parse_field(field);
+            let old_type = *vector::borrow(&old_types_to_drop, i);
 
             set_field(uid, Key { namespace, key }, type, old_type, value, true);
             i = i + 1;
@@ -125,9 +123,9 @@ module attach::data {
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let old_type = vector::borrow(&old_types, i);
+            let old_type = *vector::borrow(&old_types, i);
 
-            if (!string::is_empty(old_type)) {
+            if (!string::is_empty(&old_type)) {
                 drop_field(uid, key, old_type);
             };
 
@@ -142,12 +140,12 @@ module attach::data {
     ) {
         assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-        let (keys, types) = schema::remove_all(uid, namespace, keys);
+        let (keys, types) = schema::remove_all(uid, namespace);
 
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let type = vector::borrow(&types, i);
+            let type = *vector::borrow(&types, i);
 
             drop_field(uid, key, type);
 
@@ -162,7 +160,7 @@ module attach::data {
     }
 
     // Hint: use schema::get_type(uid, namespace, key) to get the type of the value as an Option<String>.
-    public fun exists_with_type<T>(uid: &UID, namespace: address, key: String): bool {
+    public fun exists_with_type<T: store>(uid: &UID, namespace: address, key: String): bool {
         dynamic_field::exists_with_type<Key, T>(uid, Key { namespace, key })
     }
 
@@ -191,11 +189,11 @@ module attach::data {
         key: String,
         default: T,
         auth: &TxAuthority
-    ): T {
+    ): &mut T {
         assert!(tx_authority::is_signed_by(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-        if (!exists_with_type<Key, T>(uid, namespace, key)) {
-            set(uid, namespace, vector[key], vector[default], auth);
+        if (!exists_with_type<T>(uid, namespace, key)) {
+            set_(uid, namespace, vector[key], vector[default], auth);
         };
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
@@ -226,14 +224,14 @@ module attach::data {
             let field = vector::borrow(fields, i);
             if (vector::borrow(field, 0) == &key) {
                 j = i;
-                break;
+                break
             };
             i = i + 1;
         };
 
         // Key was not found
         if (j == len) {
-            return default;
+            return default
         };
 
         let value = vector::swap_remove(data, j);
@@ -252,7 +250,6 @@ module attach::data {
     // The response is raw BCS bytes; the client app will need to consult this object's schema for the
     // specified namespace + specified keys order to deserialize the results.
     public fun view(uid: &UID, namespace: address, keys: vector<String>): vector<u8> {
-        let schema = schema::borrow(uid, namespace);
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
@@ -268,7 +265,6 @@ module attach::data {
 
     // Same as above, except we fill in undefined values with the default object's values
     public fun view_with_default(uid: &UID, default: &UID, namespace: address, keys: vector<String>): vector<u8> {
-        let schema = schema::borrow(uid, namespace);
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
@@ -346,162 +342,166 @@ module attach::data {
     //     }
     // }
 
-    // ============ (de)serializes objects ============ 
+    // ============ (de)serializes objects ============
+    // We choose to keep these functions private so that they can only be modified by going
+    // through one of the above-listed functions, which modify the object's stored schema
 
     // Aborts if `type_string` does not match `value` (the binary data) supplied, because the bcs
     // deserialization will fail
     //
     // Supported types: address, bool, objectID, u8, u16, u32, u64, u128, u256, String (utf8),
     // VecMap<String, String>, Url, and vectors of these types, as well as vector<vector<u8>>
-    public fun set_field<T: store + copy + drop>(
+    fun set_field<T: store + copy + drop>(
         uid: &mut UID,
         key: T,
-        type_string: String,
-        old_type: String, // May be an empty string
+        type: String,
+        old_type: String, // Pass an empty string if this arg is not needed
         value: vector<u8>,
         overwrite: bool
     ) {
-        if (!string::is_empty(&old_type) && old_type != type_string) {
+        if (!string::is_empty(&old_type) && old_type != type) {
             // Type is changing; drop the old field
             drop_field(uid, key, old_type);
         };
 
-        let type = *string::bytes(&type_string);
+        // This is cheaper on gas; we don't have to construct a string every time we do a comparison
+        // to a string literal. Instead we can just compare the string-bytes
+        let type_bytes = *string::bytes(&type);
 
         // Empty byte-arrays are treated as undefined
         if (vector::length(&value) == 0) {
             // These types are allowed to be empty arrays and still count as being "defined"
-            if ( type == b"String" || type == b"VecMap" || encode::is_vector(type_string) ) {
+            if (type_bytes == b"String" || type_bytes == b"VecMap" || encode::is_vector(type) ) {
                 value = vector[0u8];
             } else { 
-                drop_field(uid, key, type_string);
+                drop_field(uid, key, type);
                 return
             };
         };
 
         let i = 0;
 
-        if (type == b"address") {
+        if (type_bytes == b"address") {
             let (addr, _) = deserialize::address_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, addr);
         } 
-        else if (type == b"bool") {
+        else if (type_bytes == b"bool") {
             let (boolean, _) = deserialize::bool_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, boolean);
         } 
-        else if (type == b"id") {
+        else if (type_bytes == b"id") {
             let (object_id, _) = deserialize::id_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, object_id);
         } 
-        else if (type == b"u8") {
+        else if (type_bytes == b"u8") {
             let integer = vector::borrow(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, *integer);
         }
-        else if (type == b"u16") {
+        else if (type_bytes == b"u16") {
             let (integer, _) = deserialize::u16_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"u32") {
+        else if (type_bytes == b"u32") {
             let (integer, _) = deserialize::u32_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"u64") {
+        else if (type_bytes == b"u64") {
             let (integer, _) = deserialize::u64_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"u128") {
+        else if (type_bytes == b"u128") {
             let (integer, _) = deserialize::u128_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"u256") {
+        else if (type_bytes == b"u256") {
             let (integer, _) = deserialize::u256_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, integer);
         } 
-        else if (type == b"String") {
+        else if (type_bytes == b"String") {
             let (string, _) = deserialize::string_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, string);
         }
-        else if (type == b"Url") {
+        else if (type_bytes == b"Url") {
             let (url, _) = deserialize::url_(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, url);
         } 
-        else if (type == b"vector<address>") {
+        else if (type_bytes == b"vector<address>") {
             let (vec, _) = deserialize::vec_address(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<bool>") {
+        else if (type_bytes == b"vector<bool>") {
             let (vec, _) = deserialize::vec_bool(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<id>") {
+        else if (type_bytes == b"vector<id>") {
             let (vec, _) = deserialize::vec_id(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u8>") {
+        else if (type_bytes == b"vector<u8>") {
             let (vec, _) = deserialize::vec_u8(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u16>") {
+        else if (type_bytes == b"vector<u16>") {
             let (vec, _) = deserialize::vec_u16(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u32>") {
+        else if (type_bytes == b"vector<u32>") {
             let (vec, _) = deserialize::vec_u32(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u64>") {
+        else if (type_bytes == b"vector<u64>") {
             let (vec, _) = deserialize::vec_u64(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u128>") {
+        else if (type_bytes == b"vector<u128>") {
             let (vec, _) = deserialize::vec_u128(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<u256>") {
+        else if (type_bytes == b"vector<u256>") {
             let (vec, _) = deserialize::vec_u256(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<vector<u8>>") {
+        else if (type_bytes == b"vector<vector<u8>>") {
             let (vec, _) = deserialize::vec_vec_u8(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec);
         }
-        else if (type == b"vector<String>") {
+        else if (type_bytes == b"vector<String>") {
             let (strings, _) = deserialize::vec_string(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, strings);
         }
-        else if (type == b"vector<Url>") {
+        else if (type_bytes == b"vector<Url>") {
             let (urls, _) = deserialize::vec_url(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, urls);
         }
-        else if (type == b"VecMap") {
+        else if (type_bytes == b"VecMap") {
             let (vec_map, _) = deserialize::vec_map_string_string(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_map);
         }
-        else if (type == b"vector<VecMap>") {
+        else if (type_bytes == b"vector<VecMap>") {
             let (vec_maps, _) = deserialize::vec_vec_map_string_string(&value, i);
             if (overwrite || !dynamic_field::exists_(uid, key))
                 dynamic_field2::set(uid, key, vec_maps);
@@ -511,10 +511,31 @@ module attach::data {
         }
     }
 
+    // Pass in the actual value V, rather than the bytes for value V to deserialize
+    fun set_field_<K: store + copy + drop, V: store + drop>(
+        uid: &mut UID,
+        key: K,
+        type: String,
+        old_type: String,
+        value: V,
+        overwrite: bool
+    ) {
+        if (!overwrite && dynamic_field::exists_(uid, key)) {
+            return
+        };
+
+        if (!string::is_empty(&old_type) && old_type != type) {
+            // Type is changing; drop the old field
+            drop_field(uid, key, old_type);
+        };
+
+        dynamic_field2::set(uid, key, value);
+    }
+
     // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
     // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
     // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
-    public fun drop_field<T: store + copy + drop>(uid: &mut UID, key: T, type_string: String) {
+    fun drop_field<T: store + copy + drop>(uid: &mut UID, key: T, type_string: String) {
         let type = *string::bytes(&type_string);
 
         if (type == b"address") {

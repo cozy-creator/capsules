@@ -1,15 +1,16 @@
-// Sui's On-Chain Type Display Objects
+// Sui's On-Chain Template-system for Displaying Objects
 
-// Type objects are root-level owned objects storing default display data for a given type.
-// Rather than using devInspect transactions along with display::view(), the intention is that the Fullnodes
+// Type objects are root-level owned objects storing default display data for a given type `T`.
+// Rather than using devInspect transactions along with data::view(), the intention is that Sui Fullnodes
 // will handle this all for clients behind the scenes.
 //
-// Type objects act as fallbacks when querying for the display-data of an object. For example, if you're creating
-// a Capsule like 0x599::outlaw_sky::Outlaw, and you have a field on your display schema like 'created_by', which
-// will be  identical for every object, it would be dumb to duplicate this field once for every object (10,000x times).
-// Instead you can leave that field undefined, and define it once on Type<0x599::outlaw_sky::Outlaw>.
-
-// The intent for display object is that they should be owned and maintained by the package-publisher, or frozen.
+// Type objects can also act as fallbacks when querying for the display-data of an object.
+// For example, if you're creating a Capsule like 0x599::outlaw_sky::Outlaw, and you have a dynamic-field for a
+// view-function like 'created_by' that will be identical for every Outlaw, it would be wasteful to duplicate
+// this field once for every object (10,000x times).
+// Instead you can leave that field undefined, and define it once on Display<0x599::outlaw_sky::Outlaw>.
+//
+// The intent for Display objects is that they should be owned and maintained by the package-publisher, or frozen.
 
 module display::display {
     use std::string::String;
@@ -40,10 +41,10 @@ module display::display {
     const ETYPE_ALREADY_DEFINED: u64 = 1;
     const ETYPE_DOES_NOT_MATCH_UID_OBJECT: u64 = 2;
     const ETYPE_IS_NOT_CONCRETE: u64 = 3;
-    const EKEY_UNDEFINED_IN_SCHEMA: u64 = 4;
-    const EVEC_LENGTH_MISMATCH: u64 = 5;
-    const ENO_OWNER_AUTHORITY: u64 = 6;
-    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 7;
+    const EVEC_LENGTH_MISMATCH: u64 = 4;
+    const ENO_OWNER_AUTHORITY: u64 = 5;
+    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 6;
+    const ETYPE_IN_RESOLVER_NOT_SPECIFIED: u64 = 7;
 
     // ========= Concrete Type =========
 
@@ -80,13 +81,10 @@ module display::display {
     // an AbstractDisplay object, which is then used with `define_from_abstract()` to define a concrete type
     // per instance of its generics.
     //
-    // The `resolver_strings` input to this function is work just like the inputs to a Schema, and look like:
+    // The `resolver_strings` input to this function should look like:
     // [ [type, resolver-1, resolver-2], [type, resolver-1], ... ]
-    //
-    // Resolvers can be left undefined, which means that it resolves to object.key; for example, if the key is
-    // `name` then we it will just return `object.name`.
-    //
-    // Multiple resolvers can be defined per key, and they will be tried in order until one returns a value.
+    // We do not enforce any value for 'types' here. The only input-validation we do is to ensure that at
+    // least one string is specified (the type).
     public fun create_<T>(
         publisher: &mut PublishReceipt,
         keys: vector<String>,
@@ -106,7 +104,10 @@ module display::display {
 
         let (i, resolvers) = (0, vec_map::empty());
         while (i < vector::length(&keys)) {
-            vec_map::insert(&mut resolvers, *vector::borrow(key, i), *vector::borrow(&resolver_strings, i));
+            let resolver = *vector::borrow(&resolver_strings, i);
+            assert!(vector::length(&vector::borrow(&resolver, 0)) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
+
+            vec_map::insert(&mut resolvers, *vector::borrow(key, i), resolver);
             i = i + 1;
         };
 

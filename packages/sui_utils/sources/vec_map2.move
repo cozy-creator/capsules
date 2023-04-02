@@ -41,10 +41,10 @@ module sui_utils::vec_map2 {
     public fun get_maybe<K: copy + drop, V: copy>(self: &VecMap<K, V>, key: K): Option<V> {
         let index_maybe = vec_map::get_idx_opt(self, &key);
 
-        if (option::is_some(index_maybe)) {
+        if (option::is_some(&index_maybe)) {
             let index = option::destroy_some(index_maybe);
             let (_, value) = vec_map::get_entry_by_idx(self, index);
-            option::some(value)
+            option::some(*value)
         } else {
             option::none()
         }
