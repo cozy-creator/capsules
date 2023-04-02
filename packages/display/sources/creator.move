@@ -7,13 +7,13 @@ module display::creator {
     use sui::dynamic_field;
     use sui::transfer;
 
-    use display::publish_receipt::{Self, PublishReceipt};
     use display::display;
     use display::package::{Self, Package};
     use display::schema::Schema;
     
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::publish_receipt::{Self, PublishReceipt};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 

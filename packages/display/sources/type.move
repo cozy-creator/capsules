@@ -28,10 +28,10 @@ module display::type {
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::publish_receipt::{Self, PublishReceipt};
 
     use display::display;
     use display::schema::{Self, Schema, Field};
-    use display::publish_receipt::{Self, PublishReceipt};
     use display::abstract_type::{Self, AbstractType};
 
     // error enums

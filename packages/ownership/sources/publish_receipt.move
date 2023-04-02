@@ -6,7 +6,7 @@
 // the same one-time witness, since we do not drop it here. We do this so that the one-time-witness can
 // be used for things like creating a 0x2::coin::create_currency.
 
-module display::publish_receipt {
+module ownership::publish_receipt {
     use sui::object::{Self, ID, UID};
     use sui::tx_context::TxContext;
     use sui::types::is_one_time_witness;
