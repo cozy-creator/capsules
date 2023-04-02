@@ -12,9 +12,18 @@ import util from 'util';
 
 const PRIVATE_KEY_ENV_VAR = 'PRIVATE_KEY';
 
-// Default endpoint is devnet 'https://fullnode.devnet.sui.io:443'
-// https://sui-devnet.artifact.systems:443/
+// Available endpoints:
+// Devnet:
+// https://fullnode.devnet.sui.io:443
+// https://fullnode.devnet.vincagame.com:443/ (has indexer)
 // https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd
+//
+// Testnet:
+//
+// https://testnet.devnet.sui.io:443
+// https://suinode-testnet.belaunch.io/
+// https://sui-testnet.artifact.systems:443/
+// https://fullnode.testnet.vincagame.com:443/
 
 // Build a class to connect to Sui RPC servers
 export const provider = new JsonRpcProvider(
