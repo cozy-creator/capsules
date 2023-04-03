@@ -2,10 +2,11 @@
 name = "Ownership"
 version = "0.2.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
+published-at = "0x6d203c00a02630cc8f9094e8381fb2881fbcfa3227bc9851c84d42b08dfbfc89"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 
 [addresses]
-ownership = "0xac1494adacb65a36257a931aab153c33e9634f22"
+ownership = "0x6d203c00a02630cc8f9094e8381fb2881fbcfa3227bc9851c84d42b08dfbfc89"

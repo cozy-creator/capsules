@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "packages/*", 
+    "examples/**/move_package"
+]
+
+[provider]
+address = "0x2a1b6f57961805c46c21166712aad57095808b18"
+env = "local"
+config = "~/.sui/sui_config/client.yaml"
+
+[envs]
+devnet = { url = "https://fullnode.devnet.vincagame.com:443/" }
+testnet = { url = "https://fullnode.testnet.sui.io/" }
+local = { url = "http://127.0.0.1:9000/" }

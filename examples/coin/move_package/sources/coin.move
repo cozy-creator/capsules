@@ -11,6 +11,7 @@ module sui_examples::coin {
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
     use sui::tx_context;
+    use sui::typed_id;
     use sui::transfer;
     use std::vector;
     use sui::event;
@@ -67,6 +68,8 @@ module sui_examples::coin {
 
     /// Create a new currency type `T` as and return `TreasuryCap<T>` and `Type<T>` metadata
     /// object to the caller.
+    /// Note that the default sui::coin module uses one-time-witnesses to guarantee that these are
+    /// singleton objects, whereas we use abstract types to ensure that Coin<T> is unique per type `T`.
     public fun create_currency<T: drop>(
         witness: T,
         abstract_type: &mut AbstractType,
@@ -97,13 +100,12 @@ module sui_examples::coin {
 
         let schema_fields = ascii2::vec_bytes_to_vec_strings(METADATA_SCHEMA);
         let schema = schema::create_(schema_fields, ctx);
-        let schema_id = schema::into_schema_id(&schema);
-        schema::return_and_freeze(schema);
 
-        let owner = tx_authority::type_into_address<Witness>();
+        let witness = tx_authority::type_into_address<Witness>();
+        let sender = tx_context::sender(ctx);
 
-        abstract_type::create<Coin<Witness>>(&mut receipt, option::some(owner), schema_id, ctx);
-        transfer::transfer(receipt, tx_context::sender(ctx));
+        abstract_type::create<Coin<Witness>>(&mut receipt, vector[witness, sender], schema, ctx);
+        transfer::transfer(receipt, sender);
     }
 
     // The schema is statically embedded into this package here
@@ -116,11 +118,12 @@ module sui_examples::coin {
     // In this case, our schema is statically embedded into this package
     public entry fun attach_metadata<T>(coin: &mut Coin<T>, data: vector<vector<u8>>, ctx: &mut TxContext) {
         let auth = tx_authority::begin_with_type(&Witness {});
-        let proof = ownership::setup(coin);
+        let typed_id = typed_id::new(coin);
         let schema_fields = ascii2::vec_bytes_to_vec_strings(INDIVIDUAL_METADATA_SCHEMA);
         let schema = schema::create_(schema_fields, ctx);
 
-        ownership::initialize(&mut coin.id, proof, &auth);
+        ownership::initialize_with_module_authority(&mut coin.id, typed_id, &auth);
+        ownership::as_owned_object(&mut coin.id, &auth);
         metadata::attach(&mut coin.id, data, &schema, &auth);
 
         schema::return_and_destroy(schema);

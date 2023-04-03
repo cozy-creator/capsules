@@ -47,7 +47,7 @@ module sui_utils::rand {
 
 #[test_only]
 module sui_utils::rand_tests {
-    use std::debug;
+    // use std::debug;
     use sui::test_scenario;
     use sui::tx_context::TxContext;
     use sui_utils::rand;
@@ -58,7 +58,7 @@ module sui_utils::rand_tests {
 
     public fun print_rand(min: u64, max: u64, ctx: &mut TxContext): u64 {
         let num = rand::rng(min, max, ctx);
-        debug::print(&num);
+        // debug::print(&num);
         assert!(num >= min && num < max, EOUTSIDE_RANGE);
         num
     }

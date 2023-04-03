@@ -1,12 +1,12 @@
 module metadata::creator {
     use std::ascii;
-    use std::option::{Self, Option};
     use std::vector;
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
     use sui::dynamic_field;
     use sui::transfer;
+    use sui::typed_id;
 
     use metadata::publish_receipt::{Self, PublishReceipt};
     use metadata::metadata;
@@ -28,7 +28,6 @@ module metadata::creator {
 
     struct Witness has drop { }
     struct Key has store, copy, drop { }
-    struct Endorsement has store, copy, drop { from: address }
 
     // Shared, root-level object
     struct Creator has key {
@@ -39,7 +38,7 @@ module metadata::creator {
     public entry fun define(
         data: vector<vector<u8>>,
         schema: &Schema,
-        owner_maybe: Option<address>,
+        owner: address,
         ctx: &mut TxContext
     ) {
         let creator = Creator { 
@@ -47,18 +46,16 @@ module metadata::creator {
             packages: vector::empty()
         };
 
-        let owner = if (option::is_some(&owner_maybe)) {
-            option::destroy_some(owner_maybe)
-        } else {
-            tx_context::sender(ctx)
-        };
+        // Initialize owner and metadata
+        let typed_id = typed_id::new(&creator);
+        let auth = tx_authority::add_type_capability(
+            &Witness { }, &tx_authority::begin(ctx));
 
-        // Initailize owner and metadata
-        let proof = ownership::setup(&creator);
-        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        ownership::initialize(&mut creator.id, proof, &auth);
+        ownership::initialize_without_module_authority(&mut creator.id, typed_id, &auth);
+
         metadata::attach(&mut creator.id, data, schema, &auth);
-        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut creator.id, owner, &auth);
+
+        ownership::as_shared_object<SimpleTransfer>(&mut creator.id, vector[owner], &auth);
 
         transfer::share_object(creator);
     }
@@ -174,18 +171,13 @@ module metadata::creator {
     //
     // We use dynamic fields, rather than vectors, because it scales O(1) instead of O(n) for n endorsements.
 
-    public entry fun add_endorsement(creator: &mut Creator, from: address, ctx: &mut TxContext) {
-        add_endorsement_(creator, from, &tx_authority::begin(ctx));
-    }
 
+    struct Endorsement has store, copy, drop { from: address }
+    
     public fun add_endorsement_(creator: &mut Creator, from: address, auth: &TxAuthority) {
         assert!(tx_authority::is_signed_by(from, auth), ESENDER_UNAUTHORIZED);
 
         dynamic_field2::set<Endorsement, bool>(&mut creator.id, Endorsement { from }, true);
-    }
-
-    public entry fun remove_endorsement(creator: &mut Creator, from: address, ctx: &mut TxContext) {
-        remove_endorsement_(creator, from, &tx_authority::begin(ctx));
     }
 
     public fun remove_endorsement_(creator: &mut Creator, from: address, auth: &TxAuthority) {
@@ -194,7 +186,6 @@ module metadata::creator {
         dynamic_field2::drop<Endorsement, bool>(&mut creator.id, Endorsement { from });
     }
 
-    // Useful as a view function
     public fun is_endorsed_by(creator: &Creator, from: address): bool {
         dynamic_field::exists_(&creator.id, Endorsement { from })
     }
@@ -211,4 +202,5 @@ module metadata::creator {
 
         count
     }
+    
 }
