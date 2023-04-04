@@ -435,9 +435,16 @@ module attach::data_tests {
 
     use ownership::tx_authority;
     use ownership::ownership;
+    use ownership::tx_authority::TxAuthority;
 
     use attach::data;
     use attach::schema;
+
+    // Error constants
+    const EINVALID_METADATA: u64 = 0;
+    const ENOT_OWNER: u64 = 1;
+
+    const SENDER: address = @0x99;
 
     struct Witness has drop {}
 
@@ -445,12 +452,13 @@ module attach::data_tests {
         id: UID
     }
 
-    // Error constant
-    const EINVALID_METADATA: u64 = 0;
+    public fun uid(test_object: &TestObject): &UID {
+        &test_object.id
+    }
 
-    const SENDER: address = @0x99;
+    public fun uid_mut(test_object: &mut TestObject, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&test_object.id, auth), ENOT_OWNER);
 
-    public fun uid_mut(test_object: &mut TestObject): &mut UID {
         &mut test_object.id
     }
 
