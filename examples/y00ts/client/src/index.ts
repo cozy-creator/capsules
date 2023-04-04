@@ -5,25 +5,26 @@ import {
   getSigner,
   getCreatedObjects
 } from '../../../../sdk/typescript/src';
-import { RawSigner } from '@mysten/sui.js';
+import { RawSigner, normalizeSuiObjectId, TransactionBlock, fromB64 } from '@mysten/sui.js';
 import { execSync } from 'child_process';
 import path from 'path';
 
-// const CLI_PATH = "/Users/bytedeveloper/.cargo/bin/sui";
-// const PACKAGE_PATH = "/Users/bytedeveloper/Documents/Projects/0xCapsules/capsules/examples/y00ts";
+// TO DO: I don't know how to generalize this path yet. Right now it's hardcoded
 const CLI_PATH = '/home/paul/.cargo/bin/sui';
 const PACKAGE_PATH = '../move_package';
-
 const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
-const displayPackageID = '0xddcad84f0d79d96535f3970fc01150a15bcbc2fd';
+// Devnet addresses
+const displayPackageID = '0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee';
+const ownershipPackageID = '0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa';
 
 async function main(signer: RawSigner) {
-  // This is a publish transaction; requires the Sui CLI to be installed on this machine however
-
   let signerAddress = '0x' + (await signer.getAddress());
 
+  console.log('signer: ', signerAddress);
+
   // ======= Transaction 1: Publish Package =======
+  // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
   console.log('Publishing Y00t package...');
 
   const modulesInBase64 = JSON.parse(
@@ -32,221 +33,223 @@ async function main(signer: RawSigner) {
     })
   );
 
-  let moveCallTxn0 = await signer.publish({
-    compiledModules: modulesInBase64,
-    gasBudget: 3000
-  });
-
-  let createdObjects = getCreatedObjects(moveCallTxn0);
-  let y00tPackageID = createdObjects.Immutable[0];
-  let y00tPublishReceipt = createdObjects.AddressOwner[0];
-
-  // ======= Transaction 2: Create Creator Object =======
-  console.log('Making a creator object...');
-
-  // Fetch an on-chain existing creator schema -- commented out for now
-  // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
-
-  // Make a creator object
-  const moveCallTxn2 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'creator',
-    function: 'create',
-    typeArguments: [],
-    arguments: [
-      signerAddress,
-      serializeByField(bcs, creatorObject, creatorSchema),
-      creatorSchemaObjectID
-    ],
-    gasBudget: 3000
-  });
-
-  let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
-
-  // ======= Transaction 3: Attach Data to Creator Object =======
-
-  const creatorData = {
-    name: 'String',
-    url: 'Url'
-  } as const;
-
-  type Creator = JSTypes<typeof creatorData>;
-
-  let creatorObject: Creator = {
-    name: 'Dust Labs',
-    url: new URL('https://www.dustlabs.com/')
-  };
-
-  // Something
-
-  // ======= Transaction 4: Update Creator Object's Data =======
-
-  console.log('Updating creator object...');
-
-  creatorObject.name = 'Y00t Labs';
-  let fieldsChanged = ['name'];
-
-  const _moveCallTxn3 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'creator',
-    function: 'update',
-    typeArguments: [],
-    arguments: [
-      creatorObjectID,
-      fieldsChanged,
-      serializeByField(bcs, creatorObject, creatorSchema, fieldsChanged),
-      creatorSchemaObjectID,
-      true
-    ],
-    gasBudget: 3000
-  });
-
-  // ======= Transaction 5: Claim a package object using our publish-receipt + creator object =======
-  console.log('Claiming package object...');
-
-  const moveCallTxn4 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'creator',
-    function: 'claim_package',
-    typeArguments: [],
-    arguments: [creatorObjectID, y00tPublishReceipt],
-    gasBudget: 3000
-  });
-
-  let packageObjectID = getCreatedObjects(moveCallTxn4).AddressOwner[0];
-
-  // Add some display data for our package object using a package-display schema
-
-  // ======= Transaction 6: Define an abstract type for Points<T> Publish Receipt =======
-  console.log('Defining abstract type...');
-
-  const y00tSchema = {
-    name: 'String',
-    description: 'Option<String>',
-    image: 'Url',
-    attributes: 'VecMap'
-  } as const;
-
-  type Y00t = JSTypes<typeof y00tSchema>;
-
-  const y00tDefault: Y00t = {
-    name: 'y00t',
-    description: {
-      some: 'y00ts is a generative art project of 15,000 NFTs. y00topia is a curated community of builders and creators. Each y00t was designed by De Labs in Los Angeles, CA.'
-    },
-    image:
-      'https://bafkreidc5co72clgqor54gpugde6tr4otrubjfqanj4vx4ivjwxnhqgaai.ipfs.nftstorage.link/',
-    attributes: {}
-  };
-
-  // This use up way too much gas; optimize
-
-  const moveCallTxn6 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'abstract_type',
-    function: 'define',
-    typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<u8>`],
-    arguments: [
-      y00tPublishReceipt,
-      [signerAddress],
-      serializeByField(bcs, y00tDefault, y00tSchema),
-      [], // We leave resolvers undefined for now
-      Object.entries(y00tSchema).map(([key, value]) => [key, value])
-    ],
-    gasBudget: 6000
-  });
-
-  let abstractTypeObjectID = getCreatedObjects(moveCallTxn6).Shared[0];
-
-  // ======= Transaction 7: Attach Data to Abstract Type =======
-
-  // ====== Transaction 8: Produce a concrete type from our AbstractType =======
-  console.log('Producing concrete type from abstract...');
-
-  // This is too expensive for gas; optimize
-
-  const moveCallTxn7 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'type',
-    function: 'define_from_abstract',
-    typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<vector<u8>>`],
-    arguments: [abstractTypeObjectID, []], // We leave data undefined
-    gasBudget: 7000
-  });
-
-  let concreteFromAbstractTypeID = getCreatedObjects(moveCallTxn7).AddressOwner[0];
-
-  // Claim a Type for our Y00t using our publisher-receipt
-  console.log('Claiming a Type for Y00t...');
-
-  const moveCallTxn8 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'type',
-    function: 'define',
-    typeArguments: [`${y00tPackageID}::y00t::Y00t`],
-    arguments: [
-      y00tPublishReceipt,
-      serializeByField(bcs, y00tDefault, y00tSchema),
-      [], // We leave resolvers undefined for now
-      Object.entries(y00tSchema).map(([key, value]) => [key, value])
-    ],
-    gasBudget: 7000
-  });
-
-  let typeObjectID = getCreatedObjects(moveCallTxn8).AddressOwner[0];
-
-  // ====== Transaction 9: Attach Data to Concrete Type =======
-
-  // ====== Transaction 10: Modify Data on Concrete Type =======
-
-  // Modify some fields on our Type
-  console.log('Modifying fields on our Y00t Type...');
-
-  // Let's create a new schema, and change to that
-  const y00tSchema2 = {
-    name: 'String',
-    symbol: 'String',
-    description: 'Option<String>',
-    image: 'Url',
-    attributes: 'VecMap'
-  } as const;
-
-  type Y00t2 = JSTypes<typeof y00tSchema2>;
-
-  const y00tDefault2: Y00t2 = {
-    name: 'unknown y00t',
-    symbol: 'Y00T'
-  };
-
-
-      public entry fun set_fields<T>(
-        self: &mut Type<T>,
-        data: vector<vector<u8>>,
-        raw_fields: vector<vector<String>>,
-    ) {
-
-  const moveCallTxn9 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'type',
-    function: 'set_fields',
-    typeArguments: [`${y00tPackageID}::y00t::Y00t`],
-    arguments: [
-      typeObjectID,
-      serializeByField(bcs, y00tDefault, y00tSchema),
-      [], // We leave resolvers undefined for now
-      Object.entries(y00tSchema).map(([key, value]) => [key, value])
-    ],
-    gasBudget: 2000
-  });
-
-  // ====== Transaction 11: Create a Y00t, attach data to it =======
-
-  // ====== Transaction 12: Modify Y00t data =======
-
-  // ====== Transaction 13: View Y00t =======
-
-  // ====== Transaction 14: Transfer Ownership of Y00t =======
+  const tx = new TransactionBlock();
+  tx.publish(
+    modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
+    modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
+  );
+  const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  console.log({ result1 });
 }
+
+// let createdObjects = getCreatedObjects(moveCallTxn0);
+// let y00tPackageID = createdObjects.Immutable[0];
+// let y00tPublishReceipt = createdObjects.AddressOwner[0];
+
+// ======= Transaction 2: Create Creator Object =======
+// console.log('Making a creator object...');
+
+// // Fetch an on-chain existing creator schema -- commented out for now
+// // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
+
+// // Make a creator object
+// const moveCallTxn2 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'creator',
+//   function: 'create',
+//   typeArguments: [],
+//   arguments: [
+//     signerAddress,
+//     serializeByField(bcs, creatorObject, creatorSchema),
+//     creatorSchemaObjectID
+//   ],
+//   gasBudget: 3000
+// });
+
+// let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
+
+// // ======= Transaction 3: Attach Data to Creator Object =======
+
+// const creatorData = {
+//   name: 'String',
+//   url: 'Url'
+// } as const;
+
+// type Creator = JSTypes<typeof creatorData>;
+
+// let creatorObject: Creator = {
+//   name: 'Dust Labs',
+//   url: new URL('https://www.dustlabs.com/')
+// };
+
+// // Something
+
+// // ======= Transaction 4: Update Creator Object's Data =======
+
+// console.log('Updating creator object...');
+
+// creatorObject.name = 'Y00t Labs';
+// let fieldsChanged = ['name'];
+
+// const _moveCallTxn3 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'creator',
+//   function: 'update',
+//   typeArguments: [],
+//   arguments: [
+//     creatorObjectID,
+//     fieldsChanged,
+//     serializeByField(bcs, creatorObject, creatorSchema, fieldsChanged),
+//     creatorSchemaObjectID,
+//     true
+//   ],
+//   gasBudget: 3000
+// });
+
+// // ======= Transaction 5: Claim a package object using our publish-receipt + creator object =======
+// console.log('Claiming package object...');
+
+// const moveCallTxn4 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'creator',
+//   function: 'claim_package',
+//   typeArguments: [],
+//   arguments: [creatorObjectID, y00tPublishReceipt],
+//   gasBudget: 3000
+// });
+
+// let packageObjectID = getCreatedObjects(moveCallTxn4).AddressOwner[0];
+
+// // Add some display data for our package object using a package-display schema
+
+// // ======= Transaction 6: Define an abstract type for Points<T> Publish Receipt =======
+// console.log('Defining abstract type...');
+
+// const y00tSchema = {
+//   name: 'String',
+//   description: 'Option<String>',
+//   image: 'Url',
+//   attributes: 'VecMap'
+// } as const;
+
+// type Y00t = JSTypes<typeof y00tSchema>;
+
+// const y00tDefault: Y00t = {
+//   name: 'y00t',
+//   description: {
+//     some: 'y00ts is a generative art project of 15,000 NFTs. y00topia is a curated community of builders and creators. Each y00t was designed by De Labs in Los Angeles, CA.'
+//   },
+//   image:
+//     'https://bafkreidc5co72clgqor54gpugde6tr4otrubjfqanj4vx4ivjwxnhqgaai.ipfs.nftstorage.link/',
+//   attributes: {}
+// };
+
+// // This use up way too much gas; optimize
+
+// const moveCallTxn6 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'abstract_type',
+//   function: 'define',
+//   typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<u8>`],
+//   arguments: [
+//     y00tPublishReceipt,
+//     [signerAddress],
+//     serializeByField(bcs, y00tDefault, y00tSchema),
+//     [], // We leave resolvers undefined for now
+//     Object.entries(y00tSchema).map(([key, value]) => [key, value])
+//   ],
+//   gasBudget: 6000
+// });
+
+// let abstractTypeObjectID = getCreatedObjects(moveCallTxn6).Shared[0];
+
+// // ======= Transaction 7: Attach Data to Abstract Type =======
+
+// // ====== Transaction 8: Produce a concrete type from our AbstractType =======
+// console.log('Producing concrete type from abstract...');
+
+// // This is too expensive for gas; optimize
+
+// const moveCallTxn7 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'type',
+//   function: 'define_from_abstract',
+//   typeArguments: [`${y00tPackageID}::y00t::Y00tAbstract<vector<u8>>`],
+//   arguments: [abstractTypeObjectID, []], // We leave data undefined
+//   gasBudget: 7000
+// });
+
+// let concreteFromAbstractTypeID = getCreatedObjects(moveCallTxn7).AddressOwner[0];
+
+// // Claim a Type for our Y00t using our publisher-receipt
+// console.log('Claiming a Type for Y00t...');
+
+// const moveCallTxn8 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'type',
+//   function: 'define',
+//   typeArguments: [`${y00tPackageID}::y00t::Y00t`],
+//   arguments: [
+//     y00tPublishReceipt,
+//     serializeByField(bcs, y00tDefault, y00tSchema),
+//     [], // We leave resolvers undefined for now
+//     Object.entries(y00tSchema).map(([key, value]) => [key, value])
+//   ],
+//   gasBudget: 7000
+// });
+
+// let typeObjectID = getCreatedObjects(moveCallTxn8).AddressOwner[0];
+
+// // ====== Transaction 9: Attach Data to Concrete Type =======
+
+// // ====== Transaction 10: Modify Data on Concrete Type =======
+
+// // Modify some fields on our Type
+// console.log('Modifying fields on our Y00t Type...');
+
+// // Let's create a new schema, and change to that
+// const y00tSchema2 = {
+//   name: 'String',
+//   symbol: 'String',
+//   description: 'Option<String>',
+//   image: 'Url',
+//   attributes: 'VecMap'
+// } as const;
+
+// type Y00t2 = JSTypes<typeof y00tSchema2>;
+
+// const y00tDefault2: Y00t2 = {
+//   name: 'unknown y00t',
+//   symbol: 'Y00T'
+// };
+
+//     public entry fun set_fields<T>(
+//       self: &mut Type<T>,
+//       data: vector<vector<u8>>,
+//       raw_fields: vector<vector<String>>,
+//   ) {
+
+// const moveCallTxn9 = await signer.executeMoveCall({
+//   packageObjectId: displayPackageID,
+//   module: 'type',
+//   function: 'set_fields',
+//   typeArguments: [`${y00tPackageID}::y00t::Y00t`],
+//   arguments: [
+//     typeObjectID,
+//     serializeByField(bcs, y00tDefault, y00tSchema),
+//     [], // We leave resolvers undefined for now
+//     Object.entries(y00tSchema).map(([key, value]) => [key, value])
+//   ],
+//   gasBudget: 2000
+// });
+
+// // ====== Transaction 11: Create a Y00t, attach data to it =======
+
+// // ====== Transaction 12: Modify Y00t data =======
+
+// // ====== Transaction 13: View Y00t =======
+
+// // ====== Transaction 14: Transfer Ownership of Y00t =======
 
 const NFTSchema = {
   name: 'String',

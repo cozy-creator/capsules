@@ -2,6 +2,7 @@
 name = "Attach"
 version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
+published-at = "0xef6aaed4bdc512470fbb85e27e4fa9c88962b409410e807ed3ad2e63bde1caba"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -9,4 +10,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-attach =  "0x0"
+attach =  "0xef6aaed4bdc512470fbb85e27e4fa9c88962b409410e807ed3ad2e63bde1caba"

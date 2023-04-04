@@ -1,6 +1,6 @@
 // Similar to vec_set in 0x2::sui, but more performant and far more useful
 
-module sui::vec_set2 {
+module sui_utils::vec_set2 {
     use std::option::{Self, Option};
     use std::vector;
 

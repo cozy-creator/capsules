@@ -32,6 +32,10 @@ const notNestedSchema = {
 } as const;
 ```
 
+### Common Errors
+
+If you get a 'fetch() not found error' from the @Mysten/sui.js library, upgrade your version of node to 17.5 or higher. No more need for polymorphic-fills!
+
 ## License
 
 MIT

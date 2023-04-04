@@ -1,4 +1,4 @@
-import { SuiExecuteTransactionResponse } from '@mysten/sui.js';
+import { SuiTransactionBlockResponse } from '@mysten/sui.js';
 
 export interface CreatedObject {
   owner:
@@ -20,7 +20,8 @@ export interface ParsedResponse {
   Shared: string[];
 }
 
-export function getCreatedObjects(txResponse: SuiExecuteTransactionResponse): ParsedResponse {
+// TO DO: update this for v0.29 so I can get rid of the ts-ignores
+export function getCreatedObjects(txResponse: SuiTransactionBlockResponse): ParsedResponse {
   let result: ParsedResponse = {
     AddressOwner: [],
     ObjectOwner: [],
@@ -30,9 +31,12 @@ export function getCreatedObjects(txResponse: SuiExecuteTransactionResponse): Pa
 
   if (
     'effects' in txResponse &&
+    // @ts-ignore
     'effects' in txResponse.effects &&
+    // @ts-ignore
     txResponse.effects.effects.created
   ) {
+    // @ts-ignore
     txResponse.effects.effects.created.forEach((object: CreatedObject) => {
       switch (object.owner) {
         case 'Immutable':
