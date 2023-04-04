@@ -40,12 +40,10 @@ module display::display {
     // error enums
     const EINVALID_PUBLISH_RECEIPT: u64 = 0;
     const ETYPE_ALREADY_DEFINED: u64 = 1;
-    const ETYPE_DOES_NOT_MATCH_UID_OBJECT: u64 = 2;
-    const ETYPE_IS_NOT_CONCRETE: u64 = 3;
-    const EVEC_LENGTH_MISMATCH: u64 = 4;
-    const ENO_OWNER_AUTHORITY: u64 = 5;
-    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 6;
-    const ETYPE_IN_RESOLVER_NOT_SPECIFIED: u64 = 7;
+    const ETYPE_IS_NOT_CONCRETE: u64 = 2;
+    const EVEC_LENGTH_MISMATCH: u64 = 3;
+    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 4;
+    const ETYPE_IN_RESOLVER_NOT_SPECIFIED: u64 = 5;
 
     // ========= Concrete Type =========
 
@@ -97,7 +95,7 @@ module display::display {
 
         // Ensures that this concrete type can only ever be defined once
         let key = Key { slot: encode::module_and_struct_name<T>() };
-        let uid = publish_receipt::extend(publisher);
+        let uid = publish_receipt::uid_mut(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
         dynamic_field::add(uid, key, true);
 

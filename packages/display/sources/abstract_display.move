@@ -34,6 +34,7 @@ module display::abstract_display {
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::publish_receipt::{Self, PublishReceipt};
 
+    use attach::data;
     use attach::schema;
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
@@ -44,6 +45,7 @@ module display::abstract_display {
     const ETYPE_IS_NOT_ABSTRACT: u64 = 2;
     const ETYPE_ALREADY_DEFINED: u64 = 3;
     const EVEC_LENGTH_MISMATCH: u64 = 4;
+    const ETYPE_IN_RESOLVER_NOT_SPECIFIED: u64 = 7;
 
     // Shared root-level object. Cannot be destroyed. Single, unique on its `type` field.
     // We could potentially make these storeable / owned as well; it depends if the Sui Fullnode will be able
@@ -52,7 +54,7 @@ module display::abstract_display {
         id: UID,
         type: StructTag,
         // These will be used as the default display template when defining a concrete type
-        resolvers: VecMap<String, String>
+        resolvers: VecMap<String, vector<String>>
     }
 
     // Added to publish receipt to ensure an abstract type is only created once
@@ -95,7 +97,7 @@ module display::abstract_display {
 
         // Ensures that this abstract type can only ever be created once
         let key = Key { slot: encode::module_and_struct_name<T>() };
-        let uid = publish_receipt::extend(publisher);
+        let uid = publish_receipt::uid_mut(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
         dynamic_field::add(uid, key, true);
 
@@ -117,7 +119,7 @@ module display::abstract_display {
     public fun return_and_share(abstract_type: AbstractDisplay, owner: address) {
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
-        ownership::as_shared_object<AbstractType, SimpleTransfer>(
+        ownership::as_shared_object<AbstractDisplay, SimpleTransfer>(
             &mut abstract_type.id,
             typed_id,
             vector[owner],
@@ -180,14 +182,14 @@ module display::abstract_display {
 
     // ======== Accessor Functions =====
 
-    public fun borrow_resolvers(self: &AbstractDisplay): VecMap<String, vector<String>> {
+    public fun borrow_resolvers(self: &AbstractDisplay): &VecMap<String, vector<String>> {
         &self.resolvers
     }
 
     public fun borrow_mut_resolvers<T>(
-        self: &mut Display<T>,
+        self: &mut AbstractDisplay,
         auth: &TxAuthority
-    ): VecMap<String, vector<String>> {
+    ): &mut VecMap<String, vector<String>> {
         assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut self.resolvers
@@ -203,7 +205,7 @@ module display::abstract_display {
     public fun view_with_default<T>(
         uid: &UID,
         namespace: Option<address>,
-        display: &AbstractDisplay<T>
+        display: &AbstractDisplay
     ): vector<u8> {
         data::view_with_default(uid, &display.id, namespace, schema::into_keys(uid, namespace))
     }

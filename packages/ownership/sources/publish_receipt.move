@@ -44,8 +44,12 @@ module ownership::publish_receipt {
         publisher.package == id
     }
 
+    public fun uid(publisher: &PublishReceipt): &UID {
+        &publisher.id
+    }
+
     // Publisher is an owned-object, so no need for an ownership check here
-    public fun extend(publisher: &mut PublishReceipt): &mut UID {
+    public fun uid_mut(publisher: &mut PublishReceipt): &mut UID {
         &mut publisher.id
     }
 
