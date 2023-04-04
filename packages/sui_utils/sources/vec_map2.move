@@ -5,6 +5,25 @@ module sui_utils::vec_map2 {
 
     use sui::vec_map::{Self, VecMap};
 
+    // Error enums
+    const EVEC_LENGTH_MISMATCH: u64 = 0;
+
+    public fun create<K: copy, V>(keys: vector<K>, values: vector<V>): VecMap<K, V> {
+        assert!(vector::length(&keys) == vector::length(&values), EVEC_LENGTH_MISMATCH);
+
+        vector::reverse(&mut keys);
+        vector::reverse(&mut values);
+
+        let result = vec_map::empty();
+        while (vector::length(&values) > 0) {
+            let key = vector::pop_back(&mut keys);
+            let value = vector::pop_back(&mut values);
+            vec_map::insert(&mut result, key, value);
+        };
+
+        result
+    }
+
     // This will fail if there is an odd number of entries in the first vector
     // It will also fail if the bytes are not utf8 strings
     public fun to_string_string_vec_map(bytes: &vector<vector<u8>>): VecMap<String, String> {
@@ -23,9 +42,11 @@ module sui_utils::vec_map2 {
         output
     }
 
+    // Returns the old value (if one existed)
     public fun set<K: copy + drop, V>(self: &mut VecMap<K, V>, key: K, value: V): Option<V> {
-        let old_value_maybe = if (vec_map::contains(self, &key)) {
-            let (_, old_value) = vec_map::remove(self, &key);
+        let index_maybe = vec_map::get_idx_opt(self, &key);
+        let old_value_maybe = if (option::is_some(&index_maybe)) {
+            let (_, old_value) = vec_map::remove_entry_by_idx(self, option::destroy_some(index_maybe));
             option::some(old_value)
         } else {
             option::none()

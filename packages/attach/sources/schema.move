@@ -1,3 +1,15 @@
+// Normally with Sui dynamic fields, the calling (client) application is supposed to implement some
+// custom logic that memorizes keys + types for all data they're storing. Schemas remove this burden
+// from the client application / developer.
+//
+// Schemas are VecMap<String, String> and are stored within the object itself.
+// They allow us to enumerate all keys, so clients can duplicate, delete, and serialize data in a
+// single command without having the burden of remembering what data they stored.
+//
+// Schemas support all commonly-used Sui Move data types.
+// Supported types: address, bool, objectID, u8, u16, u32, u64, u128, u256, String (utf8),
+// VecMap<String, String>, Url, and vectors of these types + vector<vector<u8>>
+
 module attach::schema {
     use std::string::{Self, String, utf8};
     use std::option::{Self, Option};
@@ -19,7 +31,7 @@ module attach::schema {
 
     // Key for storing the object + namespace -> schema mapping
     // Schemas allows us to enumerate and serialize an object's fields in the future
-    struct Key has store, copy, drop { namespace: address } // -> VecMap<String, String>
+    struct Key has store, copy, drop { namespace: Option<address> } // -> VecMap<String, String>
 
     // ===== Primary Creation / Deletion Functions =====
     // These can only be called by the `data` module, which has already done an authority-check.
@@ -33,7 +45,7 @@ module attach::schema {
     // Tyeps will be returned in the same order they were in `fields`
     public(friend) fun update_object_schema(
         uid: &mut UID,
-        namespace: address,
+        namespace: Option<address>,
         fields: vector<vector<String>>
     ): vector<String> {
         // Get the schema stored in the object
@@ -61,7 +73,7 @@ module attach::schema {
     // Convenience function if you have many keys change with the same type
     public(friend) fun update_object_schema_(
         uid: &mut UID,
-        namespace: address,
+        namespace: Option<address>,
         keys: vector<String>,
         type: String
     ): vector<String> {
@@ -75,7 +87,7 @@ module attach::schema {
         update_object_schema(uid, namespace, fields)
     }
 
-    public(friend) fun remove(uid: &mut UID, namespace: address, keys: vector<String>): vector<String> {
+    public(friend) fun remove(uid: &mut UID, namespace: Option<address>, keys: vector<String>): vector<String> {
         let schema = borrow_mut(uid, namespace);
 
         let (i, types) = (0, vector::empty<String>());
@@ -93,7 +105,7 @@ module attach::schema {
         types
     }
 
-    public(friend) fun remove_all(uid: &mut UID, namespace: address): (vector<String>, vector<String>) {
+    public(friend) fun remove_all(uid: &mut UID, namespace: Option<address>): (vector<String>, vector<String>) {
         let key = Key { namespace };
 
         if (dynamic_field::exists_(uid, key)) {
@@ -106,7 +118,7 @@ module attach::schema {
 
     // Private so that the schema cannot be edited outside this module
     // Creates an empty schema if one does not exist already for the object + namespace
-    fun borrow_mut(uid: &mut UID, namespace: address): &mut VecMap<String, String> {
+    fun borrow_mut(uid: &mut UID, namespace: Option<address>): &mut VecMap<String, String> {
         let key = Key { namespace };
         if (!dynamic_field::exists_(uid, key)) {
             dynamic_field::add(uid, key, vec_map::empty<String, String>());
@@ -116,33 +128,39 @@ module attach::schema {
 
     // ==== Accessor Functions ====
 
-    public fun exists_(uid: &UID, namespace: address): bool {
+    public fun exists_(uid: &UID, namespace: Option<address>): bool {
         dynamic_field::exists_(uid, Key { namespace })
     }
     
-    public fun borrow(uid: &UID, namespace: address): &VecMap<String, String> {
+    public fun borrow(uid: &UID, namespace: Option<address>): &VecMap<String, String> {
         dynamic_field::borrow<Key, VecMap<String, String>>(uid, Key { namespace })
     }
 
-    public fun length(uid: &UID, namespace: address): u64 {
+    public fun length(uid: &UID, namespace: Option<address>): u64 {
         if (!exists_(uid, namespace)) { return 0 };
         let schema = borrow(uid, namespace);
         vec_map::size(schema)
     }
 
-    public fun into_keys(uid: &UID, namespace: address): vector<String> {
+    public fun into_keys(uid: &UID, namespace: Option<address>): vector<String> {
         if (!exists_(uid, namespace)) { return vector::empty() };
         let schema = borrow(uid, namespace);
         vec_map::keys(schema)
     }
 
-    public fun has_key(uid: &UID, namespace: address, key: String): bool {
+    public fun into_keys_types(uid: &UID, namespace: Option<address>): (vector<String>, vector<String>) {
+        if (!exists_(uid, namespace)) { return vector::empty() };
+        let schema = borrow(uid, namespace);
+        vec_map::into_keys_values(schema)
+    }
+
+    public fun has_key(uid: &UID, namespace: Option<address>, key: String): bool {
         if (!exists_(uid, namespace)) { return false };
         let schema = borrow(uid, namespace);
         vec_map::contains(schema, &key)
     }
 
-    public fun get_type(uid: &UID, namespace: address, key: String): Option<String> {
+    public fun get_type(uid: &UID, namespace: Option<address>, key: String): Option<String> {
         if (!exists_(uid, namespace)) { return option::none() };
         let schema = borrow(uid, namespace);
         vec_map2::get_maybe(schema, key)

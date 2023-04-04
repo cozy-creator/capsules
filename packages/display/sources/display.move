@@ -49,6 +49,8 @@ module display::display {
     // ========= Concrete Type =========
 
     // Owned, root-level object. Cannot be destroyed. Singleton, unique on `T`.
+    // We could potentially make these storeable as well; it depends if the Sui Fullnode will be able to
+    // find it to do resolution.
     struct Display<phantom T> has key {
         id: UID,
         resolvers: VecMap<String, vector<String>>
@@ -56,10 +58,10 @@ module display::display {
     }
 
     // Added to publish receipt
-    struct Key has store, copy, drop { slot: String } // slot is a type-name, value is boolean
+    struct Key has store, copy, drop { slot: String } // slot is a module + struct name, value is boolean
 
     // Added to abstract-type to ensure that each concrete type (set of generics) can only ever be defined once
-    struct KeyGenerics has store, copy, drop { slot: vector<String> }
+    struct KeyGenerics has store, copy, drop { generics: vector<String> }
     
     // Module authority
     struct Witness has drop { }
@@ -78,13 +80,11 @@ module display::display {
     }
 
     // `T` must not contain any generics. If it does, you must first use `define_abstract()` to create
-    // an AbstractDisplay object, which is then used with `define_from_abstract()` to define a concrete type
+    // an AbstractDisplay object, which is then used with `create_from_abstract()` to define a concrete type
     // per instance of its generics.
     //
     // The `resolver_strings` input to this function should look like:
     // [ [type, resolver-1, resolver-2], [type, resolver-1], ... ]
-    // We do not enforce any value for 'types' here. The only input-validation we do is to ensure that at
-    // least one string is specified (the type).
     public fun create_<T>(
         publisher: &mut PublishReceipt,
         keys: vector<String>,
@@ -93,34 +93,34 @@ module display::display {
     ): Display<T> {
         assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
         assert!(!encode::has_generics<T>(), ETYPE_IS_NOT_CONCRETE);
-        assert!(vector::length(&keys) == vector::length(&resolver_strings), EVEC_LENGTH_MISMATCH);
 
         // Ensures that this concrete type can only ever be defined once
         let key = Key { slot: encode::module_and_struct_name<T>() };
         let uid = publish_receipt::extend(publisher);
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
-
         dynamic_field::add(uid, key, true);
 
-        let (i, resolvers) = (0, vec_map::empty());
+        // We do not enforce any value for 'types' here. The only input-validation we do is to ensure that at
+        // the first string is specified in the vector of resolver strings; the type.
+        let i = 0;
         while (i < vector::length(&keys)) {
             let resolver = *vector::borrow(&resolver_strings, i);
             assert!(vector::length(&vector::borrow(&resolver, 0)) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
-
-            vec_map::insert(&mut resolvers, *vector::borrow(key, i), resolver);
             i = i + 1;
         };
 
-        define_internal<T>(resolvers, ctx)
+        let resolvers = vec_map2::create(keys, resolver_strings);
+
+        create_internal<T>(resolvers, ctx);
     }
 
     // Convenience entry function
-    public entry fun define_from_abstract<T>(
+    public entry fun create_from_abstract<T>(
         abstract_display: &mut AbstractDisplay,
         data: vector<vector<u8>>,
         ctx: &mut TxContext
     ) {
-        let display = define_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
+        let display = create_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
         transfer(type, tx_context::sender(ctx));
     }
 
@@ -128,9 +128,8 @@ module display::display {
     // AbstractDisplay Coin<T>
     // The raw_fields supplied will be used as a Schema to define the concrete type's display, and must be the same 
     // schema specified in the abstract type's `schema_id` field
-    public fun define_from_abstract_<T>(
+    public fun create_from_abstract_<T>(
         abstract: &mut AbstractDisplay,
-        data: vector<vector<u8>>,
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): Display<T> {
@@ -141,28 +140,21 @@ module display::display {
         // We use the existing resolvers and fields from the abstract type
         let resolvers = *abstract_type::borrow_resolvers(abstract);
 
-        // The owner of the abstract type must authorize this action
+        // The owner of the abstract type must authorize this action; the ownership check is done
+        // within this function
         let uid = abstract_type::uid_mut(abstract, auth);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
         // Ensures that this concrete type can only ever be created once
         let generics = struct_tag::generics(&struct_tag);
-        let key = KeyGenerics { slot: generics };
+        let key = KeyGenerics { generics };
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
-
         dynamic_field::add(uid, key, true);
 
-        // We use the abstract type's existing data as default data for the concrete type's data,
-        // assuming we haven't been supplied any data
-        if (vector::length(&data) == 0) {
-            data = data::view_parsed(uid, vec_map::keys(&fields), &fields);
-        };
-
-        define_internal<T>(resolvers, ctx)
+        create_internal<T>(resolvers, ctx)
     }
 
     // This is used by abstract_type as well, to define concrete types from abstract types
-    fun define_internal<T>(
+    fun create_internal<T>(
         resolvers: VecMap<String, vector<String>>,
         ctx: &mut TxContext
     ): Display<T> {
@@ -173,16 +165,13 @@ module display::display {
 
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&type);
-
-        ownership::initialize_without_module_authority(&mut type.id, typed_id, &auth);
-        // data::attach_(&mut type.id, data, fields, &auth);
-        ownership::as_owned_object(&mut type.id, &auth);
+        ownership::as_owned_object(&mut display.id, typed_id, &auth);
 
         display
     }
 
-    // ====== Modify Schema and Resolvers ======
-    // This is Type's own custom API for editing the display-data stored on the Type object.
+    // ====== Modify Resolvers ======
+    // This is Display's own custom API for editing the resolvers stored on the Display object.
     
     // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
     // it will be added.
@@ -191,34 +180,24 @@ module display::display {
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
     ) {
-        let (len, i) = (vector::length(&keys), 0);
+        let (i, len) = (0, vector::length(&keys));
         assert!(len == vector::length(&resolver_strings), EVEC_LENGTH_MISMATCH);
 
         while (i < len) {
-            let key = *vector::borrow(&keys, i);
-            let value = *vector::borrow(&resolver_strings, i);
-
-            if (vec_map::contains(&self.resolvers, &key)) {
-                *vec_map::get_mut(&mut self.resolvers, &key) = value;
-            } else {
-                vec_map::insert(&mut self.resolvers, key, value);
-            };
-
+            vec_map2::set(
+                &mut self.resolvers,
+                *vector::borrow(&keys, i),
+                *vector::borrow(&resolver_strings, i)
+            );
             i = i + 1;
         };
     }
 
     /// Remove keys from the Type object
-    public entry fun remove_fields<T>(self: &mut Display<T>, keys: vector<String>) {
-        let (len, i) = (vector::length(&keys), 0);
-
+    public entry fun remove_resolvers<T>(self: &mut Display<T>, keys: vector<String>) {
+        let (i, len) = (0, vector::length(&keys));
         while (i < len) {
-            let index_maybe = vec_map::get_idx_opt(&self.resolvers, vector::borrow(&keys, i));
-
-            if (option::is_some(&index_maybe)) {
-                vec_map::remove_entry_by_idx(&mut self.resolvers, option::destroy_some(index_maybe));
-            };
-
+            vec_map2::remove_maybe(&mut self.resolvers, *vector::borrow(&keys, i));
             i = i + 1;
         };
     }
@@ -235,17 +214,13 @@ module display::display {
 
     // ======== View Functions =====
 
-    // Type objects serve as convenient view-function fallbacks
+    // Display objects serve as convenient view-function fallbacks
     public fun view_with_default<T>(
         uid: &UID,
-        fallback_type: &Display<T>,
-        keys: vector<String>,
-        schema: &Schema
+        namespace: Option<address>,
+        display: &Display<T>
     ): vector<u8> {
-        let object_type = option::destroy_some(ownership::get_type(uid));
-        assert!(struct_tag::get<T>() == object_type, ETYPE_DOES_NOT_MATCH_UID_OBJECT);
-
-        display::view_with_default(uid, &fallback_type.id, keys, schema)
+        data::view_with_default(uid, &display.id, namespace, schema::into_keys(uid, namespace))
     }
 
     // ======== For Owners ========

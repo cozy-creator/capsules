@@ -62,6 +62,11 @@ module ownership::tx_authority {
         vector::contains(&auth.addresses, &addr)
     }
 
+    public fun is_signed_by_(addr: Option<address>, auth: &TxAuthority): bool {
+        if (option::is_none(&addr)) return true;
+        is_signed_by(option::destroy_some(addr), auth)
+    }
+
     public fun is_signed_by_module<T>(auth: &TxAuthority): bool {
         is_signed_by(witness_addr<T>(), auth)
     }

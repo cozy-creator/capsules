@@ -29,11 +29,10 @@ module ownership::ownership {
     // see if it's possible.
     // We might add some 'was initialized for owner' boolean here perhaps
     struct Ownership has store, copy, drop {
-        module_auth: vector<address>,
         owner: vector<address>,
         transfer_auth: vector<address>,
-        type: StructTag,
-        is_shared: Option<bool>
+        type: StructTag
+        // is_shared: Option<bool>
     }
 
     // ======= Module Authority =======
@@ -67,12 +66,9 @@ module ownership::ownership {
         assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
 
         let ownership = Ownership {
-            module_auth: module_authority,
             owner: vector::empty(),
             transfer_auth: vector::empty(),
-            type: struct_tag::get<T>(),
-            // this won't be determined until we call `as_shared_object` or `as_owned_object`
-            is_shared: option::none()
+            type: struct_tag::get<T>()
         };
 
         dynamic_field::add(uid, Key { }, ownership);
@@ -201,6 +197,29 @@ module ownership::ownership {
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.owner = new_owner;
+    }
+
+    // ======= Delegation System =======
+
+    ownership::add_owner_delegation<Witness>(&mut display.id, &auth);
+
+    public fun add_owner_delegation<T>(uid: &mut UID, auth: &TxAuthority) {
+        assert!(tx_authority::is_authorized_by_type<T>(auth), ENO_MODULE_AUTHORITY);
+
+        let from = tx_authority::type_into_address<T>();
+
+        dynamic_field2::set(uid, DelegationKey { from }, Delegation { 
+            from,
+            to: get_owner(uid)
+        });
+    }
+
+    public fun add_delegation() {
+
+    }
+
+    public fun remove_delegation() {
+        
     }
 
     // ======= Authority Checkers =======
