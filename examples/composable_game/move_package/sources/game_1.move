@@ -40,6 +40,15 @@ module composable_game::aircraft_carrier {
         config: &Config,
         ctx: &mut TxContext
     ) {
+            public fun deserialize_and_set<Namespace>(
+        uid: &mut UID,
+        data: vector<vector<u8>>,
+        fields: vector<vector<String>>,
+        auth: &TxAuthority
+    ) {
+
+        data::deserialize_and_set<Witness>(&mut carrier.id, data, schema_fields, auth);
+
         let schema = schema::create(schema_fields);
         let carrier = create_(data, schema, owner, config, ctx);
         transfer::share_object(carrier);

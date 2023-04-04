@@ -77,15 +77,16 @@ module attach::data {
         };
     }
 
-    // Convenience function
-    public fun deserialize_and_set<Namespace>(
+    // Convenience function using a Witness pattern. The Witness is the namespace
+    public fun deserialize_and_set<Witness: drop>(
+        witness: Witness,
         uid: &mut UID,
         data: vector<vector<u8>>,
         fields: vector<vector<String>>,
-        auth: &TxAuthority
     ) {
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
-        deserialize_and_set_(uid, option::some(namespace_addr), data, fields, auth);
+        let auth = tx_authority::begin_with_type(&witness);
+        let namespace_addr = tx_authority::type_into_address<Witness>();
+        deserialize_and_set_(uid, option::some(namespace_addr), data, fields, &auth);
     }
 
     // This is a powerful function that allows client applications to serialize arbitrary objects
