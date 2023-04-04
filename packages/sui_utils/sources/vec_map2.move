@@ -9,10 +9,7 @@ module sui_utils::vec_map2 {
     const EVEC_LENGTH_MISMATCH: u64 = 0;
     const EVEC_NOT_EMPTY: u64 = 1;
 
-    // TO DO: the Move compiler doesn't understand that vector<K> and vector<V> are empty at the end
-    // of the execution, so it incorrectly flags this as an error, when in fact it is not.
-    // I've added the unnecessary `drop` ability here until this is fixed.
-    public fun create<K: copy + drop, V: drop>(keys: vector<K>, values: vector<V>): VecMap<K, V> {
+    public fun create<K: copy, V>(keys: vector<K>, values: vector<V>): VecMap<K, V> {
         assert!(vector::length(&keys) == vector::length(&values), EVEC_LENGTH_MISMATCH);
 
         vector::reverse(&mut keys);
@@ -25,9 +22,8 @@ module sui_utils::vec_map2 {
             vec_map::insert(&mut result, key, value);
         };
 
-        // Doesn't convince the compiler either lol
-        // assert!(vector::is_empty(&keys), EVEC_NOT_EMPTY);
-        // assert!(vector::is_empty(&values), EVEC_NOT_EMPTY);
+        vector::destroy_empty(keys);
+        vector::destroy_empty(values);
 
         result
     }
