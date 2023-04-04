@@ -149,9 +149,9 @@ module attach::schema {
     }
 
     public fun into_keys_types(uid: &UID, namespace: Option<address>): (vector<String>, vector<String>) {
-        if (!exists_(uid, namespace)) { return vector::empty() };
+        if (!exists_(uid, namespace)) { return (vector::empty(), vector::empty()) };
         let schema = borrow(uid, namespace);
-        vec_map::into_keys_values(schema)
+        vec_map::into_keys_values(*schema)
     }
 
     public fun has_key(uid: &UID, namespace: Option<address>, key: String): bool {

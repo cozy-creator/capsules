@@ -3,7 +3,8 @@
 // carefully guard access to it, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
-    use std::string::{Self, String};
+    use std::option::{Self, Option};
+    use std::string::{Self, String, utf8};
     use std::vector;
 
     use sui::bcs;
@@ -12,6 +13,7 @@ module ownership::tx_authority {
     use sui::object::{Self, ID};
 
     use sui_utils::encode;
+    use sui_utils::string2;
     use sui_utils::struct_tag::{Self, StructTag};
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
@@ -63,6 +65,7 @@ module ownership::tx_authority {
         vector::contains(&auth.addresses, &addr)
     }
 
+    // Defaults to `true` if the signing address is option::none
     public fun is_signed_by_(addr: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&addr)) return true;
         is_signed_by(option::destroy_some(addr), auth)
@@ -130,7 +133,7 @@ module ownership::tx_authority {
     }
 
     public fun witness_addr_from_struct_tag(tag: &StructTag): address {
-        let witness_type = string::empty();
+        let witness_type = string2::empty();
         string::append(&mut witness_type, string2::from_id(struct_tag::package_id(tag)));
         string::append(&mut witness_type, utf8(b"::"));
         string::append(&mut witness_type, struct_tag::module_name(tag));

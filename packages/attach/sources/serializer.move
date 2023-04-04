@@ -6,7 +6,6 @@
 
 module attach::serializer {
     use std::string::{Self, String};
-    use std::option;
     use std::vector;
 
     use sui::bcs::{Self};
@@ -18,10 +17,6 @@ module attach::serializer {
     use sui_utils::encode;
     use sui_utils::deserialize;
     use sui_utils::dynamic_field2;
-
-    use ownership::tx_authority::{Self, TxAuthority};
-
-    use attach::schema;
 
     // Error enums
     const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
@@ -211,9 +206,9 @@ module attach::serializer {
         // destination field
         if (!dynamic_field::exists_(source_uid, source_key)) {
             if (overwrite && !string::is_empty(&old_destination_type)) { 
-                drop_field(destination_uid, key, old_destination_type) 
+                drop_field(destination_uid, destination_key, old_destination_type) 
             };
-            return; 
+            return
         };
 
         // Type is changing; drop the old field
@@ -221,7 +216,7 @@ module attach::serializer {
             drop_field(destination_uid, destination_key, old_destination_type); 
         };
 
-        let type_bytes = *string::bytes(&soure_type);
+        let type_bytes = *string::bytes(&source_type);
 
         if (type_bytes == b"address") {
             let addr = *dynamic_field::borrow<K, address>(source_uid, source_key);
@@ -331,61 +326,61 @@ module attach::serializer {
     // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
     // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
     // this lengthy function in place of what should be one line of code. I know... ;-(
-    public fun drop_field<T: store + copy + drop>(uid: &mut UID, key: T, type_string: String) {
-        let type = *string::bytes(&type_string);
+    public fun drop_field<T: store + copy + drop>(uid: &mut UID, key: T, type: String) {
+        let type_bytes = *string::bytes(&type);
 
-        if (type == b"address") {
+        if (type_bytes == b"address") {
             dynamic_field2::drop<T, address>(uid, key);
         } 
-        else if (type == b"bool") {
+        else if (type_bytes == b"bool") {
             dynamic_field2::drop<T, bool>(uid, key);
         } 
-        else if (type == b"id") {
+        else if (type_bytes == b"id") {
             dynamic_field2::drop<T, ID>(uid, key);
         } 
-        else if (type == b"u8") {
+        else if (type_bytes == b"u8") {
             dynamic_field2::drop<T, u8>(uid, key);
         } 
-        else if (type == b"u64") {
+        else if (type_bytes == b"u64") {
             dynamic_field2::drop<T, u64>(uid, key);
         } 
-        else if (type == b"u128") {
+        else if (type_bytes == b"u128") {
             dynamic_field2::drop<T, u128>(uid, key);
         } 
-        else if (type == b"String") {
+        else if (type_bytes == b"String") {
             dynamic_field2::drop<T, String>(uid, key);
         }
-        else if (type == b"Url") {
+        else if (type_bytes == b"Url") {
             dynamic_field2::drop<T, Url>(uid, key);
         } 
-        else if (type == b"vector<address>") {
+        else if (type_bytes == b"vector<address>") {
             dynamic_field2::drop<T, vector<address>>(uid, key);
         }
-        else if (type == b"vector<bool>") {
+        else if (type_bytes == b"vector<bool>") {
             dynamic_field2::drop<T, vector<bool>>(uid, key);
         }
-        else if (type == b"vector<id>") {
+        else if (type_bytes == b"vector<id>") {
             dynamic_field2::drop<T, vector<ID>>(uid, key);
         }
-        else if (type == b"vector<u8>") {
+        else if (type_bytes == b"vector<u8>") {
             dynamic_field2::drop<T, vector<u8>>(uid, key);
         }
-        else if (type == b"vector<u64>") {
+        else if (type_bytes == b"vector<u64>") {
             dynamic_field2::drop<T, vector<u64>>(uid, key);
         }
-        else if (type == b"vector<u128>") {
+        else if (type_bytes == b"vector<u128>") {
             dynamic_field2::drop<T, vector<u128>>(uid, key);
         }
-        else if (type == b"vector<String>") {
+        else if (type_bytes == b"vector<String>") {
             dynamic_field2::drop<T, vector<String>>(uid, key);
         }
-        else if (type == b"vector<Url>") {
+        else if (type_bytes == b"vector<Url>") {
             dynamic_field2::drop<T, vector<Url>>(uid, key);
         }
-        else if (type == b"VecMap") {
+        else if (type_bytes == b"VecMap") {
             dynamic_field2::drop<T, VecMap<String, String>>(uid, key);
         }
-        else if (type == b"vector<VecMap>") {
+        else if (type_bytes == b"vector<VecMap>") {
             dynamic_field2::drop<T, vector<VecMap<String, String>>>(uid, key);
         }
         else {
@@ -395,79 +390,79 @@ module attach::serializer {
 
     // Something like dynamic_field::get_bcs_bytes would be nice; we could simplify this down to
     // one line of code
-    public fun get_bcs_bytes<T: store + copy + drop>(uid: &UID, key: T, type_string: String): vector<u8> {
-        let type = *string::bytes(type_string);
+    public fun get_bcs_bytes<T: store + copy + drop>(uid: &UID, key: T, type: String): vector<u8> {
+        let type_bytes = *string::bytes(&type);
 
-        if (type == b"address") {
-            let addr = dynamic_field::borrow<Key, address>(uid, key);
+        if (type_bytes == b"address") {
+            let addr = dynamic_field::borrow<T, address>(uid, key);
             bcs::to_bytes(addr)
         } 
-        else if (type == b"bool") {
-            let boolean = dynamic_field::borrow<Key, bool>(uid, key);
+        else if (type_bytes == b"bool") {
+            let boolean = dynamic_field::borrow<T, bool>(uid, key);
             bcs::to_bytes(boolean)
         } 
-        else if (type == b"id") {
-            let object_id = dynamic_field::borrow<Key, ID>(uid, key);
+        else if (type_bytes == b"id") {
+            let object_id = dynamic_field::borrow<T, ID>(uid, key);
             bcs::to_bytes(object_id)
         } 
-        else if (type == b"u8") {
-            let int = dynamic_field::borrow<Key, u8>(uid, key);
+        else if (type_bytes == b"u8") {
+            let int = dynamic_field::borrow<T, u8>(uid, key);
             bcs::to_bytes(int)
         } 
-        else if (type == b"u64") {
-            let int = dynamic_field::borrow<Key, u64>(uid, key);
+        else if (type_bytes == b"u64") {
+            let int = dynamic_field::borrow<T, u64>(uid, key);
             bcs::to_bytes(int)
         } 
-        else if (type == b"u128") {
-            let int = dynamic_field::borrow<Key, u128>(uid, key);
+        else if (type_bytes == b"u128") {
+            let int = dynamic_field::borrow<T, u128>(uid, key);
             bcs::to_bytes(int)
         } 
-        else if (type == b"String") {
-            let string = dynamic_field::borrow<Key, String>(uid, key);
+        else if (type_bytes == b"String") {
+            let string = dynamic_field::borrow<T, String>(uid, key);
             bcs::to_bytes(string)
         }
-        else if (type == b"Url") {
-            let url = dynamic_field::borrow<Key, Url>(uid, key);
+        else if (type_bytes == b"Url") {
+            let url = dynamic_field::borrow<T, Url>(uid, key);
             bcs::to_bytes(url)
         } 
-        else if (type == b"vector<address>") {
-            let vec = dynamic_field::borrow<Key, vector<address>>(uid, key);
+        else if (type_bytes == b"vector<address>") {
+            let vec = dynamic_field::borrow<T, vector<address>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<bool>") {
-            let vec = dynamic_field::borrow<Key, vector<bool>>(uid, key);
+        else if (type_bytes == b"vector<bool>") {
+            let vec = dynamic_field::borrow<T, vector<bool>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<id>") {
-            let vec = dynamic_field::borrow<Key, vector<ID>>(uid, key);
+        else if (type_bytes == b"vector<id>") {
+            let vec = dynamic_field::borrow<T, vector<ID>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<u8>") {
-            let vec = dynamic_field::borrow<Key, vector<u8>>(uid, key);
+        else if (type_bytes == b"vector<u8>") {
+            let vec = dynamic_field::borrow<T, vector<u8>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<u64>") {
-            let vec = dynamic_field::borrow<Key, vector<u64>>(uid, key);
+        else if (type_bytes == b"vector<u64>") {
+            let vec = dynamic_field::borrow<T, vector<u64>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<u128>") {
-            let vec = dynamic_field::borrow<Key, vector<u128>>(uid, key);
+        else if (type_bytes == b"vector<u128>") {
+            let vec = dynamic_field::borrow<T, vector<u128>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<String>") {
-            let vec = dynamic_field::borrow<Key, vector<String>>(uid, key);
+        else if (type_bytes == b"vector<String>") {
+            let vec = dynamic_field::borrow<T, vector<String>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"vector<Url>") {
-            let vec = dynamic_field::borrow<Key, vector<Url>>(uid, key);
+        else if (type_bytes == b"vector<Url>") {
+            let vec = dynamic_field::borrow<T, vector<Url>>(uid, key);
             bcs::to_bytes(vec)
         }
-        else if (type == b"VecMap") {
-            let vec_map = dynamic_field::borrow<Key, VecMap<String, String>>(uid, key);
+        else if (type_bytes == b"VecMap") {
+            let vec_map = dynamic_field::borrow<T, VecMap<String, String>>(uid, key);
             bcs::to_bytes(vec_map)
         }
-        else if (type == b"vector<VecMap>") {
-            let vec_vec_map = dynamic_field::borrow<Key, vector<VecMap<String, String>>>(uid, key);
+        else if (type_bytes == b"vector<VecMap>") {
+            let vec_vec_map = dynamic_field::borrow<T, vector<VecMap<String, String>>>(uid, key);
             bcs::to_bytes(vec_vec_map)
         }
         else {

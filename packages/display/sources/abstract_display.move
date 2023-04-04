@@ -23,18 +23,18 @@ module display::abstract_display {
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::VecMap;
 
     use sui_utils::encode;
     use sui_utils::typed_id;
     use sui_utils::struct_tag::{Self, StructTag};
+    use sui_utils::vec_map2;
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::publish_receipt::{Self, PublishReceipt};
 
-    use display::display;
-    use display::schema;
+    use attach::schema;
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -43,10 +43,7 @@ module display::abstract_display {
     const EINVALID_PUBLISH_RECEIPT: u64 = 1;
     const ETYPE_IS_NOT_ABSTRACT: u64 = 2;
     const ETYPE_ALREADY_DEFINED: u64 = 3;
-    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 4;
-    const EINVALID_SCHEMA_ID: u64 = 5;
-    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 6;
-    const EUNDEFINED_KEY: u64 = 7;
+    const EVEC_LENGTH_MISMATCH: u64 = 4;
 
     // Shared root-level object. Cannot be destroyed. Single, unique on its `type` field.
     // We could potentially make these storeable / owned as well; it depends if the Sui Fullnode will be able
@@ -75,7 +72,7 @@ module display::abstract_display {
         resolver_strings: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let abstract_type = create_<T>(publisher, data, resolver_strings, schema_fields, ctx);
+        let abstract_type = create_<T>(publisher, keys, resolver_strings, ctx);
 
         // If `owner` is not set, it will default to the transaction-sender
         let owner = if (option::is_some(&owner_maybe)) { 
@@ -106,7 +103,7 @@ module display::abstract_display {
         let i = 0;
         while (i < vector::length(&keys)) {
             let resolver = *vector::borrow(&resolver_strings, i);
-            assert!(vector::length(&vector::borrow(&resolver, 0)) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
+            assert!(vector::length(&resolver) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
             i = i + 1;
         };
 
@@ -120,7 +117,12 @@ module display::abstract_display {
     public fun return_and_share(abstract_type: AbstractDisplay, owner: address) {
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
-        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, typed_id, vector[owner], &auth);
+        ownership::as_shared_object<AbstractType, SimpleTransfer>(
+            &mut abstract_type.id,
+            typed_id,
+            vector[owner],
+            &auth
+        );
         transfer::share_object(abstract_type);
     }
 
@@ -178,14 +180,14 @@ module display::abstract_display {
 
     // ======== Accessor Functions =====
 
-    public fun borrow_resolvers(self: &AbstractDisplay): &VecMap<String, String> {
+    public fun borrow_resolvers(self: &AbstractDisplay): VecMap<String, vector<String>> {
         &self.resolvers
     }
 
     public fun borrow_mut_resolvers<T>(
         self: &mut Display<T>,
         auth: &TxAuthority
-    ): &mut VecMap<String, vector<String>> {
+    ): VecMap<String, vector<String>> {
         assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut self.resolvers

@@ -4,6 +4,7 @@
 version = 0
 
 dependencies = [
+  { name = "Attach" },
   { name = "Ownership" },
   { name = "Sui" },
   { name = "SuiUtils" },
@@ -11,8 +12,18 @@ dependencies = [
 ]
 
 [[move.package]]
+name = "Attach"
+source = { local = "../attach" }
+
+dependencies = [
+  { name = "Ownership" },
+  { name = "Sui" },
+  { name = "SuiUtils" },
+]
+
+[[move.package]]
 name = "MoveStdlib"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "devnet", subdir = "crates/sui-framework/packages/move-stdlib" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "82c9c80", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
 name = "Ownership"
@@ -25,7 +36,7 @@ dependencies = [
 
 [[move.package]]
 name = "Sui"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "devnet", subdir = "crates/sui-framework/packages/sui-framework" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "82c9c80", subdir = "crates/sui-framework/packages/sui-framework" }
 
 dependencies = [
   { name = "MoveStdlib" },

@@ -21,23 +21,23 @@ module sui_utils::string2 {
     }
 
     public fun from_id(id: ID): String {
-        let bytes = object::id_to_address(&id);
+        let bytes = object::id_to_bytes(&id);
         string::utf8(hex::encode(bytes))
     }
 
     public fun into_address(str: String): address {
         assert!(string::length(&str) == address::length() * 2, EINCORRECT_SIZE_FOR_ADDRESS);
 
-        let bytes = string::bytes(str);
-        let addr_bytes = hex::decode(bytes);
+        let bytes = string::bytes(&str);
+        let addr_bytes = hex::decode(*bytes);
         sui_address::from_bytes(addr_bytes)
     }
 
     public fun into_id(str: String): ID {
         assert!(string::length(&str) == address::length() * 2, EINCORRECT_SIZE_FOR_ADDRESS);
 
-        let bytes = string::bytes(str);
-        let id_bytes = hex::decode(bytes);
+        let bytes = string::bytes(&str);
+        let id_bytes = hex::decode(*bytes);
         object::id_from_bytes(id_bytes)
     }
 }

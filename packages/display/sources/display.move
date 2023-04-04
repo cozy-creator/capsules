@@ -13,28 +13,29 @@
 // The intent for Display objects is that they should be owned and maintained by the package-publisher, or frozen.
 
 module display::display {
+    use std::option::Option;
     use std::string::String;
-    use std::option;
     use std::vector;
 
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
-    use sui::typed_id;
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::VecMap;
 
     use sui_utils::encode;
     use sui_utils::struct_tag;
+    use sui_utils::typed_id;
+    use sui_utils::vec_map2;
 
     use ownership::ownership;
+    use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::tx_authority::{Self, TxAuthority};
 
-    use display::publish_receipt::{Self, PublishReceipt};
     use display::abstract_display::{Self, AbstractDisplay};
 
-    use data::data;
-    use data::schema::{Self, Schema, Field};
+    use attach::data;
+    use attach::schema;
 
     // error enums
     const EINVALID_PUBLISH_RECEIPT: u64 = 0;
@@ -76,7 +77,7 @@ module display::display {
         ctx: &mut TxContext
     ) {
         let display = create_<T>(publisher, keys, resolver_strings, ctx);
-        transfer::transfer(type, tx_context::sender(ctx));
+        transfer::transfer(display, tx_context::sender(ctx));
     }
 
     // `T` must not contain any generics. If it does, you must first use `define_abstract()` to create
@@ -105,23 +106,22 @@ module display::display {
         let i = 0;
         while (i < vector::length(&keys)) {
             let resolver = *vector::borrow(&resolver_strings, i);
-            assert!(vector::length(&vector::borrow(&resolver, 0)) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
+            assert!(vector::length(&resolver) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
             i = i + 1;
         };
 
         let resolvers = vec_map2::create(keys, resolver_strings);
 
-        create_internal<T>(resolvers, ctx);
+        create_internal<T>(resolvers, ctx)
     }
 
     // Convenience entry function
     public entry fun create_from_abstract<T>(
-        abstract_display: &mut AbstractDisplay,
-        data: vector<vector<u8>>,
+        abstract: &mut AbstractDisplay,
         ctx: &mut TxContext
     ) {
-        let display = create_from_abstract_<T>(abstract_type, data, &tx_authority::begin(ctx), ctx);
-        transfer(type, tx_context::sender(ctx));
+        let display = create_from_abstract_<T>(abstract, &tx_authority::begin(ctx), ctx);
+        transfer(display, tx_context::sender(ctx));
     }
 
     // Returns a concrete type based on an abstract type, like Type<Coin<0x2::sui::SUI>> from
@@ -135,14 +135,14 @@ module display::display {
     ): Display<T> {
         let struct_tag = struct_tag::get<T>();
         assert!(struct_tag::is_same_abstract_type(
-            &abstract_type::into_struct_tag(abstract), &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
+            &abstract_display::into_struct_tag(abstract), &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
 
         // We use the existing resolvers and fields from the abstract type
-        let resolvers = *abstract_type::borrow_resolvers(abstract);
+        let resolvers = *abstract_display::borrow_resolvers(abstract);
 
         // The owner of the abstract type must authorize this action; the ownership check is done
         // within this function
-        let uid = abstract_type::uid_mut(abstract, auth);
+        let uid = abstract_display::uid_mut(abstract, auth);
 
         // Ensures that this concrete type can only ever be created once
         let generics = struct_tag::generics(&struct_tag);
@@ -164,7 +164,7 @@ module display::display {
         };
 
         let auth = tx_authority::begin_with_type(&Witness { });
-        let typed_id = typed_id::new(&type);
+        let typed_id = typed_id::new(&display);
         ownership::as_owned_object(&mut display.id, typed_id, &auth);
 
         display
@@ -240,8 +240,8 @@ module display::display {
     }
 
     // `Type` is an owned object, so there's no need for an ownership check
-    public fun uid_mut<T>(type: &mut Display<T>): &mut UID {
-        &mut type.id
+    public fun uid_mut<T>(self: &mut Display<T>): &mut UID {
+        &mut self.id
     }
 }
 

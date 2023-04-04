@@ -22,19 +22,15 @@ module attach::data {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::bcs::{Self};
     use sui::dynamic_field;
-    use sui::object::{UID, ID};
-    use sui::vec_map::VecMap;
-    use sui::url::Url;
+    use sui::object::UID;
 
-    use sui_utils::encode;
-    use sui_utils::deserialize;
-    use sui_utils::dynamic_field2;
+    use sui_utils::string2;
 
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
+    use attach::serializer;
 
     // Error enums
     const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
@@ -77,7 +73,7 @@ module attach::data {
             let value = vector::pop_back(&mut values);
             let old_type = vector::pop_back(&mut old_types_to_drop);
 
-            set_field_(uid, Key { namespace, key }, type, old_type, value, true);
+            serializer::set_field_(uid, Key { namespace, key }, type, old_type, value, true);
         };
     }
 
@@ -89,7 +85,7 @@ module attach::data {
         auth: &TxAuthority
     ) {
         let namespace_addr = tx_authority::type_into_address<Namespace>();
-        deserialize_and_set_(uid, namespace_addr, data, fields, auth);
+        deserialize_and_set_(uid, option::some(namespace_addr), data, fields, auth);
     }
 
     // This is a powerful function that allows client applications to serialize arbitrary objects
@@ -115,7 +111,7 @@ module attach::data {
             let (key, type) = schema::parse_field(field);
             let old_type = *vector::borrow(&old_types_to_drop, i);
 
-            set_field(uid, Key { namespace, key }, type, old_type, value, true);
+            serializer::set_field(uid, Key { namespace, key }, type, old_type, value, true);
             i = i + 1;
         };
     }
@@ -136,7 +132,7 @@ module attach::data {
             let old_type = *vector::borrow(&old_types, i);
 
             if (!string::is_empty(&old_type)) {
-                drop_field(uid, key, old_type);
+                serializer::drop_field(uid, key, old_type);
             };
 
             i = i + 1;
@@ -157,7 +153,7 @@ module attach::data {
             let key = *vector::borrow(&keys, i);
             let type = *vector::borrow(&types, i);
 
-            drop_field(uid, key, type);
+            serializer::drop_field(uid, key, type);
 
             i = i + 1;
         };
@@ -185,7 +181,12 @@ module attach::data {
     // Requires namespace authority to write.
     // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
     // will abort.
-    public fun borrow_mut<T: store>(uid: &mut UID, namespace: Option<address>, key: String, auth: &TxAuthority): &mut T {
+    public fun borrow_mut<T: store>(
+        uid: &mut UID,
+        namespace: Option<address>,
+        key: String,
+        auth: &TxAuthority
+    ): &mut T {
         assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
@@ -225,18 +226,22 @@ module attach::data {
         destination_uid: &mut UID,
         auth: &TxAuthority
     ) {
+        assert!(tx_authority::is_signed_by_(destination, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+
         let (keys, types) = schema::into_keys_types(source_uid, source);
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
-            let type = *vector::borrow(&types, i);
+            
             let key1 = Key { namespace: source, key };
             let key2 = Key { namespace: destination, key };
-            let old_type_maybe = get_type(destination_uid, destination, key);
+
+            let type1 = *vector::borrow(&types, i);
+            let old_type_maybe = schema::get_type(destination_uid, destination, key);
             let old_type = if (option::is_some(&old_type_maybe)) {
                 option::destroy_some(old_type_maybe)
             } else {
-                string::empty()
+                string2::empty()
             };
 
             serializer::duplicate(source_uid, destination_uid, key1, key2, type1, old_type, true);
@@ -312,7 +317,7 @@ module attach::data {
     // Same as above, but with separated vectors per type
     // This only matters for on-chain functions; off-chain all the vectors get concatenated together
     public fun view_parsed(uid: &UID, namespace: Option<address>, keys: vector<String>): vector<vector<u8>> {
-        let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
+        let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
 
         while (i < len) {
             vector::push_back(
@@ -345,7 +350,7 @@ module attach::data {
         response
     }
 
-    public fun get_bcs_bytes<T: store + copy + drop>(
+    public fun get_bcs_bytes(
         uid: &UID,
         namespace: Option<address>,
         key: String

@@ -149,7 +149,7 @@ module ownership::ownership {
 
     // ======= Authority Checkers =======
 
-    public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypeID<T>, auth: &TxAuthority) {
+    public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
         assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
         assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
@@ -165,7 +165,7 @@ module ownership::ownership {
         if (!is_initialized(uid)) false
         else {
             let module_authority = option::destroy_some(get_module_authority(uid));
-            tx_authority::has_k_of_n_signatures(module_authority, 1, auth)
+            tx_authority::is_signed_by(module_authority, auth)
         }
     }
 
@@ -199,7 +199,7 @@ module ownership::ownership {
         if (!is_initialized(uid)) { return option::none() };
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-        let addr = tx_authority::witness_addr_from_struct_tag(ownership.type);
+        let addr = tx_authority::witness_addr_from_struct_tag(&ownership.type);
         option::some(addr)
     }
 
