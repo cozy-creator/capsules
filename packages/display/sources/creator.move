@@ -29,19 +29,17 @@ module display::creator {
     // Shared, root-level object. Cannot be destroyed.
     struct Creator has key {
         id: UID
-        // <display::Key { slot: String }> : <T: store>
+        // <data::Key { namespace, key }> : <T: store>
     }
 
-    // Added to publish-receipt
+    // Added to publish-receipt to prevent a package from being claimed twice
     struct Key has store, copy, drop { }
 
     // Module authority struct
     struct Witness has drop { }
 
-    public entry fun define(
+    public entry fun create(
         owner: address,
-        data: vector<vector<u8>>,
-        schema: &Schema,
         ctx: &mut TxContext
     ) {
         let creator = Creator { id: object::new(ctx) };

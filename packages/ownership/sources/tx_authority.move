@@ -12,6 +12,7 @@ module ownership::tx_authority {
     use sui::object::{Self, ID};
 
     use sui_utils::encode;
+    use sui_utils::struct_tag::{Self, StructTag};
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
@@ -125,6 +126,17 @@ module ownership::tx_authority {
 
     public fun witness_addr_(type: String): address {
         let witness_type = witness_string_(type);
+        type_string_into_address(witness_type)
+    }
+
+    public fun witness_addr_from_struct_tag(tag: &StructTag): address {
+        let witness_type = string::empty();
+        string::append(&mut witness_type, string2::from_id(struct_tag::package_id(tag)));
+        string::append(&mut witness_type, utf8(b"::"));
+        string::append(&mut witness_type, struct_tag::module_name(tag));
+        string::append(&mut witness_type, utf8(b"::"));
+        string::append(&mut witness_type, utf8(WITNESS_STRUCT));
+
         type_string_into_address(witness_type)
     }
 

@@ -120,30 +120,25 @@ module display::abstract_display {
     public fun return_and_share(abstract_type: AbstractDisplay, owner: address) {
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
-
-        ownership::initialize_with_module_authority(&mut abstract_type.id, typed_id, &auth);
-        display::attach_(&mut abstract_type.id, data, fields, &auth);
-
-        let auth = tx_authority::begin_with_type(&Witness { });
-        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, vector[owner], &auth);
-
+        ownership::as_shared_object<SimpleTransfer>(&mut abstract_type.id, typed_id, vector[owner], &auth);
         transfer::share_object(abstract_type);
     }
 
     // ====== Modify Resolvers ======
     // This is Display's own custom API for editing the resolvers stored on the Display object.
-    
-    // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
-    // it will be added.
+
+    // Convenience function
     public entry fun set_resolvers(
         self: &mut AbstractDisplay,
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        set_resolvers_(self, data, raw_fields, &tx_authority::begin(ctx));
+        set_resolvers_(self, keys, resolver_strings, &tx_authority::begin(ctx));
     }
-    
+
+    // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
+    // it will be added.
     public fun set_resolvers_(
         self: &mut AbstractDisplay,
         keys: vector<String>,
@@ -165,6 +160,7 @@ module display::abstract_display {
         };
     }
 
+    // Convenience function
     public entry fun remove_resolvers(self: &mut AbstractDisplay, keys: vector<String>, ctx: &mut TxContext) {
         remove_resolvers_(self, keys, &tx_authority::begin(ctx));
     }
@@ -186,7 +182,10 @@ module display::abstract_display {
         &self.resolvers
     }
 
-    public fun borrow_mut_resolvers<T>(self: &mut Display<T>, auth: &TxAuthority): &mut VecMap<String, vector<String>> {
+    public fun borrow_mut_resolvers<T>(
+        self: &mut Display<T>,
+        auth: &TxAuthority
+    ): &mut VecMap<String, vector<String>> {
         assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut self.resolvers

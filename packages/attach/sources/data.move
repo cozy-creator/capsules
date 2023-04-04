@@ -326,7 +326,12 @@ module attach::data {
     }
 
     // Same as above, except we fill in undefined values with the default object's values
-    public fun view_with_default(uid: &UID, default: &UID, namespace: Option<address>, keys: vector<String>): vector<u8> {
+    public fun view_with_default(
+        uid: &UID,
+        default: &UID,
+        namespace: Option<address>,
+        keys: vector<String>
+    ): vector<u8> {
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
@@ -340,7 +345,11 @@ module attach::data {
         response
     }
 
-    public fun get_bcs_bytes<T: store + copy + drop>(uid: &UID, namespace: Option<address>, key: String): vector<u8> {
+    public fun get_bcs_bytes<T: store + copy + drop>(
+        uid: &UID,
+        namespace: Option<address>,
+        key: String
+    ): vector<u8> {
         let type_maybe = schema::get_type(uid, namespace, key);
         // if (option::is_none(type_maybe)) {
         //     return vector[0u8]; // option::none in BCS
