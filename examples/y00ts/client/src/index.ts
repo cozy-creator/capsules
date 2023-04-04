@@ -23,7 +23,7 @@ async function main(signer: RawSigner) {
 
   let signerAddress = '0x' + (await signer.getAddress());
 
-  // ======= Publish Package =======
+  // ======= Transaction 1: Publish Package =======
   console.log('Publishing Y00t package...');
 
   const modulesInBase64 = JSON.parse(
@@ -41,42 +41,17 @@ async function main(signer: RawSigner) {
   let y00tPackageID = createdObjects.Immutable[0];
   let y00tPublishReceipt = createdObjects.AddressOwner[0];
 
-  // ======= Define Creator Object =======
+  // ======= Transaction 2: Create Creator Object =======
   console.log('Making a creator object...');
 
   // Fetch an on-chain existing creator schema -- commented out for now
   // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
 
-  const creatorSchema = {
-    name: 'String',
-    url: 'Url'
-  } as const;
-
-  // Create a schema object to be used for the creator object
-  // Normally you'd just use one that already exists...
-  const moveCallTxn1 = await signer.executeMoveCall({
-    packageObjectId: displayPackageID,
-    module: 'schema',
-    function: 'create',
-    typeArguments: [],
-    arguments: [Object.entries(creatorSchema).map(([key, value]) => [key, value])],
-    gasBudget: 2000
-  });
-
-  let creatorSchemaObjectID = getCreatedObjects(moveCallTxn1).Immutable[0];
-
-  type Creator = JSTypes<typeof creatorSchema>;
-
-  let creatorObject: Creator = {
-    name: 'Dust Labs',
-    url: 'https://www.dustlabs.com/'
-  };
-
-  // Make a creator object, add display data to it using a creator-display schema
+  // Make a creator object
   const moveCallTxn2 = await signer.executeMoveCall({
     packageObjectId: displayPackageID,
     module: 'creator',
-    function: 'define',
+    function: 'create',
     typeArguments: [],
     arguments: [
       signerAddress,
@@ -88,7 +63,24 @@ async function main(signer: RawSigner) {
 
   let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
 
-  // ======= Update Creator object's display data =======
+  // ======= Transaction 3: Attach Data to Creator Object =======
+
+  const creatorData = {
+    name: 'String',
+    url: 'Url'
+  } as const;
+
+  type Creator = JSTypes<typeof creatorData>;
+
+  let creatorObject: Creator = {
+    name: 'Dust Labs',
+    url: new URL('https://www.dustlabs.com/')
+  };
+
+  // Something
+
+  // ======= Transaction 4: Update Creator Object's Data =======
+
   console.log('Updating creator object...');
 
   creatorObject.name = 'Y00t Labs';
@@ -109,7 +101,7 @@ async function main(signer: RawSigner) {
     gasBudget: 3000
   });
 
-  // ======= Claim a package object using our publish-receipt + creator object =======
+  // ======= Transaction 5: Claim a package object using our publish-receipt + creator object =======
   console.log('Claiming package object...');
 
   const moveCallTxn4 = await signer.executeMoveCall({
@@ -125,7 +117,7 @@ async function main(signer: RawSigner) {
 
   // Add some display data for our package object using a package-display schema
 
-  // ======= Define an abstract type from our Publish Receipt =======
+  // ======= Transaction 6: Define an abstract type for Points<T> Publish Receipt =======
   console.log('Defining abstract type...');
 
   const y00tSchema = {
@@ -166,7 +158,9 @@ async function main(signer: RawSigner) {
 
   let abstractTypeObjectID = getCreatedObjects(moveCallTxn6).Shared[0];
 
-  // ====== Produce a concrete type from our AbstractType =======
+  // ======= Transaction 7: Attach Data to Abstract Type =======
+
+  // ====== Transaction 8: Produce a concrete type from our AbstractType =======
   console.log('Producing concrete type from abstract...');
 
   // This is too expensive for gas; optimize
@@ -200,6 +194,10 @@ async function main(signer: RawSigner) {
   });
 
   let typeObjectID = getCreatedObjects(moveCallTxn8).AddressOwner[0];
+
+  // ====== Transaction 9: Attach Data to Concrete Type =======
+
+  // ====== Transaction 10: Modify Data on Concrete Type =======
 
   // Modify some fields on our Type
   console.log('Modifying fields on our Y00t Type...');
@@ -241,13 +239,13 @@ async function main(signer: RawSigner) {
     gasBudget: 2000
   });
 
-  // Create a Y00t, attaching display data to it
+  // ====== Transaction 11: Create a Y00t, attach data to it =======
 
-  // Modify our Y00t's display data
+  // ====== Transaction 12: Modify Y00t data =======
 
-  // View our Y00t, using our Type + object in a view-function
+  // ====== Transaction 13: View Y00t =======
 
-  // Send our Y00t to someone else
+  // ====== Transaction 14: Transfer Ownership of Y00t =======
 }
 
 const NFTSchema = {

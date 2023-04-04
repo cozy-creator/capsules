@@ -41,6 +41,8 @@ module y00t::y00t {
         transfer::share_object(y00t);
     }
 
+    // Note that once init functions can accept arguments in Sui, we should bring in a creator object and then
+    // claim the package object directly inside of this
     fun init(otw: Y00T, ctx: &mut TxContext) {
         let receipt = publish_receipt::claim(&otw, ctx);
 
