@@ -117,7 +117,7 @@ module attach::data {
         };
     }
 
-    public fun remove<T: store + copy + drop>(
+    public fun remove(
         uid: &mut UID,
         namespace: Option<address>,
         keys: vector<String>,
@@ -140,7 +140,7 @@ module attach::data {
         };
     }
 
-    public fun remove_all<T: store + copy + drop>(
+    public fun remove_all(
         uid: &mut UID,
         namespace: Option<address>,
         auth: &TxAuthority

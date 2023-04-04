@@ -13,7 +13,7 @@ module composable_game::aircraft_carrier {
     // Shared, root-level object. Owned by the game-master
     struct Config has key {
         id: UID,
-        schema: Schema
+        schema_fields: vector<vector<String>>
         // servers: VecSet2<address>
     }
 
@@ -32,64 +32,38 @@ module composable_game::aircraft_carrier {
         vector[b"speed", b"Option<u8>"]
     ];
 
-    // Convenience entry function
-    public entry fun create(
-        data: vector<vector<u8>>,
-        schema_fields: vector<vector<String>>,
-        owner: address,
-        config: &Config,
-        ctx: &mut TxContext
-    ) {
-            public fun deserialize_and_set<Namespace>(
-        uid: &mut UID,
-        data: vector<vector<u8>>,
-        fields: vector<vector<String>>,
-        auth: &TxAuthority
-    ) {
-
-        data::deserialize_and_set<Witness>(&mut carrier.id, data, schema_fields, auth);
-
-        let schema = schema::create(schema_fields);
-        let carrier = create_(data, schema, owner, config, ctx);
-        transfer::share_object(carrier);
-    }
-
     // A fixed schema is stored in the config object; the data supplied must conform to this shape
+    // otherwise the deserialization will fail and the transaction will abort
     public entry fun create_fixed_schema(
         data: vector<vector<u8>>,
         owner: address,
         config: &Config,
         ctx: &mut TxContext
     ) {
-        let carrier = create_(data, config.schema, owner, config, ctx);
-        transfer::share_object(carrier);
+        create(data, config.schema_fields, owner, config, ctx);
     }
 
-    public fun create_(
+    public entry fun create(
         data: vector<vector<u8>>,
-        schema: Schema,
+        fields: vector<vector<String>>,
         owner: address,
         config: &Config,
         ctx: &mut TxContext
-    ): Carrier {
+    ) {
         let server = tx_context::sender(ctx);
         assert!(ownership::is_authorized_to_create(&server, &config.id), ENO_SERVER_AUTH);
 
-        let schema = schema::create(schema_fields);
-        let name = data::remove<String>(utf8(b"name"), &mut data, &mut schema, utf8(b"None"));
+        let name = data::deserialize_and_take_string(utf8(b"name"), &mut data, &mut fields, utf8(b"None"));
 
-        let carrier = Carrier { 
-            id: object::new(ctx), 
-            name 
-        };
+        let carrier = Carrier { id: object::new(ctx), name };
 
-        let typed_id = typed_id::new(&outlaw);
-        let auth = tx_authority::begin_with_type(&Witness {});
+        let typed_id = typed_id::new(&carrier);
+        let auth = tx_authority::begin_with_type(&Witness { });
+        ownership::as_shared_object<SimplerTransfer>(&mut carrier.id, typed_id, vector[owner], &auth);
 
-        ownership::as_shared_object<SimplerTransfer>(&mut carrier.id, vector[owner], typed_id, &auth)
-        data::attach_<Witness>(&mut carrier.id, data, schema, &auth);
+        data::deserialize_and_set(Witness { }, &mut carrier.id, data, fields);
 
-        carrier
+        transfer::share_object(carrier);
     }
 
     fun init(ctx: &mut TxContext) {
@@ -97,14 +71,15 @@ module composable_game::aircraft_carrier {
 
         let config = Config {
             id: object::new(ctx),
-            schema: schema
+            schema_fields: schema
             // servers: vec_set2::empty()
         };
-        
+
+        let typed_id = typed_id::new(&config);
         ownership::as_shared_object<SimpleTransfer>(
             &mut config.id,
+            typed_id,
             vector[tx_context::sender(ctx)],
-            typed_id::new(&config),
             &tx_authority::begin_with_type(&Witness {})
         );
 
