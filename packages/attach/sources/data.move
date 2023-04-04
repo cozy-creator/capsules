@@ -117,7 +117,7 @@ module attach::data {
         };
     }
 
-    public fun remove<T: store + copy + drop>(
+    public fun remove(
         uid: &mut UID,
         namespace: Option<address>,
         keys: vector<String>,
@@ -133,14 +133,14 @@ module attach::data {
             let old_type = *vector::borrow(&old_types, i);
 
             if (!string::is_empty(&old_type)) {
-                serializer::drop_field(uid, key, old_type);
+                serializer::drop_field(uid, Key { namespace, key }, old_type);
             };
 
             i = i + 1;
         };
     }
 
-    public fun remove_all<T: store + copy + drop>(
+    public fun remove_all(
         uid: &mut UID,
         namespace: Option<address>,
         auth: &TxAuthority
@@ -154,7 +154,7 @@ module attach::data {
             let key = *vector::borrow(&keys, i);
             let type = *vector::borrow(&types, i);
 
-            serializer::drop_field(uid, key, type);
+            serializer::drop_field(uid, Key { namespace, key }, type);
 
             i = i + 1;
         };
@@ -362,9 +362,8 @@ module attach::data {
         // }
         // we might want to append vector[1u8] as option::some here
         let type = option::destroy_some(type_maybe);
-        let key = Key { namespace, key };
 
-        serializer::get_bcs_bytes(uid, key, type)
+        serializer::get_bcs_bytes(uid, Key { namespace, key }, type)
     }
 
     // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
@@ -451,10 +450,9 @@ module attach::data_tests {
 
     const SENDER: address = @0x99;
 
-    public fun extend(test_object: &mut TestObject): &mut UID {
+    public fun uid_mut(test_object: &mut TestObject): &mut UID {
         &mut test_object.id
     }
-
 
     fun create_test_object(scenario: &mut Scenario) {
         let ctx = test_scenario::ctx(scenario);
@@ -602,17 +600,15 @@ module attach::data_tests {
         test_scenario::next_tx(&mut scenario, SENDER);
 
         {
+            let field_name = utf8(b"rating");
+
             let object = test_scenario::take_shared<TestObject>(&scenario);
             assert_set_serialized_data(&mut object.id, namespace, values, fields);
 
             let auth = tx_authority::begin_with_type(&Witness {});
-            data::remove<u8>(&mut object.id, namespace, vector[utf8(b"rating")], &auth);
+            data::remove(&mut object.id, namespace, vector[field_name], &auth);
 
-            // assert!(!data::exists_(&object.id, namespace, utf8(b"rating")), 0);
-
-            // data is still available even after being removed
-            let rating = data::borrow<u8>(&object.id, namespace, utf8(b"rating"));
-            std::debug::print(rating);
+            assert!(!data::exists_(&object.id, namespace, field_name), 0);
 
             test_scenario::return_shared(object);
         };
