@@ -237,7 +237,7 @@ module attach::data {
             let key2 = Key { namespace: destination, key };
 
             let old_types_to_drop = schema::update_object_schema_(destination_uid, destination, vector[key], type);
-            let old_type = *vector::borrow(&old_types_to_drop, 0);
+            let old_type = vector::pop_back(&mut old_types_to_drop);
 
             serializer::duplicate(source_uid, destination_uid, key1, key2, type, old_type, true);
 
