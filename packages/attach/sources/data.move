@@ -609,7 +609,6 @@ module attach::data_tests {
 
         {
             let field_name = utf8(b"rating");
-
             let object = test_scenario::take_shared<TestObject>(&scenario);
             assert_set_serialized_data(&mut object.id, namespace, values, fields);
 
@@ -619,6 +618,70 @@ module attach::data_tests {
             assert!(!data::exists_(&object.id, namespace, field_name), 0);
 
             test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_remove_all_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            assert_set_serialized_data(&mut object.id, namespace, values, fields);
+
+            let auth = tx_authority::begin_with_type(&Witness {});
+            data::remove_all(&mut object.id, namespace, &auth);
+
+            let (i, len) = (0, vector::length(&fields));
+            while (i < len) {
+                let field_name = *vector::borrow(vector::borrow(&fields, i), 0);
+                assert!(!data::exists_(&object.id, namespace, field_name), 0);
+
+                i = i + 1;
+            };
+
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_duplicate_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let source_object = test_scenario::take_shared<TestObject>(&scenario);
+            let source_uid_mut = &mut source_object.id;
+
+            assert_set_serialized_data(source_uid_mut, namespace, values, fields);
+            create_test_object(&mut scenario);
+            test_scenario::next_tx(&mut scenario, SENDER);
+
+            {
+                let dest_object = test_scenario::take_shared<TestObject>(&scenario);
+                let dest_uid_mut = &mut dest_object.id;
+
+                let auth = tx_authority::begin_with_type(&Witness {});
+                data::duplicate_(namespace, option::none(), source_uid_mut, dest_uid_mut, &auth);
+
+                assert_set_serialized_data(dest_uid_mut, option::none(), values, fields);
+                test_scenario::return_shared(dest_object);
+            };
+
+            test_scenario::return_shared(source_object);
         };
 
         test_scenario::end(scenario);
