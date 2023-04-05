@@ -98,7 +98,7 @@ module ownership::ownership {
 
     // Requires module, owner, and transfer authorities all to sign off on this migration
     public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
-        assert!(is_authorized_by_module(uid, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
         assert!(is_authorized_by_transfer(uid, auth), ENO_TRANSFER_AUTHORITY);
 
