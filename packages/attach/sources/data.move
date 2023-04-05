@@ -25,8 +25,6 @@ module attach::data {
     use sui::dynamic_field;
     use sui::object::UID;
 
-    use sui_utils::string2;
-
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
@@ -133,7 +131,7 @@ module attach::data {
             let old_type = *vector::borrow(&old_types, i);
 
             if (!string::is_empty(&old_type)) {
-                serializer::drop_field(uid, key, old_type);
+                serializer::drop_field(uid, Key { namespace, key }, old_type);
             };
 
             i = i + 1;
@@ -154,7 +152,7 @@ module attach::data {
             let key = *vector::borrow(&keys, i);
             let type = *vector::borrow(&types, i);
 
-            serializer::drop_field(uid, key, type);
+            serializer::drop_field(uid, Key { namespace, key }, type);
 
             i = i + 1;
         };
@@ -233,19 +231,15 @@ module attach::data {
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
+            let type = *vector::borrow(&types, i);
             
             let key1 = Key { namespace: source, key };
             let key2 = Key { namespace: destination, key };
 
-            let type1 = *vector::borrow(&types, i);
-            let old_type_maybe = schema::get_type(destination_uid, destination, key);
-            let old_type = if (option::is_some(&old_type_maybe)) {
-                option::destroy_some(old_type_maybe)
-            } else {
-                string2::empty()
-            };
+            let old_types_to_drop = schema::update_object_schema_(destination_uid, destination, vector[key], type);
+            let old_type = vector::pop_back(&mut old_types_to_drop);
 
-            serializer::duplicate(source_uid, destination_uid, key1, key2, type1, old_type, true);
+            serializer::duplicate(source_uid, destination_uid, key1, key2, type, old_type, true);
 
             i = i + 1;
         };
@@ -362,9 +356,8 @@ module attach::data {
         // }
         // we might want to append vector[1u8] as option::some here
         let type = option::destroy_some(type_maybe);
-        let key = Key { namespace, key };
 
-        serializer::get_bcs_bytes(uid, key, type)
+        serializer::get_bcs_bytes(uid, Key { namespace, key }, type)
     }
 
     // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
@@ -423,20 +416,29 @@ module attach::data {
 #[test_only]
 module attach::data_tests {
     use std::string::{String, utf8};
+    use std::option::{Self, Option};
     use std::vector;
-    use std::option;
 
     use sui::bcs;
     use sui::object::{Self, UID};
     use sui::transfer;
+    use sui::tx_context;
     use sui::test_scenario::{Self, Scenario};
-    use sui::typed_id;
 
-    use display::display;
-    use display::schema;
+    use sui_utils::typed_id;
 
     use ownership::tx_authority;
     use ownership::ownership;
+    use ownership::tx_authority::TxAuthority;
+
+    use attach::data;
+    use attach::schema;
+
+    // Error constants
+    const EINVALID_METADATA: u64 = 0;
+    const ENOT_OWNER: u64 = 1;
+
+    const SENDER: address = @0x99;
 
     struct Witness has drop {}
 
@@ -444,153 +446,257 @@ module attach::data_tests {
         id: UID
     }
 
-    // Error constant
-    const EINVALID_METADATA: u64 = 0;
+    public fun uid(test_object: &TestObject): &UID {
+        &test_object.id
+    }
 
-    const SENDER: address = @0x99;
+    public fun uid_mut(test_object: &mut TestObject, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&test_object.id, auth), ENOT_OWNER);
 
-    public fun extend(test_object: &mut TestObject): &mut UID {
         &mut test_object.id
     }
 
-    public fun assert_correct_serialization(data: vector<vector<u8>>, schema_data: vector<vector<String>>): Scenario {
-        // Tx1: Create a schema
-        let scenario_val = test_scenario::begin(SENDER);
-        let scenario = &mut scenario_val;
-        {
-            let ctx = test_scenario::ctx(scenario);
-            schema::create(schema_data, ctx);
+    fun create_test_object(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+        let object = TestObject { 
+            id: object::new(ctx) 
         };
 
-        // Tx2: Create an object and attach metadata
-        test_scenario::next_tx(scenario, SENDER);
-        let schema = test_scenario::take_immutable<schema::Schema>(scenario);
-        {
-            let ctx = test_scenario::ctx(scenario);
+        let typed_id = typed_id::new(&object);
+        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let owner = vector[tx_context::sender(ctx)];
 
-            let object = TestObject { id: object::new(ctx) };
+        ownership::as_shared_object_(&mut object.id, typed_id, owner, owner, &auth);
+        transfer::share_object(object)
+    }
+
+    fun get_test_values(): (vector<vector<u8>>, vector<u8>) {
+        let string_values = vector[ 
+            bcs::to_bytes(&b"Capsules"), 
+            bcs::to_bytes(&b"Coolest project on Sui!"), 
+            bcs::to_bytes(&b"https://www.capsulecraft.dev/"),
+        ];
+        let u8_values = vector<u8>[10];
+
+        (string_values, u8_values)
+    }
+
+    fun get_test_keys(): (vector<String>, vector<String>) {
+        let string_keys = vector[utf8(b"name"), utf8(b"description"), utf8(b"website")];
+        let u8_keys = vector[utf8(b"rating")];
+
+        (string_keys, u8_keys)
+    }
+
+    fun get_serialized_test_data(): (vector<vector<String>>, vector<vector<u8>>) {
+        let fields = vector[
+            vector[utf8(b"name"), utf8(b"String")], 
+            vector[utf8(b"description"), utf8(b"String")], 
+            vector[utf8(b"website"), utf8(b"String")],
+            vector[utf8(b"rating"), utf8(b"u8")],
+        ];
+        let values = vector[ 
+            bcs::to_bytes(&b"Capsules"),
+            bcs::to_bytes(&b"Coolest project on Sui!"),
+            bcs::to_bytes(&b"https://www.capsulecraft.dev/"),
+            bcs::to_bytes<u8>(&9),
+        ];
+
+        (fields, values)
+    }
+
+    fun current_package(): address {
+        tx_authority::type_into_address<Witness>()
+    }
+
+    fun assert_deserialize_values(types: vector<String>, data: vector<u8>, values: vector<vector<u8>>) {
+        let (i, bcs) = (0, bcs::new(data));
+
+        while(i < vector::length(&types)) {
+            let type = *vector::borrow(&types, i);
+            let value = vector::borrow(&values, i);
+
+            if(type == utf8(b"vector<u8>")) {
+                assert!(bcs::peel_vec_u8(&mut bcs) == *value, 0)
+            } else if (type == utf8(b"String")) {
+                assert!(bcs::peel_vec_u8(&mut bcs) == bcs::peel_vec_u8(&mut bcs::new(*value)), 0)
+            } else if(type == utf8(b"u8")) {
+                assert!(bcs::peel_u8(&mut bcs) == *vector::borrow(value, 0), 0)
+            };
+
+            i = i + 1;
+        }
+    }
+
+    fun assert_deserialize_serialized_data(uid: &mut UID, namespace: Option<address>, values: vector<vector<u8>>, fields: vector<vector<String>>) {
+        let data = data::view_all(uid, namespace);
+        let (i, types) = (0, vector[]);
+
+        while(i < vector::length(&fields)) {
+            let field = vector::borrow(&fields, i);
+            vector::push_back(&mut types, *vector::borrow(field, 1));
+
+            i = i + 1;
+        };
+
+        assert_deserialize_values(types, data, values)
+    }
+ 
+    #[test]
+    public fun test_set_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let (string_keys, u8_keys) = get_test_keys();
+        let (string_values, u8_values) = get_test_values();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+
+            let ctx = test_scenario::ctx(&mut scenario);
             let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-            let typed_id = typed_id::new(&object);
+            let uid = uid_mut(&mut object, &auth);
 
-            ownership::initialize_with_module_authority(&mut object.id, typed_id, &auth);
+            data::set<Witness, vector<u8>>(uid, string_keys, string_values, &auth);
+            data::set<Witness, u8>(uid, u8_keys, u8_values, &auth);
 
-            display::attach(&mut object.id, data, &schema, &auth);
+            let namespace = option::some(current_package());
+            let (keys, types) = schema::into_keys_types(uid, namespace);
+            let values = data::view(uid, namespace, keys);
 
-            transfer::share_object(object);
+            let data = string_values;
+            vector::push_back(&mut data, u8_values);
+
+            assert_deserialize_values(types, values, data);
+            test_scenario::return_shared(object);
         };
 
-        // Tx3: view metadata and assert that it was deserialized correctly
-        test_scenario::next_tx(scenario, SENDER);
-        let test_object = test_scenario::take_shared<TestObject>(scenario);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_serialized_set_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
         {
-            let uid = extend(&mut test_object);
-            display::view_field(uid, utf8(b"name"), &schema);
+            let object = test_scenario::take_shared<TestObject>(&scenario);
 
-            let keys = schema::into_keys(&schema);
-            let i = 0;
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
 
-            while (i < vector::length(&keys)) {
-                let key = *vector::borrow(&keys, i);
-                let bcs_bytes = display::view_field(uid, key, &schema);
-                assert!(&bcs_bytes == vector::borrow(&data, i), EINVALID_METADATA);
+            data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
+            assert_deserialize_serialized_data(uid, namespace, values, fields);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_remove_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+
+            let field_name = utf8(b"rating");
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+
+            data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
+            assert_deserialize_serialized_data(uid, namespace, values, fields);
+
+            let auth = tx_authority::begin_with_type(&Witness {});
+            data::remove(uid, namespace, vector[field_name], &auth);
+
+            assert!(!data::exists_(uid, namespace, field_name), 0);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    public fun test_remove_all_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+            
+            data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
+            assert_deserialize_serialized_data(uid, namespace, values, fields);
+            data::remove_all(uid, namespace, &auth);
+
+            let (i, len) = (0, vector::length(&fields));
+            while (i < len) {
+                let field_name = *vector::borrow(vector::borrow(&fields, i), 0);
+                assert!(!data::exists_(uid, namespace, field_name), 0);
+
                 i = i + 1;
             };
+
+            test_scenario::return_shared(object);
         };
-        test_scenario::return_immutable(schema);
-        test_scenario::return_shared(test_object);
 
-        scenario_val
+        test_scenario::end(scenario);
     }
 
     #[test]
-    public fun nft1() {
-        let schema_data = vector<vector<String>>[ 
-            vector[utf8(b"name"), utf8(b"String")],
-            vector[utf8(b"description"), utf8(b"Option<String>")],
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"power_level"), utf8(b"u64")] 
-        ];
-        let data = vector<vector<u8>>[ 
-            bcs::to_bytes(&b"Kyrie"), 
-            bcs::to_bytes(&option::some(vector<u8>[])), 
-            bcs::to_bytes(&b"https://wikipedia.org/"), 
-            bcs::to_bytes(&19999u64) 
-        ];
+    public fun test_duplicate_data() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
 
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
 
-    #[test]
-    public fun nft2() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"description"), utf8(b"Option<String>")], 
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"power_level"), utf8(b"u64")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[6, 79, 117, 116, 108, 97, 119], 
-            vector[1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], 
-            vector[77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], 
-            vector[199, 0, 0, 0, 0, 0, 0, 0], 
-            vector[ 0 ]
-        ];
-
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
-
-    #[test]
-    public fun nft3() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"description"), utf8(b"Option<String>")], 
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[10, 121, 48, 48, 116, 32,  35, 56, 49,  55, 51], 
-            vector[ 0 ], 
-            vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
-            vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101,   8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116,   4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
-
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
-
-    #[test]
-    public fun test_update() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"url"), utf8(b"Url")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[10, 121, 48, 48, 116, 32,  35, 56, 49,  55, 51], 
-            vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
-            vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101, 8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116, 4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
-        
-        let scenario_val = assert_correct_serialization(data, schema_data);
-        let scenario = &mut scenario_val;
-
-        // Tx4: Update the display data
-        test_scenario::next_tx(scenario, SENDER);
-        let schema = test_scenario::take_immutable<schema::Schema>(scenario);
-        let test_object = test_scenario::take_shared<TestObject>(scenario);
         {
-            let new_data = bcs::to_bytes(&utf8(b"New Name"));
-            let auth = tx_authority::begin_with_type(&Witness {});
-            let uid = extend(&mut test_object);
-            display::update(uid, vector[utf8(b"name")], vector[new_data], &schema, true, &auth);
+            let source_object = test_scenario::take_shared<TestObject>(&scenario);
+            
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let source_uid = uid_mut(&mut source_object, &auth);
 
-            let bcs_bytes = display::view_field(uid, utf8(b"name"), &schema);
-            assert!(bcs_bytes == new_data, EINVALID_METADATA);
+            data::deserialize_and_set<Witness>(Witness {}, source_uid, values, fields);
+            assert_deserialize_serialized_data(source_uid, namespace, values, fields);
+
+            create_test_object(&mut scenario);
+            test_scenario::next_tx(&mut scenario, SENDER);
+
+            {
+                let dest_object = test_scenario::take_shared<TestObject>(&scenario);
+                let dest_uid = uid_mut(&mut dest_object, &auth);
+
+                data::duplicate_(namespace, option::none(), source_uid, dest_uid, &auth);
+                assert_deserialize_serialized_data(dest_uid, option::none(), values, fields);
+                test_scenario::return_shared(dest_object);
+            };
+
+            test_scenario::return_shared(source_object);
         };
-        test_scenario::return_immutable(schema);
-        test_scenario::return_shared(test_object);
 
-        test_scenario::end(scenario_val);
+        test_scenario::end(scenario);
     }
 }

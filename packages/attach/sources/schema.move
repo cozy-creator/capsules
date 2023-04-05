@@ -29,6 +29,13 @@ module attach::schema {
     // We support (de)serialization of the following schema types
     const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"Url", b"vector<address>", b"VecMap", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"vector<Url>", b"vector<VecMap>", b"vector<vector<u8>>"];
 
+    const STRING_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::string::String";
+    const URL_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::url::Url";
+    const VEC_MAP_STRING_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::vec_map::VecMap<0000000000000000000000000000000000000000000000000000000000000001::string::String,0000000000000000000000000000000000000000000000000000000000000001::string::String>";
+    const VEC_STRING_TYPE_BYTES: vector<u8> = b"vector<0000000000000000000000000000000000000000000000000000000000000001::string::String";
+    const VEC_URL_TYPE_BYTES: vector<u8> = b"vector<0000000000000000000000000000000000000000000000000000000000000001::url::Url";
+    const VEC_VEC_MAP_STRING_TYPE_BYTES: vector<u8> = b"vector<0000000000000000000000000000000000000000000000000000000000000001::vec_map::VecMap<0000000000000000000000000000000000000000000000000000000000000001::string::String,0000000000000000000000000000000000000000000000000000000000000001::string::String>";
+
     // Key for storing the object + namespace -> schema mapping
     // Schemas allows us to enumerate and serialize an object's fields in the future
     struct Key has store, copy, drop { namespace: Option<address> } // -> VecMap<String, String>
@@ -174,18 +181,18 @@ module attach::schema {
         let full_type = encode::type_name<T>();
         let type_bytes = *string::bytes(&full_type);
 
-        if (type_bytes == b"0x1::string::String") {
+        if (type_bytes == STRING_TYPE_BYTES) {
             utf8(b"String")
-        } else if (type_bytes == b"0x1::url::Url") {
+        } else if (type_bytes == URL_TYPE_BYTES) {
             utf8(b"Url")
-        } else if (type_bytes == b"0x1::vec_map::VecMap<String,String>") {
+        } else if (type_bytes == VEC_MAP_STRING_TYPE_BYTES) {
             // TO DO: we'll likely change this in the future to support more generics than just strings
             utf8(b"VecMap")
-        } else if (type_bytes == b"vector<0x1::string::String") {
+        } else if (type_bytes == VEC_STRING_TYPE_BYTES) {
             utf8(b"vector<String>")
-        } else if (type_bytes == b"vector<0x1::url::Url") {
+        } else if (type_bytes == VEC_URL_TYPE_BYTES) {
             utf8(b"vector<Url>")
-        } else if (type_bytes == b"vector<0x1::vec_map::VecMap<String,String>") {
+        } else if (type_bytes == VEC_VEC_MAP_STRING_TYPE_BYTES) {
             utf8(b"vector<VecMap>")
         } else {
             assert!(is_supported_type(full_type), EUNSUPPORTED_TYPE);
