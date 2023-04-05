@@ -3,7 +3,8 @@ import {
   bcs,
   serializeByField,
   getSigner,
-  getCreatedObjects
+  getCreatedObjects,
+  newSerializer
 } from '../../../../sdk/typescript/src';
 import { RawSigner, normalizeSuiObjectId, TransactionBlock, fromB64 } from '@mysten/sui.js';
 import { execSync } from 'child_process';
@@ -15,8 +16,10 @@ const PACKAGE_PATH = '../move_package';
 const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
 // Devnet addresses
+const attachPackageID = '';
 const displayPackageID = '0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee';
 const ownershipPackageID = '0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa';
+const scriptTxPackageID = '';
 
 async function main(signer: RawSigner) {
   let signerAddress = '0x' + (await signer.getAddress());
@@ -24,6 +27,8 @@ async function main(signer: RawSigner) {
   console.log('signer: ', signerAddress);
 
   // ======= Transaction 1: Publish Package =======
+  // ==============================================
+  // ==============================================
   // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
   console.log('Publishing Y00t package...');
 
@@ -33,56 +38,72 @@ async function main(signer: RawSigner) {
     })
   );
 
-  const tx = new TransactionBlock();
+  let tx = new TransactionBlock();
   tx.publish(
     modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
     modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
   );
   const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
   console.log({ result1 });
+
+  // ======= Transaction 2: Create Creator Object =======
+  // ==============================================
+  // ==============================================
+  console.log('Making a creator object...');
+
+  tx = new TransactionBlock();
+  tx.moveCall({
+    target: `${displayPackageID}::creator::create`,
+    arguments: [tx.pure(signerAddress)]
+  });
+  const result2 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  console.log({ result2 });
+
+  const creatorObjectID = ''; // TO DO: get this from result2
+
+  // ======= Transaction 3: Attach Data to Creator Object =======
+  // ==============================================
+  // ==============================================
+
+  // Create a schema we can serialize with, then serialize it
+  const creatorSchema = {
+    name: 'String',
+    url: 'Url'
+  } as const;
+
+  type Creator = JSTypes<typeof creatorSchema>;
+
+  let creatorData: Creator = {
+    name: 'Dust Labs',
+    url: new URL('https://www.dustlabs.com/')
+  };
+
+  let [data, fields] = newSerializer(bcs, creatorData, creatorSchema);
+
+  // Construct an auth object; this might work
+  tx = new TransactionBlock();
+  let [auth] = tx.moveCall({
+    target: `${ownershipPackageID}::tx_authority::begin`,
+    arguments: []
+  });
+
+  tx.moveCall({
+    target: `${scriptTxPackageID}::display_creator::deserialize_and_set_`,
+    arguments: [tx.object(creatorObjectID), tx.pure(null), tx.pure(data), tx.pure(fields), auth]
+  });
+
+  const result3 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  console.log({ result3 });
 }
+
+// Fetch an on-chain existing creator schema -- commented out for now
+// let creatorSchema = await provider.getObject(creatorSchemaObjectID);
 
 // let createdObjects = getCreatedObjects(moveCallTxn0);
 // let y00tPackageID = createdObjects.Immutable[0];
 // let y00tPublishReceipt = createdObjects.AddressOwner[0];
 
-// ======= Transaction 2: Create Creator Object =======
-// console.log('Making a creator object...');
-
-// // Fetch an on-chain existing creator schema -- commented out for now
-// // let creatorSchema = await provider.getObject(creatorSchemaObjectID);
-
-// // Make a creator object
-// const moveCallTxn2 = await signer.executeMoveCall({
-//   packageObjectId: displayPackageID,
-//   module: 'creator',
-//   function: 'create',
-//   typeArguments: [],
-//   arguments: [
-//     signerAddress,
-//     serializeByField(bcs, creatorObject, creatorSchema),
-//     creatorSchemaObjectID
-//   ],
-//   gasBudget: 3000
-// });
-
 // let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
-
-// // ======= Transaction 3: Attach Data to Creator Object =======
-
-// const creatorData = {
-//   name: 'String',
-//   url: 'Url'
-// } as const;
-
-// type Creator = JSTypes<typeof creatorData>;
-
-// let creatorObject: Creator = {
-//   name: 'Dust Labs',
-//   url: new URL('https://www.dustlabs.com/')
-// };
-
-// // Something
 
 // // ======= Transaction 4: Update Creator Object's Data =======
 

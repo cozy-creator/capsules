@@ -289,6 +289,24 @@ function serializeByField(
   return serializedData;
 }
 
+function newSerializer(
+  bcs: BCS,
+  data: Record<string, SupportedJSTypes>,
+  schema: Record<string, string>
+): [number[][], string[][]] {
+  const serializedData: number[][] = [];
+  const schemaFields: string[][] = [];
+
+  for (const [key, keyType] of Object.entries(schema)) {
+    const bytesArray = Array.from(bcs.ser(keyType, data[key]).toBytes());
+    serializedData.push(bytesArray);
+
+    schemaFields.push([key, keyType]);
+  }
+
+  return [serializedData, schemaFields];
+}
+
 /**
  * Deserializes an array of arrays of bytes into a Record of key-value pairs using the provided BCS and schema.
  *
@@ -374,5 +392,6 @@ export {
   parseViewResultsFromVector,
   moveStructValidator,
   sliceULEB128,
-  schemaToStringArray
+  schemaToStringArray,
+  newSerializer
 };
