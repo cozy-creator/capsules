@@ -4,34 +4,43 @@ import {
   serializeByField,
   getSigner,
   getCreatedObjects,
-  newSerializer
-} from '../../../../sdk/typescript/src';
-import { RawSigner, normalizeSuiObjectId, TransactionBlock, fromB64 } from '@mysten/sui.js';
-import { execSync } from 'child_process';
-import path from 'path';
+  newSerializer,
+} from "../../../../sdk/typescript/src";
+import {
+  RawSigner,
+  normalizeSuiObjectId,
+  fromB64,
+  TransactionBlock,
+  SuiTransactionBlockResponse,
+} from "@mysten/sui.js";
+import { execSync } from "child_process";
+import path from "path";
 
 // TO DO: I don't know how to generalize this path yet. Right now it's hardcoded
-const CLI_PATH = '/home/paul/.cargo/bin/sui';
-const PACKAGE_PATH = '../move_package';
-const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
+// const CLI_PATH = "/home/paul/.cargo/bin/sui";
+const CLI_PATH = "/home/george/.cargo/bin/sui";
+const PACKAGE_PATH = "../move_package";
+const ENV_PATH = path.resolve(__dirname, "../../../../", ".env");
 
 // Devnet addresses
-const attachPackageID = '';
-const displayPackageID = '0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee';
-const ownershipPackageID = '0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa';
-const scriptTxPackageID = '';
+const attachPackageID = "";
+const displayPackageID =
+  "0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee";
+const ownershipPackageID =
+  "0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa";
+const scriptTxPackageID = "";
 
 async function main(signer: RawSigner) {
   let signerAddress = await signer.getAddress(); // we don't add 0x here
   let tx = new TransactionBlock();
 
-  console.log('signer: ', signerAddress);
+  console.log("signer: ", signerAddress);
 
   // ======= Transaction 1: Publish Package =======
   // ==============================================
   // ==============================================
   // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
-  console.log('Publishing Y00t package...');
+  console.log("Publishing Y00t package...");
 
   // const modulesInBase64 = JSON.parse(
   //   execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
@@ -50,17 +59,32 @@ async function main(signer: RawSigner) {
   // ==============================================
   // ==============================================
   // Gas benchmark (devnet): 5,004 nanoSUI
-  console.log('Making a creator object...');
+  console.log("Making a creator object...");
 
   tx = new TransactionBlock();
   tx.moveCall({
     target: `${displayPackageID}::creator::create`,
-    arguments: [tx.pure(signerAddress)]
+    arguments: [tx.pure(signerAddress)],
   });
-  const result2 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
-  console.log({ result2 });
-
-  const creatorObjectID = ''; // TO DO: get this from result2
+  const tx2Response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showInput: true,
+      showEffects: true,
+      showEvents: true,
+      showObjectChanges: true,
+    },
+  });
+  let creatorObjectID = "";
+  if (tx2Response.objectChanges) {
+    const createdCreator = tx2Response.objectChanges.find(
+      (obj) => obj.type === "created" && obj.objectType.includes("Creator")
+    );
+    console.log(createdCreator);
+    // @ts-ignore
+    creatorObjectID = createdCreator.objectId; // TO DO: get this from result2
+    console.log("creatorObjectID: ", creatorObjectID);
+  }
 
   // ======= Transaction 3: Attach Data to Creator Object =======
   // ==============================================
@@ -68,15 +92,15 @@ async function main(signer: RawSigner) {
 
   // Create a schema we can serialize with, then serialize it
   const creatorSchema = {
-    name: 'String',
-    url: 'Url'
+    name: "String",
+    url: "Url",
   } as const;
 
   type Creator = JSTypes<typeof creatorSchema>;
 
   let creatorData: Creator = {
-    name: 'Dust Labs',
-    url: new URL('https://www.dustlabs.com/')
+    name: "Dust Labs",
+    url: new URL("https://www.dustlabs.com/"),
   };
 
   let [data, fields] = newSerializer(bcs, creatorData, creatorSchema);
@@ -85,15 +109,23 @@ async function main(signer: RawSigner) {
   tx = new TransactionBlock();
   let [auth] = tx.moveCall({
     target: `${ownershipPackageID}::tx_authority::begin`,
-    arguments: []
+    arguments: [],
   });
 
   tx.moveCall({
     target: `${scriptTxPackageID}::display_creator::deserialize_and_set_`,
-    arguments: [tx.object(creatorObjectID), tx.pure(null), tx.pure(data), tx.pure(fields), auth]
+    arguments: [
+      tx.object(creatorObjectID),
+      tx.pure(null),
+      tx.pure(data),
+      tx.pure(fields),
+      auth,
+    ],
   });
 
-  const result3 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  const result3 = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+  });
   console.log({ result3 });
 }
 
@@ -274,10 +306,10 @@ async function main(signer: RawSigner) {
 // // ====== Transaction 14: Transfer Ownership of Y00t =======
 
 const NFTSchema = {
-  name: 'String',
-  description: 'Option<String>',
-  image: 'String',
-  attributes: 'VecMap'
+  name: "String",
+  description: "Option<String>",
+  image: "String",
+  attributes: "VecMap",
 } as const;
 
 // Define the schema type in TypeScript
@@ -285,29 +317,29 @@ type NFT = JSTypes<typeof NFTSchema>;
 
 // Create an object of type `NFT`
 const y00t: NFT = {
-  name: 'y00t #8173',
+  name: "y00t #8173",
   description: { none: null },
-  image: 'https://metadata.y00ts.com/y/8172.png',
+  image: "https://metadata.y00ts.com/y/8172.png",
   attributes: {
-    Background: 'White',
-    Fur: 'Paradise Green',
-    Face: 'Wholesome',
-    Clothes: 'Summer Shirt',
-    Head: 'Beanie (blackout)',
-    Eyewear: 'Melrose Bricks',
-    '1/1': 'None'
-  }
+    Background: "White",
+    Fur: "Paradise Green",
+    Face: "Wholesome",
+    Clothes: "Summer Shirt",
+    Head: "Beanie (blackout)",
+    Eyewear: "Melrose Bricks",
+    "1/1": "None",
+  },
 };
 
 // Step 2: Create a Schema-validator; we can check to make sure objects comply with our schema at runtime
 
 // Step 3: Register the new type 'NFT' with BCS so we can serialize using BCS
 
-bcs.registerStructType('NFT', NFTSchema);
+bcs.registerStructType("NFT", NFTSchema);
 let bytes = serializeByField(bcs, y00t, NFTSchema);
 
 // Step 4: Post our serialized data to Sui
 
 console.dir(bytes, { maxArrayLength: null });
 
-getSigner(ENV_PATH).then(signer => main(signer));
+getSigner(ENV_PATH).then((signer) => main(signer));
