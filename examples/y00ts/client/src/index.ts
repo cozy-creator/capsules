@@ -93,14 +93,14 @@ async function main(signer: RawSigner) {
   // Create a schema we can serialize with, then serialize it
   const creatorSchema = {
     name: "String",
-    url: "Url",
+    url: "String",
   } as const;
 
   type Creator = JSTypes<typeof creatorSchema>;
 
   let creatorData: Creator = {
     name: "Dust Labs",
-    url: new URL("https://www.dustlabs.com/"),
+    url: "https://www.dustlabs.com/",
   };
 
   let [data, fields] = newSerializer(bcs, creatorData, creatorSchema);
@@ -111,6 +111,16 @@ async function main(signer: RawSigner) {
     target: `${ownershipPackageID}::tx_authority::begin`,
     arguments: [],
   });
+  const result3_0 = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showEffects: true,
+      showEvents: true,
+      showObjectChanges: true,
+    },
+  });
+  console.log("TX3 p1/2 : ", result3_0);
+  // Just trying to run seperatly the transaction to identify whats wrong
 
   tx.moveCall({
     target: `${scriptTxPackageID}::display_creator::deserialize_and_set_`,
