@@ -19,10 +19,7 @@ module attach::serializer {
     use sui_utils::dynamic_field2;
 
     // Error enums
-    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
-    const EINCORRECT_DATA_LENGTH: u64 = 1;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 2;
-    const EUNRECOGNIZED_TYPE: u64 = 3;
+    const EUNRECOGNIZED_TYPE: u64 = 0;
     
     // Aborts if `type_string` does not match `value` (the binary data) supplied, because the bcs
     // deserialization will fail
