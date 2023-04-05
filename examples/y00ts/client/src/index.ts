@@ -22,7 +22,8 @@ const ownershipPackageID = '0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb303
 const scriptTxPackageID = '';
 
 async function main(signer: RawSigner) {
-  let signerAddress = '0x' + (await signer.getAddress());
+  let signerAddress = await signer.getAddress(); // we don't add 0x here
+  let tx = new TransactionBlock();
 
   console.log('signer: ', signerAddress);
 
@@ -32,23 +33,23 @@ async function main(signer: RawSigner) {
   // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
   console.log('Publishing Y00t package...');
 
-  const modulesInBase64 = JSON.parse(
-    execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
-      encoding: 'utf-8'
-    })
-  );
+  // const modulesInBase64 = JSON.parse(
+  //   execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
+  //     encoding: 'utf-8'
+  //   })
+  // );
 
-  let tx = new TransactionBlock();
-  tx.publish(
-    modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
-    modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
-  );
-  const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
-  console.log({ result1 });
+  // tx.publish(
+  //   modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
+  //   modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
+  // );
+  // const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  // console.log({ result1 });
 
   // ======= Transaction 2: Create Creator Object =======
   // ==============================================
   // ==============================================
+  // Gas benchmark (devnet): 5,004 nanoSUI
   console.log('Making a creator object...');
 
   tx = new TransactionBlock();
