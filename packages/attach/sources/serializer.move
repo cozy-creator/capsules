@@ -485,13 +485,7 @@ module attach::serializer_tests {
 
     use attach::serializer;
 
-    // Error constants
-    const EINVALID_METADATA: u64 = 0;
-    const ENOT_OWNER: u64 = 1;
-
     const SENDER: address = @0x99;
-
-    struct Witness has drop {}
 
     struct TestObject has key {
         id: UID
