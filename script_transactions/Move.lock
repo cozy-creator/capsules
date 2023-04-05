@@ -7,13 +7,12 @@ dependencies = [
   { name = "Attach" },
   { name = "Ownership" },
   { name = "Sui" },
-  { name = "SuiUtils" },
-  { name = "TransferSystem" },
+  { name = "SuiDisplay" },
 ]
 
 [[move.package]]
 name = "Attach"
-source = { local = "../attach" }
+source = { local = "../packages/attach" }
 
 dependencies = [
   { name = "Ownership" },
@@ -27,7 +26,7 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "devnet", subdir
 
 [[move.package]]
 name = "Ownership"
-source = { local = "../ownership" }
+source = { local = "../packages/ownership" }
 
 dependencies = [
   { name = "Sui" },
@@ -43,8 +42,20 @@ dependencies = [
 ]
 
 [[move.package]]
+name = "SuiDisplay"
+source = { local = "../packages/display" }
+
+dependencies = [
+  { name = "Attach" },
+  { name = "Ownership" },
+  { name = "Sui" },
+  { name = "SuiUtils" },
+  { name = "TransferSystem" },
+]
+
+[[move.package]]
 name = "SuiUtils"
-source = { local = "../sui_utils" }
+source = { local = "../packages/sui_utils" }
 
 dependencies = [
   { name = "Sui" },
@@ -52,7 +63,7 @@ dependencies = [
 
 [[move.package]]
 name = "TransferSystem"
-source = { local = "../transfer_system" }
+source = { local = "../packages/transfer_system" }
 
 dependencies = [
   { name = "Ownership" },

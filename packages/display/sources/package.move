@@ -1,24 +1,22 @@
 module display::package {
-    use std::string::String;
-    use sui::tx_context::TxContext;
+    use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
-
-    use display::display;
-    use display::schema::Schema;
-    
-    use ownership::ownership;
-    use ownership::tx_authority;
+    use sui::tx_context::{Self, TxContext};
 
     use sui_utils::typed_id;
+    
+    use ownership::ownership;
+    use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::tx_authority::{Self, TxAuthority};
 
-    friend display::creator;
+    use transfer_system::simple_transfer::Witness as SimpleTransfer;
+
+    use display::creator::{Self, Creator};
 
     // Error enums
-    const EBAD_WITNESS: u64 = 0;
-    const ESENDER_UNAUTHORIZED: u64 = 1;
-
-    struct Witness has drop {}
+    const ESENDER_UNAUTHORIZED: u64 = 0;
+    const EPACKAGE_ALREADY_CLAIMED: u64 = 1;
 
     // Owned, root-level object. Cannot be destroyed. Unique by package ID.
     struct Package has key {
@@ -30,78 +28,90 @@ module display::package {
         creator: ID
     }
 
-    // Only display::creator can create Package Display data
-    public(friend) fun claim(package: ID, creator: ID, ctx: &mut TxContext): Package {
+    // Placed on PublishReceipt to prevent package-objects from being claimed twice
+    struct Key has store, copy, drop {}
+
+    // Authority object
+    struct Witness has drop {}
+
+    // Convenience entry function
+    public entry fun claim_package(
+        creator: &mut Creator,
+        receipt: &mut PublishReceipt,
+        ctx: &mut TxContext
+    ) {
+        let package = claim_package_(
+            creator, receipt, tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
+        return_and_share(package);
+    }
+
+    // Create a package object
+    public fun claim_package_(
+        creator: &mut Creator,
+        receipt: &mut PublishReceipt,
+        owner: address,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ): Package {
+        assert!(ownership::is_authorized_by_owner(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
+
+        // This package can only ever be claimed once
+        let receipt_uid = publish_receipt::uid_mut(receipt);
+        assert!(!dynamic_field::exists_(receipt_uid, Key { }), EPACKAGE_ALREADY_CLAIMED);
+        dynamic_field::add(receipt_uid, Key { }, true);
+
         let package = Package { 
             id: object::new(ctx),
-            package,
-            creator
+            package: publish_receipt::into_package_id(receipt),
+            creator: object::id(creator)
         };
 
-        // Renounce control of this asset so that the owner can attach display data independently of us
-        let auth = tx_authority::begin_with_type(&Witness { });
+        // Initialize ownership
         let typed_id = typed_id::new(&package);
-        ownership::initialize_without_module_authority(&mut package.id, typed_id, &auth);
-        ownership::as_owned_object(&mut package.id, &auth);
+        let auth = tx_authority::begin_with_type(&Witness { });
+        ownership::as_shared_object<Package, SimpleTransfer>(
+            &mut package.id,
+            typed_id,
+            vector[owner],
+            &auth
+        );
 
         package
     }
 
-    // Only display::creator can change the creator of a package
-    public(friend) fun set_creator(package: &mut Package, id: ID) {
-        package.creator = id;
+    public fun return_and_share(package: Package) {
+        transfer::share_object(package);
     }
 
-    // ======== Display Module API =====
-    // For convenience, we replicate the Display Module API here to make it easier to access Package's UID.
-    // This can be removed once Sui supports script transactions
-
-    public entry fun attach(package: &mut Package, data: vector<vector<u8>>, schema: &Schema) {
-        display::attach(&mut package.id, data, schema, &tx_authority::empty());
+    // Convenience function
+    public entry fun claim_as_new_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
+        claim_as_new_creator_(package, creator, &tx_authority::begin(ctx));
     }
 
-    public entry fun update(
-        package: &mut Package,
-        keys: vector<String>,
-        data: vector<vector<u8>>,
-        schema: &Schema,
-        overwrite_existing: bool
-    ) {
-        display::update(&mut package.id, keys, data, schema, overwrite_existing, &tx_authority::empty());
-    }
+    // If Person-A controls the package, and they want to give it to a Creator-B, this is a two-step
+    // process, because Sui does not yet support multi-signer transactions.
+    // Tx-1: signed by Person-A; transfer ownership of `package` to Creator-B
+    // Tx-2: signed by Creator-B; creator must call this function to set themselves as the new creator
+    public fun claim_as_new_creator_(package: &mut Package, creator: &Creator, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
+        assert!(ownership::is_authorized_by_owner(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
 
-    public entry fun delete_optional(package: &mut Package, keys: vector<String>, schema: &Schema) {
-        display::delete_optional(&mut package.id, keys, schema, &tx_authority::empty());
-    }
-
-    public entry fun detach(package: &mut Package, schema: &Schema) {
-        display::detach(&mut package.id, schema, &tx_authority::empty());
-    }
-
-    public entry fun migrate(
-        package: &mut Package,
-        old_schema: &Schema,
-        new_schema: &Schema,
-        keys: vector<String>,
-        data: vector<vector<u8>>
-    ) {
-        display::migrate(&mut package.id, old_schema, new_schema, keys, data, &tx_authority::empty());
+        package.creator = object::id(creator);
     }
 
     // ======== For Owners =====
+    // No need for transfer; that can be handled by the SimpleTransfer module
 
-    // Makes the package object immutable. This cannot be undone
-    public entry fun freeze_(package: Package) {
-        transfer::freeze_object(package);
+    public fun uid(package: &Package): &UID {
+        &package.id
     }
 
-    // Because Package lacks `store`, polymorphic transfer does not work outside of this module
-    public entry fun transfer(package: Package, new_owner: address) {
-        transfer::transfer(package, new_owner);
-    }
+    public fun uid_mut(package: &mut Package, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
 
-    // Owned object; no need for an ownership check
-    public fun extend(package: &mut Package): &mut UID {
         &mut package.id
     }
+
+    // ======== ???? =====
+    // Some sort of pakage endorsement system would make sense as well...
 }

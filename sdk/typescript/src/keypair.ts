@@ -6,37 +6,18 @@ import {
   fromB64,
   Connection
 } from '@mysten/sui.js';
-
 import fs from 'fs';
 import util from 'util';
 
 const PRIVATE_KEY_ENV_VAR = 'PRIVATE_KEY';
 
-// Default endpoint is devnet 'https://fullnode.devnet.sui.io:443'
-// https://sui-devnet.artifact.systems:443/
-// https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd
-
 // Build a class to connect to Sui RPC servers
-export const provider = new JsonRpcProvider(
+const provider = new JsonRpcProvider(
   new Connection({
     fullnode: 'https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd',
     faucet: 'https://faucet.devnet.sui.io:443/gas'
   })
 );
-
-async function requestFromFaucet(address: string) {
-  try {
-    const response = await provider.requestSuiFromFaucet(address);
-    console.log('========== Sui Airdrop Received ==========');
-    return response.transferred_gas_objects;
-  } catch (error) {
-    console.log('Request to faucet failed');
-    // @ts-ignore
-    console.log(util.inspect(error.message, { showHidden: false, depth: 2, colors: true }));
-
-    return [];
-  }
-}
 
 async function loadEnv(env_path: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -109,11 +90,25 @@ async function loadKeypair(env_path: string) {
 
 async function fetchSuiCoinsForAddress(address: string) {
   console.log(`fetching coins for ${address}`);
-  const coins = await provider.getCoins(address, '0x2::sui::SUI');
+  const coins = await provider.getCoins({ owner: address, coinType: '0x2::sui::SUI' });
   return coins.data;
 }
 
-export async function getAddress(env_path: string): Promise<string> {
+async function requestFromFaucet(address: string) {
+  try {
+    const response = await provider.requestSuiFromFaucet(address);
+    console.log('========== Sui Airdrop Received ==========');
+    return response.transferredGasObjects;
+  } catch (error) {
+    console.log('Request to faucet failed');
+    // @ts-ignore
+    console.log(util.inspect(error.message, { showHidden: false, depth: 2, colors: true }));
+
+    return [];
+  }
+}
+
+async function getAddress(env_path: string): Promise<string> {
   const keypair = await loadKeypair(env_path);
   const address = normalizeSuiAddress(keypair.getPublicKey().toSuiAddress());
 
@@ -123,7 +118,7 @@ export async function getAddress(env_path: string): Promise<string> {
   return address;
 }
 
-export async function getSigner(env_path: string): Promise<RawSigner> {
+async function getSigner(env_path: string): Promise<RawSigner> {
   const keypair = await loadKeypair(env_path);
   const address = keypair.getPublicKey().toSuiAddress();
 
@@ -140,3 +135,5 @@ export async function getSigner(env_path: string): Promise<RawSigner> {
 
   return new RawSigner(keypair, provider);
 }
+
+export { getAddress, getSigner, provider };
