@@ -156,16 +156,16 @@ bcs.registerType(
 // This is identical to the String writer / reader
 bcs.registerType(
   "Url",
-  (writer, data: string) => {
-    let bytes = new TextEncoder().encode(data);
+  (writer, data: URL) => {
+    let bytes = new TextEncoder().encode(data.toString());
     writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
     return writer;
   },
   (reader: BcsReader) => {
     let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder("utf8").decode(bytes);
+    return new URL(new TextDecoder("utf8").decode(bytes));
   },
-  (value) => is(value, MoveToStruct["Url"])
+  (value) => value instanceof URL
 );
 
 // This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than

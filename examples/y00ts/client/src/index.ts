@@ -19,7 +19,7 @@ import path from "path";
 // TO DO: I don't know how to generalize this path yet. Right now it's hardcoded
 // const CLI_PATH = "/home/paul/.cargo/bin/sui";
 const CLI_PATH = "/home/george/.cargo/bin/sui";
-const PACKAGE_PATH = "../move_package";
+const PACKAGE_PATH = "../../move_package";
 const ENV_PATH = path.resolve(__dirname, "../../../../", ".env");
 
 // Devnet addresses
@@ -41,18 +41,27 @@ async function main(signer: RawSigner) {
   // ==============================================
   // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
   console.log("Publishing Y00t package...");
+  // const absolutePackagePath = path.resolve(__dirname, PACKAGE_PATH);
+  // console.log(absolutePackagePath);
 
   // const modulesInBase64 = JSON.parse(
-  //   execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
-  //     encoding: 'utf-8'
-  //   })
+  //   execSync(
+  //     `${CLI_PATH} move build --dump-bytecode-as-base64 --path ${absolutePackagePath}`,
+  //     {
+  //       encoding: "utf-8",
+  //     }
+  //   )
   // );
 
   // tx.publish(
   //   modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
-  //   modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
+  //   modulesInBase64.dependencies.map((addr: string) =>
+  //     normalizeSuiObjectId(addr)
+  //   )
   // );
-  // const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
+  // const result1 = await signer.signAndExecuteTransactionBlock({
+  //   transactionBlock: tx,
+  // });
   // console.log({ result1 });
 
   // ======= Transaction 2: Create Creator Object =======
@@ -93,17 +102,18 @@ async function main(signer: RawSigner) {
   // Create a schema we can serialize with, then serialize it
   const creatorSchema = {
     name: "String",
-    url: "String",
+    url: "Url",
   } as const;
 
   type Creator = JSTypes<typeof creatorSchema>;
 
   let creatorData: Creator = {
     name: "Dust Labs",
-    url: "https://www.dustlabs.com/",
+    url: new URL("https://www.dustlabs.com/"),
   };
 
   let [data, fields] = newSerializer(bcs, creatorData, creatorSchema);
+  console.log(data, fields);
 
   // Construct an auth object; this might work
   tx = new TransactionBlock();
