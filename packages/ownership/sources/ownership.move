@@ -230,7 +230,6 @@ module ownership::ownership_tests {
     use sui::object::{Self, UID};
     use sui::test_scenario::{Self, Scenario};
     use sui::transfer;
-    // use sui::tx_context;
 
     use sui_utils::typed_id;
 
