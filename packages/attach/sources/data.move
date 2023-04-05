@@ -25,8 +25,6 @@ module attach::data {
     use sui::dynamic_field;
     use sui::object::UID;
 
-    use sui_utils::string2;
-
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
@@ -233,19 +231,15 @@ module attach::data {
         let i = 0;
         while (i < vector::length(&keys)) {
             let key = *vector::borrow(&keys, i);
+            let type = *vector::borrow(&types, i);
             
             let key1 = Key { namespace: source, key };
             let key2 = Key { namespace: destination, key };
 
-            let type1 = *vector::borrow(&types, i);
-            let old_type_maybe = schema::get_type(destination_uid, destination, key);
-            let old_type = if (option::is_some(&old_type_maybe)) {
-                option::destroy_some(old_type_maybe)
-            } else {
-                string2::empty()
-            };
+            let old_types_to_drop = schema::update_object_schema_(destination_uid, destination, vector[key], type);
+            let old_type = *vector::borrow(&old_types_to_drop, 0);
 
-            serializer::duplicate(source_uid, destination_uid, key1, key2, type1, old_type, true);
+            serializer::duplicate(source_uid, destination_uid, key1, key2, type, old_type, true);
 
             i = i + 1;
         };
