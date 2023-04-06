@@ -35,8 +35,7 @@ module transfer_system::market_account {
         let typed_id = typed_id::new(&account);
         let auth = tx_authority::begin_with_type(&Witness {});
 
-        ownership::initialize_with_module_authority(&mut account.id, typed_id, &auth);
-        ownership::as_shared_object_(&mut account.id, vector[tx_context::sender(ctx)], vector::empty(), &auth);
+        ownership::as_shared_object_<MarketAccount>(&mut account.id, typed_id, vector[tx_context::sender(ctx)], vector::empty(), &auth);
         transfer::share_object(account)
     }
 

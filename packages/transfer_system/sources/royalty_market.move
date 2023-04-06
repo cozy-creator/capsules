@@ -37,32 +37,26 @@ module transfer_system::royalty_market {
     struct Offer<phantom T, phantom C> has store, drop {
         price: u64,
         user: address,
-        creator_royalty: u64,
-        item: Option<ID>
+        creator_royalty: u64
     }
 
 
     // ========== Dynamic fields key structs ==========
 
-    struct Buy has store, copy, drop { 
-        item: ID 
-    }
-
-    struct Sell has store, copy, drop { 
-        item: ID 
-    }
+    /// Key used to store a buy or sell offer for an item
+    struct Key has store, copy, drop { type: u8, user: Option<address> }
 
 
     // ========== Event structs ==========
 
     struct OfferCreated has copy, drop {
-        item: Option<ID>,
+        price: u64,
         user: address,
-        price: u64
+        item_id: Option<ID>,
     }
 
     struct OfferCancelled has copy, drop {
-        item: Option<ID>
+        item_id: Option<ID>
     }
 
 
@@ -85,17 +79,31 @@ module transfer_system::royalty_market {
 
     const BPS_BASE: u16 = 10_000;
 
+    const BUY_OFFER_TYPE: u8 = 0;
+    const SELL_OFFER_TYPE: u8 = 0;
+
 
     // ========== Royalty functions ==========
 
     public fun create_royalty<T>(
-        publisher: &PublishReceipt,
+        receipt: &PublishReceipt,
+        recipient: address,
+        royalty_bps: u16,
+        marketplace_fee_bps: u16,
+        ctx: &mut TxContext
+    ) {
+        let royalty = create_royalty_<T>(receipt, recipient, royalty_bps, marketplace_fee_bps, ctx);
+        transfer::share_object(royalty)
+    }
+
+    public fun create_royalty_<T>(
+        receipt: &PublishReceipt,
         recipient: address,
         royalty_bps: u16,
         marketplace_fee_bps: u16,
         ctx: &mut TxContext
     ):  Royalty<T> {
-        assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
+        assert!(encode::package_id<T>() == publish_receipt::into_package_id(receipt), EINVALID_PUBLISH_RECEIPT);
 
          Royalty {
             id: object::new(ctx),
@@ -128,32 +136,21 @@ module transfer_system::royalty_market {
 
     // ========== Offer functions ==========
 
-    public fun create_sell_offer<T, C>(
-        uid: &mut UID,
-        royalty: &Royalty<T>,
-        seller: address,
-        price: u64,
-        auth: &TxAuthority
-    ) {
-        let item = object::uid_to_inner(uid);
-        let key = Sell { item };
-
-        assert!(!dynamic_field::exists_with_type<Sell, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
-
-        // Ensures the item type is the same as `T`
-        let (_, _, _, type, _) = ownership::get_ownership(uid);
-        assert!(option::is_some(&type), ENO_ITEM_TYPE);
-        assert!(option::extract(&mut type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
-
+    public fun create_sell_offer<T, C>(uid: &mut UID, royalty: &Royalty<T>, seller: address, price: u64, auth: &TxAuthority) {
         // Ensures that the item being offered for sale belongs to the seller
         assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+        // Ensures the item type is the same as `T`
+        assert_valid_item_type<T>(uid);
+
+        let key = Key { user: option::none(), type: SELL_OFFER_TYPE };
+        assert!(!dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
 
         let Royalty { id: _, config } = royalty;
         let creator_royalty = bps_value(price, config.royalty_bps);
-        let offer = create_offer<T, C>(option::some(item), seller, price, creator_royalty);
+        let offer = create_offer<T, C>(seller, price, creator_royalty);
 
         // emit_offer_created(offer_id, object::id(account), &offer);
-        dynamic_field::add<Sell, Offer<T, C>>(uid, key, offer)
+        dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
     public fun create_buy_offer<T, C>(
@@ -164,29 +161,22 @@ module transfer_system::royalty_market {
         price: u64,
         auth: &TxAuthority
     ) {        
-        let item = object::uid_to_inner(uid);
-        let key = Buy { item };
-
-        assert!(!dynamic_field::exists_with_type<Buy, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
-
         // Ensure that the buyer owns the account
         market_account::assert_account_ownership(account, auth);
-
         // Ensure the item type is valid
-        let (_, _, _, type, _) = ownership::get_ownership(uid);
-        assert!(option::is_some(&type), ENO_ITEM_TYPE);
-        assert!(option::extract(&mut type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
+        assert_valid_item_type<T>(uid);
 
+        let key = Key { user: option::some(buyer), type: BUY_OFFER_TYPE };
+        assert!(!dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
 
         let Royalty { id: _, config } = royalty;
         let creator_royalty = bps_value(price, config.royalty_bps);
         assert!(market_account::balance<C>(account) >= price + (creator_royalty / 2), EINSUFFICIENT_BALANCE);
 
-        let item = object::uid_to_inner(uid);
-        let offer = create_offer<T, C>(option::some(item), buyer, price, creator_royalty);
+        let offer = create_offer<T, C>(buyer, price, creator_royalty);
 
         // emit_offer_created(offer_id, object::id(account), &offer);
-        dynamic_field::add<Buy, Offer<T, C>>(uid, key, offer)
+        dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
     public fun fill_sell_offer<T, C>(
@@ -197,17 +187,17 @@ module transfer_system::royalty_market {
         marketplace: address,
         ctx: &mut TxContext
     ) {
-        let Royalty { id: _, config } = royalty;
-        let key = Sell { item: object::uid_to_inner(uid) };
-        assert!(dynamic_field::exists_with_type<Sell, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+        let key = Key { user: option::none(), type: SELL_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
-        let offer = dynamic_field::borrow<Sell, Offer<T, C>>(uid, key);
-
+        let offer = dynamic_field::borrow<Key, Offer<T, C>>(uid, key);
+        let Royalty { id: _, config } = royalty;   
+     
         // ensure that the coin provided is sufficient for the offer price and buyer's royalty payment
         let total_royalty = bps_value(offer.price, config.royalty_bps);
         let payment_value =  offer.price + (total_royalty / 2);
-
         assert!(coin::value(&coin) >= payment_value, EINSUFFICIENT_PAYMENT);
+
         let payment = coin::split(&mut coin, payment_value, ctx);
 
         // keep the extra coin payment or destroy it if empty
@@ -227,23 +217,23 @@ module transfer_system::royalty_market {
         transfer_item(uid, vector[buyer], ctx);
 
         // remove and drop item offer
-        dynamic_field::remove<Sell, Offer<T, C>>(uid, key);
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
     }
 
     public fun fill_buy_offer<T, C>(
         account: &mut MarketAccount,
         uid: &mut UID,
         seller: address,
+        buyer: address,
         royalty: &Royalty<T>,
         marketplace: address,
         ctx: &mut TxContext
     ) {
+        let key = Key { user: option::some(buyer), type: BUY_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+
         let Royalty { id: _, config } = royalty;
-        let key =  Buy { item: object::uid_to_inner(uid) };
-        assert!(dynamic_field::exists_with_type<Buy, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
-
-        let offer = dynamic_field::borrow<Buy, Offer<T, C>>(uid, key);
-
+        let offer = dynamic_field::borrow<Key, Offer<T, C>>(uid, key);
         let total_royalty = bps_value(offer.price, config.royalty_bps);
         let payment_value = offer.price + (total_royalty / 2);
 
@@ -264,29 +254,28 @@ module transfer_system::royalty_market {
         transfer_item(uid, vector[offer.user], ctx);
 
         // remove and drop item offer
-        dynamic_field::remove<Buy, Offer<T, C>>(uid, key);
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
     }
     
-    public fun cancel_sell_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+    // public fun cancel_sell_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
+    //     assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        let key =  Sell { item: object::uid_to_inner(uid) };
-        dynamic_field::remove<Sell, Offer<T, C>>(uid, key);
-    }
+    //     let key =  Key { item: object::uid_to_inner(uid) };
+    //     dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    // }
 
-    public fun cancel_buy_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+    // public fun cancel_buy_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
+    //     assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
 
-        let key =  Buy { item: object::uid_to_inner(uid) };
-        dynamic_field::remove<Buy, Offer<T, C>>(uid, key);
-    }
+    //     let key =  Key { item: object::uid_to_inner(uid) };
+    //     dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    // }
 
 
     // ==================== Helper functions ====================
 
-    fun create_offer<T, C>( item: Option<ID>, user: address, price: u64, creator_royalty: u64): Offer<T, C> {
+    fun create_offer<T, C>(user: address, price: u64, creator_royalty: u64): Offer<T, C> {
         Offer { 
-            item,
             user,
             price,
             creator_royalty
@@ -314,17 +303,23 @@ module transfer_system::royalty_market {
         };
     }
 
+    fun assert_valid_item_type<T>(uid: &UID) {
+        let type = ownership::get_type(uid);
+        assert!(option::is_some(&type), ENO_ITEM_TYPE);
+        assert!(option::destroy_some(type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
+    }
+
     // ===== Event helper functions =====
 
-    fun emit_offer_created<T, C>(offer: &Offer<T, C>) {
+    fun emit_offer_created<T, C>(item_id: Option<ID>, offer: &Offer<T, C>) {
         emit(OfferCreated {
-            item: offer.item,
+            item_id,
             user: offer.user,
             price: offer.price
         });
     }
 
-    fun emit_offer_cancelled(item: Option<ID>) {
-        emit(OfferCancelled { item });
+    fun emit_offer_cancelled(item_id: Option<ID>) {
+        emit(OfferCancelled { item_id });
     }
 }
