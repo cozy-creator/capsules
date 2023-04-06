@@ -2,7 +2,7 @@ module transfer_system::royalty_market {
     use std::option::{Self, Option};
 
     use sui::object::{Self, UID, ID};
-    use sui::tx_context::{TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     use sui::dynamic_field;
@@ -223,12 +223,15 @@ module transfer_system::royalty_market {
     public fun fill_buy_offer<T, C>(
         account: &mut MarketAccount,
         uid: &mut UID,
-        seller: address,
         buyer: address,
         royalty: &Royalty<T>,
         marketplace: address,
         ctx: &mut TxContext
     ) {
+        // Ensure that only the asset owner can fill the buy offer
+        let auth = tx_authority::begin(ctx);
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
+
         let key = Key { user: option::some(buyer), type: BUY_OFFER_TYPE };
         assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
@@ -248,7 +251,7 @@ module transfer_system::royalty_market {
         transfer_coin_value(&mut payment, marketplace_fee, marketplace, ctx);
 
         // transfer remaining payment to the seller
-        transfer::public_transfer(payment, seller);
+        transfer::public_transfer(payment, tx_context::sender(ctx));
 
         // transfer item to the buyer
         transfer_item(uid, vector[offer.user], ctx);
