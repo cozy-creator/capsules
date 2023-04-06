@@ -1,11 +1,5 @@
-import {
-  BCS,
-  BcsConfig,
-  EnumTypeDefinition,
-  BcsWriter,
-  BcsReader,
-} from "@mysten/bcs";
-import { DevInspectResults } from "@mysten/sui.js";
+import { BCS, BcsConfig, EnumTypeDefinition, BcsWriter, BcsReader } from '@mysten/bcs';
+import { DevInspectResults } from '@mysten/sui.js';
 import {
   is,
   object,
@@ -18,24 +12,25 @@ import {
   union,
   any,
   Struct,
-} from "superstruct";
+  define
+} from 'superstruct';
 
 // ===== Declared Supported Types =====
 
 const supportedTypes = [
-  "address",
-  "bool",
-  "id",
-  "u8",
-  "u16",
-  "u32",
-  "u64",
-  "u128",
-  "u256",
-  "String",
-  "Url",
-  "vector<u8>",
-  "VecMap",
+  'address',
+  'bool',
+  'id',
+  'u8',
+  'u16',
+  'u32',
+  'u64',
+  'u128',
+  'u256',
+  'String',
+  'Url',
+  'vector<u8>',
+  'VecMap'
 ] as const;
 
 type SupportedMoveTypes =
@@ -70,69 +65,69 @@ type MoveToJSTypes = {
   u256: bigint;
   String: string;
   Url: URL;
-  "vector<address>": Uint8Array[];
-  "vector<bool>": boolean[];
-  "vector<id>": Uint8Array[];
-  "vector<u8>": Uint8Array;
-  "vector<u16>": Uint16Array;
-  "vector<u32>": Uint32Array;
-  "vector<u64>": BigUint64Array;
-  "vector<u128>": BigInt[];
-  "vector<u256>": BigInt[];
-  "vector<String>": string[];
-  "vector<Url>": string[];
-  "vector<vector<u8>>": Uint8Array[];
+  'vector<address>': Uint8Array[];
+  'vector<bool>': boolean[];
+  'vector<id>': Uint8Array[];
+  'vector<u8>': Uint8Array;
+  'vector<u16>': Uint16Array;
+  'vector<u32>': Uint32Array;
+  'vector<u64>': BigUint64Array;
+  'vector<u128>': BigInt[];
+  'vector<u256>': BigInt[];
+  'vector<String>': string[];
+  'vector<Url>': string[];
+  'vector<vector<u8>>': Uint8Array[];
   VecMap: Record<string, string>;
-  "Option<address>": { none: null } | { some: Uint8Array };
-  "Option<bool>": { none: null } | { some: boolean };
-  "Option<id>": { none: null } | { some: Uint8Array };
-  "Option<u8>": { none: null } | { some: number };
-  "Option<u16>": { none: null } | { some: number };
-  "Option<u32>": { none: null } | { some: number };
-  "Option<u64>": { none: null } | { some: bigint };
-  "Option<u128>": { none: null } | { some: bigint };
-  "Option<u256>": { none: null } | { some: bigint };
-  "Option<String>": { none: null } | { some: string };
-  "Option<Url>": { none: null } | { some: string };
-  "Option<vector<address>>": { none: null } | { some: Uint8Array[] };
-  "Option<vector<bool>>": { none: null } | { some: boolean[] };
-  "Option<vector<id>>": { none: null } | { some: Uint8Array[] };
-  "Option<vector<u8>>": { none: null } | { some: Uint8Array };
-  "Option<vector<u16>>": { none: null } | { some: Uint16Array };
-  "Option<vector<u32>>": { none: null } | { some: Uint32Array };
-  "Option<vector<u64>>": { none: null } | { some: BigUint64Array };
-  "Option<vector<u128>>": { none: null } | { some: BigInt[] };
-  "Option<vector<u256>>": { none: null } | { some: BigInt[] };
-  "Option<vector<String>>": { none: null } | { some: string[] };
-  "Option<vector<Url>>": { none: null } | { some: string[] };
-  "Option<vector<vector<u8>>>": { none: null } | { some: Uint8Array[] };
-  "Option<VecMap>": { none: null } | { some: Record<string, string> };
+  'Option<address>': { none: null } | { some: Uint8Array };
+  'Option<bool>': { none: null } | { some: boolean };
+  'Option<id>': { none: null } | { some: Uint8Array };
+  'Option<u8>': { none: null } | { some: number };
+  'Option<u16>': { none: null } | { some: number };
+  'Option<u32>': { none: null } | { some: number };
+  'Option<u64>': { none: null } | { some: bigint };
+  'Option<u128>': { none: null } | { some: bigint };
+  'Option<u256>': { none: null } | { some: bigint };
+  'Option<String>': { none: null } | { some: string };
+  'Option<Url>': { none: null } | { some: string };
+  'Option<vector<address>>': { none: null } | { some: Uint8Array[] };
+  'Option<vector<bool>>': { none: null } | { some: boolean[] };
+  'Option<vector<id>>': { none: null } | { some: Uint8Array[] };
+  'Option<vector<u8>>': { none: null } | { some: Uint8Array };
+  'Option<vector<u16>>': { none: null } | { some: Uint16Array };
+  'Option<vector<u32>>': { none: null } | { some: Uint32Array };
+  'Option<vector<u64>>': { none: null } | { some: BigUint64Array };
+  'Option<vector<u128>>': { none: null } | { some: BigInt[] };
+  'Option<vector<u256>>': { none: null } | { some: BigInt[] };
+  'Option<vector<String>>': { none: null } | { some: string[] };
+  'Option<vector<Url>>': { none: null } | { some: string[] };
+  'Option<vector<vector<u8>>>': { none: null } | { some: Uint8Array[] };
+  'Option<VecMap>': { none: null } | { some: Record<string, string> };
 };
 
 // ===== Define Option enums =====
 
 let enums: { [key: string]: EnumTypeDefinition } = {};
 
-supportedTypes.forEach((typeName) => {
+supportedTypes.forEach(typeName => {
   enums[`Option<${typeName}>`] = {
     none: null,
-    some: typeName,
+    some: typeName
   };
 
   enums[`Option<vector<${typeName}>>`] = {
     none: null,
-    some: `vector<${typeName}>`,
+    some: `vector<${typeName}>`
   };
 });
 
 // ===== Instantiate bcs =====
 
 let bcsConfig: BcsConfig = {
-  vectorType: "vector",
+  vectorType: 'vector',
   addressLength: 20,
-  addressEncoding: "hex",
+  addressEncoding: 'hex',
   types: { enums },
-  withPrimitives: true,
+  withPrimitives: true
 };
 
 let bcs = new BCS(bcsConfig);
@@ -140,7 +135,7 @@ let bcs = new BCS(bcsConfig);
 // ===== Register String, Url, and VecMap<String,String> custom serializers =====
 
 bcs.registerType(
-  "String",
+  'String',
   (writer, data: string) => {
     let bytes = new TextEncoder().encode(data);
     writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
@@ -148,14 +143,14 @@ bcs.registerType(
   },
   (reader: BcsReader) => {
     let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder("utf8").decode(bytes);
+    return new TextDecoder('utf8').decode(bytes);
   },
-  (value) => is(value, MoveToStruct["String"])
+  value => is(value, MoveToStruct['String'])
 );
 
 // This is identical to the String writer / reader
 bcs.registerType(
-  "Url",
+  'Url',
   (writer, data: string) => {
     let bytes = new TextEncoder().encode(data);
     writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
@@ -163,44 +158,40 @@ bcs.registerType(
   },
   (reader: BcsReader) => {
     let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder("utf8").decode(bytes);
+    return new URL(new TextDecoder('utf8').decode(bytes));
   },
-  (value) => is(value, MoveToStruct["Url"])
+  value => is(value, MoveToStruct['Url'])
 );
 
 // This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than
 // a primitive type
 bcs.registerType(
-  "VecMap",
+  'VecMap',
   (writer, data: Record<string, string>) => {
     writer.writeULEB(Object.entries(data).length);
     let strings = Object.entries(data).flat();
 
-    let byteArray = strings.map((string) => {
+    let byteArray = strings.map(string => {
       return new TextEncoder().encode(string);
     });
 
-    byteArray.forEach((bytes) => {
+    byteArray.forEach(bytes => {
       writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
     });
     return writer;
   },
-  (reader) => {
+  reader => {
     let data: Record<string, string> = {};
 
-    reader.readVec((reader) => {
-      let key = new TextDecoder("utf8").decode(
-        reader.readBytes(reader.readULEB())
-      );
-      let value = new TextDecoder("utf8").decode(
-        reader.readBytes(reader.readULEB())
-      );
+    reader.readVec(reader => {
+      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
       data[key] = value;
     });
 
     return data;
   },
-  (value) => is(value, MoveToStruct["VecMap"])
+  value => is(value, MoveToStruct['VecMap'])
 );
 
 // bcs.registerStructType('VecMap', {
@@ -214,6 +205,10 @@ bcs.registerType(
 
 // ===== Configure SuperStruct to allow for runtime validation =====
 
+const UrlSchema = define('url', (value: unknown): value is URL => {
+  return value instanceof URL;
+});
+
 const MoveToStruct: Record<string, Struct<any, any>> = {
   address: array(integer()),
   bool: boolean(),
@@ -225,20 +220,20 @@ const MoveToStruct: Record<string, Struct<any, any>> = {
   u128: bigint(),
   u256: bigint(),
   String: string(),
-  Url: string(),
+  Url: UrlSchema
 };
 
-Object.keys(MoveToStruct).map((field) => {
+Object.keys(MoveToStruct).map(field => {
   MoveToStruct[`vector<${field}>`] = array(MoveToStruct[field]);
 });
 
-MoveToStruct["vector<vector<u8>>"] = array(array(integer()));
-MoveToStruct["VecMap"] = record(string(), string());
+MoveToStruct['vector<vector<u8>>'] = array(array(integer()));
+MoveToStruct['VecMap'] = record(string(), string());
 
-Object.keys(MoveToStruct).map((field) => {
+Object.keys(MoveToStruct).map(field => {
   MoveToStruct[`Option<${field}>`] = union([
     object({ none: any() }),
-    object({ some: MoveToStruct[field] }),
+    object({ some: MoveToStruct[field] })
   ]);
 });
 
@@ -253,7 +248,7 @@ function moveStructValidator(
 ): Struct<{ [x: string]: any }, Record<string, any>> {
   const dynamicStruct: Record<string, any> = {};
 
-  Object.keys(schema).map((key) => {
+  Object.keys(schema).map(key => {
     dynamicStruct[key] = MoveToStruct[schema[key]];
   });
 
@@ -290,7 +285,7 @@ function serializeByField(
       serializedData.push(bytesArray);
     }
   } else {
-    onlyKeys.forEach((key) => {
+    onlyKeys.forEach(key => {
       const bytesArray = Array.from(bcs.ser(schema[key], data[key]).toBytes());
       serializedData.push(bytesArray);
     });
@@ -334,9 +329,7 @@ function deserializeByField<T>(
 ): Record<string, string> | null {
   let deserializedData: Record<string, string> = {};
   if (keys && bytesArray.length !== keys?.length) {
-    throw Error(
-      "Number of keys to deserialize must be equal to bytesArray length."
-    );
+    throw Error('Number of keys to deserialize must be equal to bytesArray length.');
   }
   const iterable = keys || Object.keys(schema);
   iterable.forEach((key, index) => {
@@ -363,17 +356,14 @@ function parseViewResultsFromVector(result: DevInspectResults): Uint8Array {
   return dataCrop;
 }
 
-function sliceULEB128(
-  array: Uint8Array,
-  start: number = 0
-): [number, Uint8Array] {
+function sliceULEB128(array: Uint8Array, start: number = 0): [number, Uint8Array] {
   let total = 0;
   let shift = 0;
   let len = 0;
 
   while (true) {
     if (len > 4) {
-      throw "No ULEB128 found";
+      throw 'No ULEB128 found';
     }
 
     let byte = array[start + len];
@@ -390,10 +380,8 @@ function sliceULEB128(
   return [total, array.slice(start + len + 1, array.length)];
 }
 
-const schemaToStringArray = (
-  schema: Record<string, SupportedJSTypes>
-): string[][] => {
-  return Object.keys(schema).map((key) => {
+const schemaToStringArray = (schema: Record<string, SupportedJSTypes>): string[][] => {
+  return Object.keys(schema).map(key => {
     return [key, String(schema[key])];
   });
 };
@@ -410,5 +398,5 @@ export {
   moveStructValidator,
   sliceULEB128,
   schemaToStringArray,
-  newSerializer,
+  newSerializer
 };

@@ -35,18 +35,18 @@ module display::package {
     struct Witness has drop {}
 
     // Convenience entry function
-    public entry fun claim_package(
+    public entry fun claim(
         creator: &mut Creator,
         receipt: &mut PublishReceipt,
         ctx: &mut TxContext
     ) {
-        let package = claim_package_(
+        let package = claim_(
             creator, receipt, tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
         return_and_share(package);
     }
 
-    // Create a package object
-    public fun claim_package_(
+    // Claim a package object from our publish receipt
+    public fun claim_(
         creator: &mut Creator,
         receipt: &mut PublishReceipt,
         owner: address,
@@ -84,15 +84,15 @@ module display::package {
     }
 
     // Convenience function
-    public entry fun claim_as_new_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
-        claim_as_new_creator_(package, creator, &tx_authority::begin(ctx));
+    public entry fun transfer_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
+        transfer_creator_(package, creator, &tx_authority::begin(ctx));
     }
 
     // If Person-A controls the package, and they want to give it to a Creator-B, this is a two-step
     // process, because Sui does not yet support multi-signer transactions.
     // Tx-1: signed by Person-A; transfer ownership of `package` to Creator-B
     // Tx-2: signed by Creator-B; creator must call this function to set themselves as the new creator
-    public fun claim_as_new_creator_(package: &mut Package, creator: &Creator, auth: &TxAuthority) {
+    public fun transfer_creator_(package: &mut Package, creator: &Creator, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
         assert!(ownership::is_authorized_by_owner(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
 
