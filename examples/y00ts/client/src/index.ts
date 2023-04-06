@@ -4,187 +4,233 @@ import {
   serializeByField,
   getSigner,
   getCreatedObjects,
-  newSerializer,
-} from "../../../../sdk/typescript/src";
+  newSerializer
+} from '../../../../sdk/typescript/src';
 import {
   RawSigner,
   normalizeSuiObjectId,
   fromB64,
   TransactionBlock,
-  SuiTransactionBlockResponse,
-} from "@mysten/sui.js";
-import { execSync } from "child_process";
-import path from "path";
+  SuiTransactionBlockResponse
+} from '@mysten/sui.js';
+import { execSync } from 'child_process';
+import path from 'path';
 
-// TO DO: I don't know how to generalize this path yet. Right now it's hardcoded
-// const CLI_PATH = "/home/paul/.cargo/bin/sui";
-const CLI_PATH = "/home/george/.cargo/bin/sui";
-const PACKAGE_PATH = "../move_package";
-const ENV_PATH = path.resolve(__dirname, "../../../../", ".env");
+// This path might vary on other machines--it requires the latest Sui CLI to be installed
+const CLI_PATH = '~/.cargo/bin/sui';
+const PACKAGE_PATH = '../move_package';
+const ENV_PATH = path.resolve(__dirname, '../../../../', '.env');
 
 // Devnet addresses
-const attachPackageID = "";
-const displayPackageID =
-  "0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee";
-const ownershipPackageID =
-  "0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa";
-const scriptTxPackageID = "";
+const attachPackageID = '0xef6aaed4bdc512470fbb85e27e4fa9c88962b409410e807ed3ad2e63bde1caba';
+const displayPackageID = '0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee';
+const ownershipPackageID = '0xf01e5f373cacb8f7c101b53de83d3b33504f127ba3e0ecb3038d55b5fba389aa';
+const scriptTxPackageID = '0x1579f09714588edf97ba4ee9d4cf38978021167fd3787472239926089fbeb93e';
+
+// These are the options for the transaction block
+const options = {
+  showInput: true,
+  showEffects: true,
+  showEvents: true,
+  showObjectChanges: true
+};
 
 async function main(signer: RawSigner) {
   let signerAddress = await signer.getAddress(); // we don't add 0x here
   let tx = new TransactionBlock();
 
-  console.log("signer: ", signerAddress);
+  console.log('signer: ', signerAddress);
 
   // ======= Transaction 1: Publish Package =======
   // ==============================================
   // ==============================================
   // This requires the Sui CLI to be installed on this machine; I think this is a hard constraint
-  console.log("Publishing Y00t package...");
+  console.log('Publishing Y00t package...');
 
-  // const modulesInBase64 = JSON.parse(
-  //   execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
-  //     encoding: 'utf-8'
-  //   })
-  // );
+  const modulesInBase64 = JSON.parse(
+    execSync(`${CLI_PATH} move build --dump-bytecode-as-base64 --path ${PACKAGE_PATH}`, {
+      encoding: 'utf-8'
+    })
+  );
+  tx.setGasBudget(4000); // We have to set this manually since it fails to estimate
 
-  // tx.publish(
-  //   modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
-  //   modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
-  // );
-  // const result1 = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
-  // console.log({ result1 });
+  tx.publish(
+    modulesInBase64.modules.map((m: any) => Array.from(fromB64(m))),
+    modulesInBase64.dependencies.map((addr: string) => normalizeSuiObjectId(addr))
+  );
+  const tx1Response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options
+  });
+
+  // TO DO: This is not currently working for some reason
+  let y00tPublishReceiptID = parseTxResponse(tx1Response, 'created', 'PublishReceipt');
+  console.log({ tx1Response });
 
   // ======= Transaction 2: Create Creator Object =======
   // ==============================================
   // ==============================================
   // Gas benchmark (devnet): 5,004 nanoSUI
-  console.log("Making a creator object...");
+  console.log('Making a creator object...');
 
   tx = new TransactionBlock();
   tx.moveCall({
     target: `${displayPackageID}::creator::create`,
-    arguments: [tx.pure(signerAddress)],
+    arguments: [tx.pure(signerAddress)]
   });
   const tx2Response = await signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
-    options: {
-      showInput: true,
-      showEffects: true,
-      showEvents: true,
-      showObjectChanges: true,
-    },
+    options
   });
-  let creatorObjectID = "";
-  if (tx2Response.objectChanges) {
-    const createdCreator = tx2Response.objectChanges.find(
-      (obj) => obj.type === "created" && obj.objectType.includes("Creator")
-    );
-    console.log(createdCreator);
-    // @ts-ignore
-    creatorObjectID = createdCreator.objectId; // TO DO: get this from result2
-    console.log("creatorObjectID: ", creatorObjectID);
-  }
+
+  let creatorObjectID = parseTxResponse(tx2Response, 'created', 'Creator');
+  console.log('creatorObjectID: ', creatorObjectID);
 
   // ======= Transaction 3: Attach Data to Creator Object =======
   // ==============================================
   // ==============================================
+  // Gas benchmark (devnet): 1,122 nanoSUI
+  console.log('Attaching data to creator object...');
 
   // Create a schema we can serialize with, then serialize it
   const creatorSchema = {
-    name: "String",
-    url: "String",
+    name: 'String',
+    homepage: 'Url',
+    collection_size: 'u64'
   } as const;
 
   type Creator = JSTypes<typeof creatorSchema>;
 
   let creatorData: Creator = {
-    name: "Dust Labs",
-    url: "https://www.dustlabs.com/",
+    name: 'Dust Labs',
+    homepage: new URL('https://www.dustlabs.com/'),
+    collection_size: 15000n
   };
 
   let [data, fields] = newSerializer(bcs, creatorData, creatorSchema);
 
-  // Construct an auth object; this might work
+  // Construct an auth object
   tx = new TransactionBlock();
   let [auth] = tx.moveCall({
     target: `${ownershipPackageID}::tx_authority::begin`,
-    arguments: [],
+    arguments: []
   });
-  const result3_0 = await signer.signAndExecuteTransactionBlock({
-    transactionBlock: tx,
-    options: {
-      showEffects: true,
-      showEvents: true,
-      showObjectChanges: true,
-    },
-  });
-  console.log("TX3 p1/2 : ", result3_0);
-  // Just trying to run seperatly the transaction to identify whats wrong
 
+  // Attach data to the creator object
   tx.moveCall({
     target: `${scriptTxPackageID}::display_creator::deserialize_and_set_`,
-    arguments: [
-      tx.object(creatorObjectID),
-      tx.pure(null),
-      tx.pure(data),
-      tx.pure(fields),
-      auth,
-    ],
+    arguments: [tx.object(creatorObjectID), tx.pure([]), tx.pure(data), tx.pure(fields), auth]
   });
 
-  const result3 = await signer.signAndExecuteTransactionBlock({
+  const tx3Response = await signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
+    options
   });
-  console.log({ result3 });
+  console.log({ tx3Response });
+
+  // ======= Transaction 4: Update Creator Object's Data =======
+  // ==============================================
+  // ==============================================
+  // Gas benchmark (devnet): 5,097 (why was this more expensive??? Checking the schema?)
+  console.log('Updating data on creator object...');
+
+  const creatorSchema2 = {
+    name: 'String',
+    twitter: 'Url',
+    icon: 'Url',
+    message: 'String'
+  } as const;
+
+  type Creator2 = JSTypes<typeof creatorSchema2>;
+
+  let creatorData2: Creator2 = {
+    name: 'Y00ts Labs',
+    twitter: new URL('https://twitter.com/y00tsNFT'),
+    icon: new URL('https://pbs.twimg.com/profile_images/1588399574430806018/oBYKtGnj_400x400.jpg'),
+    message: 'You can now migrate your y00ts to Polygon.'
+  };
+
+  tx = new TransactionBlock();
+  [auth] = tx.moveCall({
+    target: `${ownershipPackageID}::tx_authority::begin`,
+    arguments: []
+  });
+
+  [data, fields] = newSerializer(bcs, creatorData2, creatorSchema2);
+
+  // Attach data to the creator object
+  tx.moveCall({
+    target: `${scriptTxPackageID}::display_creator::deserialize_and_set_`,
+    arguments: [tx.object(creatorObjectID), tx.pure([]), tx.pure(data), tx.pure(fields), auth]
+  });
+
+  // Remove two fields
+  tx.moveCall({
+    target: `${scriptTxPackageID}::display_creator::remove`,
+    arguments: [tx.object(creatorObjectID), tx.pure([]), tx.pure(['collection_size', 'icon']), auth]
+  });
+
+  const tx4Response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options
+  });
+  console.log({ tx4Response });
+
+  // ======= Transaction 5: Claim a package object using our publish-receipt + creator object =======
+  // ==============================================
+  // ==============================================
+  // Gas benchmark (devnet): ???
+  console.log('Claiming package object...');
+
+  tx = new TransactionBlock();
+  [auth] = tx.moveCall({
+    target: `${displayPackageID}::package::claim_package`,
+    arguments: [tx.object(creatorObjectID), tx.object(y00tPublishReceiptID)]
+  });
+
+  const tx5Response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options
+  });
+  console.log({ tx5Response });
+
+  // Add some display data for our package object using a package-display schema
 }
 
-// Fetch an on-chain existing creator schema -- commented out for now
-// let creatorSchema = await provider.getObject(creatorSchemaObjectID);
+type objectType =
+  | 'published'
+  | 'transferred'
+  | 'created'
+  | 'mutated'
+  | 'deleted'
+  | 'wrapped'
+  | 'created';
 
-// let createdObjects = getCreatedObjects(moveCallTxn0);
-// let y00tPackageID = createdObjects.Immutable[0];
-// let y00tPublishReceipt = createdObjects.AddressOwner[0];
+function parseTxResponse(res: SuiTransactionBlockResponse, type: objectType, name: string): string {
+  let objectID = '';
 
-// let creatorObjectID = getCreatedObjects(moveCallTxn2).Shared[0];
+  if (res.objectChanges) {
+    console.log('changes here');
+    console.log(res.objectChanges);
 
-// // ======= Transaction 4: Update Creator Object's Data =======
+    switch (type) {
+      case 'published':
+        let publishedObject = res.objectChanges.find(obj => obj.type === type);
+        // @ts-ignore
+        objectID = publishedObject.packageId;
+        break;
+      case 'created':
+        let createdObject = res.objectChanges.find(
+          obj => obj.type === type && obj.objectType.includes(name)
+        );
+        // @ts-ignore
+        objectID = createdObject.objectId;
+        break;
+    }
+  }
 
-// console.log('Updating creator object...');
-
-// creatorObject.name = 'Y00t Labs';
-// let fieldsChanged = ['name'];
-
-// const _moveCallTxn3 = await signer.executeMoveCall({
-//   packageObjectId: displayPackageID,
-//   module: 'creator',
-//   function: 'update',
-//   typeArguments: [],
-//   arguments: [
-//     creatorObjectID,
-//     fieldsChanged,
-//     serializeByField(bcs, creatorObject, creatorSchema, fieldsChanged),
-//     creatorSchemaObjectID,
-//     true
-//   ],
-//   gasBudget: 3000
-// });
-
-// // ======= Transaction 5: Claim a package object using our publish-receipt + creator object =======
-// console.log('Claiming package object...');
-
-// const moveCallTxn4 = await signer.executeMoveCall({
-//   packageObjectId: displayPackageID,
-//   module: 'creator',
-//   function: 'claim_package',
-//   typeArguments: [],
-//   arguments: [creatorObjectID, y00tPublishReceipt],
-//   gasBudget: 3000
-// });
-
-// let packageObjectID = getCreatedObjects(moveCallTxn4).AddressOwner[0];
-
-// // Add some display data for our package object using a package-display schema
+  return objectID;
+}
 
 // // ======= Transaction 6: Define an abstract type for Points<T> Publish Receipt =======
 // console.log('Defining abstract type...');
@@ -316,10 +362,10 @@ async function main(signer: RawSigner) {
 // // ====== Transaction 14: Transfer Ownership of Y00t =======
 
 const NFTSchema = {
-  name: "String",
-  description: "Option<String>",
-  image: "String",
-  attributes: "VecMap",
+  name: 'String',
+  description: 'Option<String>',
+  image: 'String',
+  attributes: 'VecMap'
 } as const;
 
 // Define the schema type in TypeScript
@@ -327,29 +373,29 @@ type NFT = JSTypes<typeof NFTSchema>;
 
 // Create an object of type `NFT`
 const y00t: NFT = {
-  name: "y00t #8173",
+  name: 'y00t #8173',
   description: { none: null },
-  image: "https://metadata.y00ts.com/y/8172.png",
+  image: 'https://metadata.y00ts.com/y/8172.png',
   attributes: {
-    Background: "White",
-    Fur: "Paradise Green",
-    Face: "Wholesome",
-    Clothes: "Summer Shirt",
-    Head: "Beanie (blackout)",
-    Eyewear: "Melrose Bricks",
-    "1/1": "None",
-  },
+    Background: 'White',
+    Fur: 'Paradise Green',
+    Face: 'Wholesome',
+    Clothes: 'Summer Shirt',
+    Head: 'Beanie (blackout)',
+    Eyewear: 'Melrose Bricks',
+    '1/1': 'None'
+  }
 };
 
 // Step 2: Create a Schema-validator; we can check to make sure objects comply with our schema at runtime
 
 // Step 3: Register the new type 'NFT' with BCS so we can serialize using BCS
 
-bcs.registerStructType("NFT", NFTSchema);
+bcs.registerStructType('NFT', NFTSchema);
 let bytes = serializeByField(bcs, y00t, NFTSchema);
 
 // Step 4: Post our serialized data to Sui
 
 console.dir(bytes, { maxArrayLength: null });
 
-getSigner(ENV_PATH).then((signer) => main(signer));
+getSigner(ENV_PATH).then(signer => main(signer));
