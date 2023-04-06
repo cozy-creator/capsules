@@ -68,13 +68,13 @@ module display::display {
     // ========= Create Type Metadata =========
 
     // Convenience entry function
-    public entry fun create<T>(
+    public entry fun claim<T>(
         publisher: &mut PublishReceipt,
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let display = create_<T>(publisher, keys, resolver_strings, ctx);
+        let display = claim_<T>(publisher, keys, resolver_strings, ctx);
         transfer::transfer(display, tx_context::sender(ctx));
     }
 
@@ -84,7 +84,7 @@ module display::display {
     //
     // The `resolver_strings` input to this function should look like:
     // [ [type, resolver-1, resolver-2], [type, resolver-1], ... ]
-    public fun create_<T>(
+    public fun claim_<T>(
         publisher: &mut PublishReceipt,
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
@@ -110,15 +110,15 @@ module display::display {
 
         let resolvers = vec_map2::create(keys, resolver_strings);
 
-        create_internal<T>(resolvers, ctx)
+        claim_internal<T>(resolvers, ctx)
     }
 
     // Convenience entry function
-    public entry fun create_from_abstract<T>(
+    public entry fun claim_from_abstract<T>(
         abstract: &mut AbstractDisplay,
         ctx: &mut TxContext
     ) {
-        let display = create_from_abstract_<T>(abstract, &tx_authority::begin(ctx), ctx);
+        let display = claim_from_abstract_<T>(abstract, &tx_authority::begin(ctx), ctx);
         transfer(display, tx_context::sender(ctx));
     }
 
@@ -126,7 +126,7 @@ module display::display {
     // AbstractDisplay Coin<T>
     // The raw_fields supplied will be used as a Schema to define the concrete type's display, and must be the same 
     // schema specified in the abstract type's `schema_id` field
-    public fun create_from_abstract_<T>(
+    public fun claim_from_abstract_<T>(
         abstract: &mut AbstractDisplay,
         auth: &TxAuthority,
         ctx: &mut TxContext
@@ -148,11 +148,11 @@ module display::display {
         assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
         dynamic_field::add(uid, key, true);
 
-        create_internal<T>(resolvers, ctx)
+        claim_internal<T>(resolvers, ctx)
     }
 
     // This is used by abstract_type as well, to define concrete types from abstract types
-    fun create_internal<T>(
+    fun claim_internal<T>(
         resolvers: VecMap<String, vector<String>>,
         ctx: &mut TxContext
     ): Display<T> {

@@ -345,6 +345,7 @@ module attach::data {
         response
     }
 
+    // This is necessary because only attach::data can construct Key { } to access these fields
     public fun get_bcs_bytes(
         uid: &UID,
         namespace: Option<address>,

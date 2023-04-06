@@ -67,14 +67,14 @@ module display::abstract_display {
     // type argument.
     // T must be abstract, in the sense that it has at least one generic
 
-    public entry fun create<T>(
+    public entry fun claim<T>(
         publisher: &mut PublishReceipt,
         owner_maybe: Option<address>,
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
         ctx: &mut TxContext
     ) {
-        let abstract_type = create_<T>(publisher, keys, resolver_strings, ctx);
+        let abstract_type = claim_<T>(publisher, keys, resolver_strings, ctx);
 
         // If `owner` is not set, it will default to the transaction-sender
         let owner = if (option::is_some(&owner_maybe)) { 
@@ -86,7 +86,7 @@ module display::abstract_display {
         return_and_share(abstract_type, owner);
     }
 
-    public fun create_<T>(
+    public fun claim_<T>(
         publisher: &mut PublishReceipt,
         keys: vector<String>,
         resolver_strings: vector<vector<String>>,
