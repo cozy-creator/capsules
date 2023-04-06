@@ -43,7 +43,7 @@ module transfer_system::royalty_market_tests {
         {
             let receipt = test_scenario::take_from_sender<PublishReceipt>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            let royalty = royalty_market::create_royalty<T>(&receipt, recipient, royalty_bps, marketplace_bps, ctx);
+            let royalty = royalty_market::create_royalty_<T>(&receipt, recipient, royalty_bps, marketplace_bps, ctx);
             transfer::public_share_object(royalty);
             test_scenario::return_to_sender(scenario, receipt)
         }
@@ -345,7 +345,7 @@ module transfer_system::royalty_market_tests {
 
         create_capsule_baby(&mut scenario);
         market_account_tests::create_account(&mut scenario);
-        create_royalty<CapsuleBaby>(&mut scenario, BUYER_ADDR, royalty_bps, marketplace_bps);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {
@@ -366,6 +366,73 @@ module transfer_system::royalty_market_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = royalty_market::EOFFER_ALREADY_EXIST)]
+    fun create_multiple_single_user_buy_offer_failure() {
+        let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
+        let scenario = test_utils::init_scenario(BUYER_ADDR);
+
+        create_capsule_baby(&mut scenario);
+        market_account_tests::create_account(&mut scenario);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+
+        {
+            let royalty = test_scenario::take_shared<Royalty<CapsuleBaby>>(&scenario);
+            let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
+            let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
+            let uid = capsule_baby::extend(&mut capsule_baby);
+
+            market_account::deposit<SUI>(&mut market_account, test_utils::mint_coin(&mut scenario, 20000000));
+            create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
+            create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
+
+            test_scenario::return_shared(market_account);
+            test_scenario::return_shared(capsule_baby);
+            test_scenario::return_shared(royalty);
+        };
+
+        test_utils::end_scenario(scenario)
+    }
+
+    #[test]
+    fun create_multiple_different_user_buy_offer_failure() {
+        let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
+        let scenario = test_utils::init_scenario(BUYER_ADDR);
+
+        create_capsule_baby(&mut scenario);
+        market_account_tests::create_account(&mut scenario);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+
+        {
+            let royalty = test_scenario::take_shared<Royalty<CapsuleBaby>>(&scenario);
+            let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
+            let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
+            let uid = capsule_baby::extend(&mut capsule_baby);
+
+            market_account::deposit<SUI>(&mut market_account, test_utils::mint_coin(&mut scenario, 20000000));
+            create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
+            
+            let other_addr = @0xFADE;
+            test_scenario::next_tx(&mut scenario, other_addr);
+            market_account_tests::create_account(&mut scenario);
+            test_scenario::next_tx(&mut scenario, other_addr);
+            {
+                let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
+                market_account::deposit<SUI>(&mut market_account, test_utils::mint_coin(&mut scenario, 20000000));
+                create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, other_addr, price);
+                test_scenario::return_shared(market_account);
+            };
+
+            test_scenario::return_shared(market_account);
+            test_scenario::return_shared(capsule_baby);
+            test_scenario::return_shared(royalty);
+        };
+
+        test_utils::end_scenario(scenario)
+    }
+
+    #[test]
     #[expected_failure(abort_code = royalty_market::EINSUFFICIENT_BALANCE)]
     fun create_buy_offer_insufficient_balance_failure() {
         let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
@@ -373,7 +440,7 @@ module transfer_system::royalty_market_tests {
 
         create_capsule_baby(&mut scenario);
         market_account_tests::create_account(&mut scenario);
-        create_royalty<CapsuleBaby>(&mut scenario, BUYER_ADDR, royalty_bps, marketplace_bps);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {
@@ -401,7 +468,7 @@ module transfer_system::royalty_market_tests {
 
         create_capsule_baby(&mut scenario);
         market_account_tests::create_account(&mut scenario);
-        create_royalty<FakeCapsuleBaby>(&mut scenario, BUYER_ADDR, royalty_bps, marketplace_bps);
+        create_royalty<FakeCapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {

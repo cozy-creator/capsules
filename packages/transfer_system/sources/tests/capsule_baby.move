@@ -27,8 +27,7 @@ module transfer_system::capsule_baby {
         let typed_id = typed_id::new(&capsule_baby);
         let auth = tx_authority::begin_with_type(&Witness {});
 
-        ownership::initialize_with_module_authority(&mut capsule_baby.id, typed_id, &auth);
-        ownership::as_shared_object<RoyaltyMarket>(&mut capsule_baby.id, vector[tx_context::sender(ctx)], &auth);
+        ownership::as_shared_object<CapsuleBaby, RoyaltyMarket>(&mut capsule_baby.id, typed_id, vector[tx_context::sender(ctx)], &auth);
 
         transfer::share_object(capsule_baby)
     }
