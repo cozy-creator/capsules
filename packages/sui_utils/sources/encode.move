@@ -247,8 +247,8 @@ module sui_utils::encode {
 #[test_only]
 module sui_utils::encode_test {
     use std::debug;
-    use std::string::{utf8};
-    use std::string::{Self, EINVALID_UTF8};
+    use std::option::Option;
+    use std::string::{Self, utf8, EINVALID_UTF8};
     use std::vector;
 
     use sui::test_scenario;
@@ -376,6 +376,24 @@ module sui_utils::encode_test {
 
         let (_, _, struct_name, _) = encode::decompose_type_name(type_name);
         assert!(struct_name == utf8(b"vector"), 0);
+    }
+
+    #[test]
+    public fun module_name() {
+        let module_name = encode::module_name<SUI>();
+        assert!(module_name == utf8(b"sui"), 0);
+
+        let module_name = encode::module_name<Option<u64>>();
+        assert!(module_name == utf8(b"option"), 0);
+    }
+
+    #[test]
+    public fun package_id_and_module_name() {
+        let pkg_mod_name = encode::package_id_and_module_name<SUI>();
+        assert!(pkg_mod_name == utf8(b"0000000000000000000000000000000000000000000000000000000000000002::sui"), 0);
+
+        let pkg_mod_name = encode::package_id_and_module_name<Option<u64>>();
+        assert!(pkg_mod_name == utf8(b"0000000000000000000000000000000000000000000000000000000000000001::option"), 0);
     }
 
     // There is currently a bug in Move core that prevents this from working. We'll bring this back
