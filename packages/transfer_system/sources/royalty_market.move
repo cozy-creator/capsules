@@ -1,5 +1,6 @@
 module transfer_system::royalty_market {
     use std::option::{Self, Option};
+    use std::type_name::{Self, TypeName};
 
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
@@ -53,6 +54,8 @@ module transfer_system::royalty_market {
         price: u64,
         user: address,
         item_id: Option<ID>,
+        coin_type: TypeName,
+        item_type: TypeName
     }
 
     struct OfferCancelled has copy, drop {
@@ -323,7 +326,9 @@ module transfer_system::royalty_market {
         emit(OfferCreated {
             item_id,
             user: offer.user,
-            price: offer.price
+            price: offer.price,
+            coin_type: type_name::get<C>(),
+            item_type: type_name::get<T>(),
         });
     }
 
