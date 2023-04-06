@@ -228,7 +228,7 @@ module transfer_system::royalty_market {
         marketplace: address,
         ctx: &mut TxContext
     ) {
-        // Ensure that only the asset owner can fill the buy offer
+        // Ensures that only the asset owner can fill the buy offer
         let auth = tx_authority::begin(ctx);
         assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
@@ -260,19 +260,24 @@ module transfer_system::royalty_market {
         dynamic_field::remove<Key, Offer<T, C>>(uid, key);
     }
     
-    // public fun cancel_sell_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
-    //     assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+    public fun cancel_sell_offer<T, C>(uid: &mut UID, ctx: &TxContext) {
+        let auth = tx_authority::begin(ctx);
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
 
-    //     let key =  Key { item: object::uid_to_inner(uid) };
-    //     dynamic_field::remove<Key, Offer<T, C>>(uid, key);
-    // }
+        let user = tx_context::sender(ctx);
+        let key = Key { user: option::some(user), type: SELL_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
-    // public fun cancel_buy_offer<T, C>(uid: &mut UID, auth: &TxAuthority) {
-    //     assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
 
-    //     let key =  Key { item: object::uid_to_inner(uid) };
-    //     dynamic_field::remove<Key, Offer<T, C>>(uid, key);
-    // }
+    public fun cancel_buy_offer<T, C>(uid: &mut UID, ctx: &TxContext) {
+        let user = tx_context::sender(ctx);
+        let key = Key { user: option::some(user), type: BUY_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
 
 
     // ==================== Helper functions ====================
