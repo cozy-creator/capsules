@@ -152,7 +152,7 @@ module transfer_system::royalty_market {
         let creator_royalty = bps_value(price, config.royalty_bps);
         let offer = create_offer<T, C>(seller, price, creator_royalty);
 
-        // emit_offer_created(offer_id, object::id(account), &offer);
+        emit_offer_created(option::some(object::uid_to_inner(uid)),  &offer);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
@@ -178,7 +178,7 @@ module transfer_system::royalty_market {
 
         let offer = create_offer<T, C>(buyer, price, creator_royalty);
 
-        // emit_offer_created(offer_id, object::id(account), &offer);
+        emit_offer_created(option::some(object::uid_to_inner(uid)),  &offer);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
