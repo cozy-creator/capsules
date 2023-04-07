@@ -26,9 +26,10 @@ module attach::schema {
     // Error constants
     const EUNSUPPORTED_TYPE: u64 = 1;
 
-    // We support (de)serialization of the following schema types
+    // We support (de)serialization of the following schema types. These are their simple type names
     const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"Url", b"vector<address>", b"VecMap", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"vector<Url>", b"vector<VecMap>", b"vector<vector<u8>>"];
 
+    // These are the fully qualified type names (includes package-ID + module-name)
     const STRING_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::string::String";
     const URL_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::url::Url";
     const VEC_MAP_STRING_TYPE_BYTES: vector<u8> = b"0000000000000000000000000000000000000000000000000000000000000001::vec_map::VecMap<0000000000000000000000000000000000000000000000000000000000000001::string::String,0000000000000000000000000000000000000000000000000000000000000001::string::String>";

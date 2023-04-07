@@ -3,6 +3,7 @@
 module outlaw_sky::demo_factory {
     use std::string::{Self, String};
     use std::vector;
+
     use sui::dynamic_field;
     use sui::url::{Self, Url};
     use sui::object::{Self, UID, ID};
@@ -10,7 +11,8 @@ module outlaw_sky::demo_factory {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::event;
-    use sui_utils::ascii2;
+
+    use sui_utils::string2;
     use sui_utils::rand;
 
     // All of these are metadata properites and do not belong on this struct, but we include them here anyway because the sui-explorer
@@ -46,7 +48,7 @@ module outlaw_sky::demo_factory {
         metadata: OutlawMetadata
     }
 
-    const URL_TEMPLATE: vector<u8> = b"https://d23f0jexolvu5k.cloudfront.net/";
+    const URL_TEMPLATE: vector<u8> = b"https://firebasestorage.googleapis.com/v0/b/capsules-9e30e.appspot.com/o/";
 
     const INVENTORY: vector<vector<vector<u8>>> = vector[
         vector[ b"aqua", b"red", b"teal"], // background
@@ -78,10 +80,10 @@ module outlaw_sky::demo_factory {
         };
 
         let id = object::new(ctx);
-        let object_id_str = string::from_ascii(ascii2::addr_into_string(object::uid_to_address(&id)));
+
         let url = string::utf8(URL_TEMPLATE);
-        string::append(&mut url, object_id_str);
-        string::append_utf8(&mut url, b".png");
+        string::append(&mut url, string2::from_id(object::uid_to_inner(&id)));
+        string::append_utf8(&mut url, b".png?alt=media");
 
         let metadata = OutlawMetadata { attributes, url };
         dynamic_field::add(&mut id, b"metadata", metadata);
@@ -99,8 +101,9 @@ module outlaw_sky::demo_factory {
         }
     }
 
-    // view function must be public for a client to call it. This is better than the other view function because
-    // it gets serialized automatically with useless prepended length bytes
+    // view functions must be public for a client to call it via devInspect.
+    // This is better than the other view function because it gets serialized automatically with
+    // useless prepended length bytes
     public fun view(outlaw: &Outlaw): &OutlawMetadata {
         dynamic_field::borrow<vector<u8>, OutlawMetadata>(&outlaw.id, b"metadata")
     }
