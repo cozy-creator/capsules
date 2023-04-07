@@ -53,13 +53,13 @@ module transfer_system::royalty_market {
     struct OfferCreated has copy, drop {
         price: u64,
         user: address,
-        item_id: Option<ID>,
+        item_id: ID,
         coin_type: TypeName,
         item_type: TypeName
     }
 
     struct OfferCancelled has copy, drop {
-        item_id: Option<ID>
+        item_id: ID
     }
 
 
@@ -152,7 +152,7 @@ module transfer_system::royalty_market {
         let creator_royalty = bps_value(price, config.royalty_bps);
         let offer = create_offer<T, C>(seller, price, creator_royalty);
 
-        emit_offer_created(option::some(object::uid_to_inner(uid)),  &offer);
+        emit_offer_created(object::uid_to_inner(uid),  &offer);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
@@ -178,7 +178,7 @@ module transfer_system::royalty_market {
 
         let offer = create_offer<T, C>(buyer, price, creator_royalty);
 
-        emit_offer_created(option::some(object::uid_to_inner(uid)),  &offer);
+        emit_offer_created(object::uid_to_inner(uid),  &offer);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
@@ -271,6 +271,7 @@ module transfer_system::royalty_market {
         let key = Key { user: option::some(user), type: SELL_OFFER_TYPE };
         assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
+        emit_offer_cancelled(object::uid_to_inner(uid));
         dynamic_field::remove<Key, Offer<T, C>>(uid, key);
     }
 
@@ -279,6 +280,7 @@ module transfer_system::royalty_market {
         let key = Key { user: option::some(user), type: BUY_OFFER_TYPE };
         assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
+        emit_offer_cancelled(object::uid_to_inner(uid));
         dynamic_field::remove<Key, Offer<T, C>>(uid, key);
     }
 
@@ -322,7 +324,7 @@ module transfer_system::royalty_market {
 
     // ===== Event helper functions =====
 
-    fun emit_offer_created<T, C>(item_id: Option<ID>, offer: &Offer<T, C>) {
+    fun emit_offer_created<T, C>(item_id: ID, offer: &Offer<T, C>) {
         emit(OfferCreated {
             item_id,
             user: offer.user,
@@ -332,7 +334,7 @@ module transfer_system::royalty_market {
         });
     }
 
-    fun emit_offer_cancelled(item_id: Option<ID>) {
+    fun emit_offer_cancelled(item_id: ID) {
         emit(OfferCancelled { item_id });
     }
 }
