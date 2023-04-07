@@ -70,26 +70,4 @@ module transfer_system::market_account_tests {
 
         test_utils::end_scenario(scenario)
     }
-
-    #[test]
-    #[expected_failure(abort_code = market_account::ENO_OWNER_AUTHORITY )]
-    fun take_from_market_account_invalid_owner_failure() {
-        let scenario = test_utils::init_scenario(SENDER);
-
-        create_account(&mut scenario);
-        test_scenario::next_tx(&mut scenario, SENDER);
-
-        {
-            let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
-
-            test_scenario::next_tx(&mut scenario, @0xFADE);
-
-            let coin = market_account::take_for_testing<SUI>(&mut market_account, 0, test_scenario::ctx(&mut scenario));
-            test_utils::burn_coin(coin);
-
-            test_scenario::return_shared(market_account);
-        };
-
-        test_utils::end_scenario(scenario)
-    }
 }

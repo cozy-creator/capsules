@@ -59,6 +59,11 @@ module transfer_system::royalty_market_tests {
         royalty_market::fill_sell_offer<T, C>(uid, buyer, royalty, coin, marketplace, ctx)
     }
 
+    fun fill_buy_offer_<T, C>(scenario: &mut Scenario, uid: &mut UID, market_account: &mut MarketAccount, buyer: address, royalty: &Royalty<T>, marketplace: address) {
+        let ctx = test_scenario::ctx(scenario);
+        royalty_market::fill_buy_offer<T, C>(uid, market_account, buyer, royalty, marketplace, ctx)
+    }
+
     fun create_buy_offer_<T, C>(scenario: &mut Scenario, uid: &mut UID, market_account: &mut MarketAccount, royalty: &Royalty<T>, buyer: address, price: u64) {
         let auth = tx_authority::begin(test_scenario::ctx(scenario));
         royalty_market::create_buy_offer<T, C>(uid, market_account, royalty, buyer, price, &auth)
@@ -483,6 +488,122 @@ module transfer_system::royalty_market_tests {
             test_scenario::return_shared(capsule_baby);
             test_scenario::return_shared(royalty);
         };
+
+        test_utils::end_scenario(scenario)
+    }
+
+    #[test]
+    fun fill_buy_offer() {
+        let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
+        let scenario = test_utils::init_scenario(SELLER_ADDR);
+
+        create_capsule_baby(&mut scenario);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        market_account_tests::create_account(&mut scenario);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        
+        {
+            let royalty = test_scenario::take_shared<Royalty<CapsuleBaby>>(&scenario);
+            let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
+            let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
+            let uid = capsule_baby::extend(&mut capsule_baby);
+
+            market_account::deposit(&mut market_account, test_utils::mint_coin<SUI>(&mut scenario, 3400000));
+            create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
+
+            let marketplace = @0xDEED;
+            test_scenario::next_tx(&mut scenario, SELLER_ADDR);
+
+            {
+                // Fill the buy offer
+                fill_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, BUYER_ADDR, &royalty, marketplace);
+                test_scenario::next_tx(&mut scenario, SELLER_ADDR);
+            };
+
+            let seller_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, SELLER_ADDR);
+            let royalty_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, SELLER_ADDR);
+            let marketplace_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, marketplace);
+
+            // Royalty paid to the royalty recipient
+            // i.e 1000 bps of 2000000 = 200000
+            assert!(coin::value(&royalty_coin) == 200_000, 0);
+
+            // Amount paid to the marketplace
+            // i.e 200 bs of 2000000 = 40000
+            assert!(coin::value(&marketplace_coin) == 40_000, 0);
+
+            // final sale amount (offer_price - (total_royalty / 2) - marketplace_fee)
+            // i.e 2000000 - (200000 / 2) - 40000
+            assert!(coin::value(&seller_coin) == 1_860_000, 0);
+
+            assert!(market_account::balance<SUI>(&market_account) == 1_300_000, 0);
+
+            test_scenario::return_to_address(SELLER_ADDR, royalty_coin);
+            test_scenario::return_to_address(SELLER_ADDR, seller_coin);
+            test_scenario::return_to_address(marketplace, marketplace_coin);
+            test_scenario::return_shared(market_account);
+            test_scenario::return_shared(capsule_baby);
+            test_scenario::return_shared(royalty);
+        };        
+
+        test_utils::end_scenario(scenario)
+    }
+
+    #[test]
+    fun fill_buy_offer_with_exact_balance() {
+        let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
+        let scenario = test_utils::init_scenario(SELLER_ADDR);
+
+        create_capsule_baby(&mut scenario);
+        create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        market_account_tests::create_account(&mut scenario);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        
+        {
+            let royalty = test_scenario::take_shared<Royalty<CapsuleBaby>>(&scenario);
+            let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
+            let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
+            let uid = capsule_baby::extend(&mut capsule_baby);
+
+            market_account::deposit(&mut market_account, test_utils::mint_coin<SUI>(&mut scenario, 2100000));
+            create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
+
+            let marketplace = @0xDEED;
+            test_scenario::next_tx(&mut scenario, SELLER_ADDR);
+
+            {
+                // Fill the buy offer
+                fill_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, BUYER_ADDR, &royalty, marketplace);
+                test_scenario::next_tx(&mut scenario, SELLER_ADDR);
+            };
+
+            let seller_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, SELLER_ADDR);
+            let royalty_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, SELLER_ADDR);
+            let marketplace_coin = test_scenario::take_from_address<Coin<SUI>>(&scenario, marketplace);
+
+            // Royalty paid to the royalty recipient
+            // i.e 1000 bps of 2000000 = 200000
+            assert!(coin::value(&royalty_coin) == 200_000, 0);
+
+            // Amount paid to the marketplace
+            // i.e 200 bs of 2000000 = 40000
+            assert!(coin::value(&marketplace_coin) == 40_000, 0);
+
+            // final sale amount (offer_price - (total_royalty / 2) - marketplace_fee)
+            // i.e 2000000 - (200000 / 2) - 40000
+            assert!(coin::value(&seller_coin) == 1_860_000, 0);
+
+            assert!(market_account::balance<SUI>(&market_account) == 0, 0);
+
+            test_scenario::return_to_address(SELLER_ADDR, royalty_coin);
+            test_scenario::return_to_address(SELLER_ADDR, seller_coin);
+            test_scenario::return_to_address(marketplace, marketplace_coin);
+            test_scenario::return_shared(market_account);
+            test_scenario::return_shared(capsule_baby);
+            test_scenario::return_shared(royalty);
+        };        
 
         test_utils::end_scenario(scenario)
     }
