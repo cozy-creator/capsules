@@ -52,8 +52,6 @@ module transfer_system::market_account {
     }
 
     public(friend) fun take<C>(self: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
-        assert_account_ownership(self, &tx_authority::begin(ctx));
-
         let balance_type = type_name::get<C>();
         assert!(bag::contains<TypeName>(&self.balances, balance_type), ENO_COIN_BALANCE);
         

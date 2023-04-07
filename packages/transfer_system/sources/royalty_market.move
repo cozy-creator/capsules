@@ -204,8 +204,8 @@ module transfer_system::royalty_market {
     }
 
     public fun fill_buy_offer<T, C>(
-        account: &mut MarketAccount,
         uid: &mut UID,
+        account: &mut MarketAccount,
         buyer: address,
         royalty: &Royalty<T>,
         marketplace: address,
