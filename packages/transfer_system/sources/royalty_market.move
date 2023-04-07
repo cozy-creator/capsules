@@ -4,7 +4,6 @@ module transfer_system::royalty_market {
 
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
-    use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     use sui::dynamic_field;
     use sui::event::emit;
@@ -116,25 +115,6 @@ module transfer_system::royalty_market {
                 marketplace_fee_bps
             }
         }
-    }
-
-    /// Collects royalty value from balance `Balance` of type `C`
-    /// It then converts it to a coin `Coin` of type `C` and transfers it to the royalty recipient
-    public fun collect_from_balance<T, C>(royalty: &Royalty<T>, offer: &Offer<T, C>, source: &mut Balance<C>, ctx: &mut TxContext) {
-        let Royalty { id: _, config } = royalty;
-        let royalty_value = bps_value(offer.price, config.royalty_bps);
-        let royalty_coin = coin::take(source, royalty_value, ctx);
-
-        transfer::public_transfer(royalty_coin, config.recipient)
-    }
-
-    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
-    public fun collect_from_coin<T, C>(royalty: &Royalty<T>, offer: &Offer<T, C>, source: &mut Coin<C>, ctx: &mut TxContext) {
-        let Royalty { id: _, config } = royalty;
-        let royalty_value = bps_value(offer.price, config.royalty_bps);
-        let royalty_coin = coin::split(source, royalty_value, ctx);
-
-        transfer::public_transfer(royalty_coin, config.recipient)
     }
 
     // ========== Offer functions ==========
@@ -302,6 +282,14 @@ module transfer_system::royalty_market {
 
     fun bps_value(value: u64, bps: u16): u64 {
         ((bps as u64) * value) / (BPS_BASE as u64)
+    }
+
+    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
+    fun collect_from_coin<T, C>(royalty: &Royalty<T>, offer: &Offer<T, C>, source: &mut Coin<C>, ctx: &mut TxContext) {
+        let Royalty { id: _, config } = royalty;
+        let royalty_value = bps_value(offer.price, config.royalty_bps);
+
+        transfer_coin_value(source, royalty_value, config.recipient, ctx)
     }
 
     fun transfer_coin_value<C>(coin: &mut Coin<C>, value: u64, recipient: address, ctx: &mut TxContext) {
