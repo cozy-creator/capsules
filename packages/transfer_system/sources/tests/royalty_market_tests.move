@@ -1,6 +1,7 @@
 #[test_only]
 module transfer_system::royalty_market_tests {
     use std::vector;
+    use std::option;
 
     use sui::transfer;
     use sui::sui::SUI;
@@ -9,6 +10,7 @@ module transfer_system::royalty_market_tests {
     use sui::coin::{Self, Coin};
     use sui::test_scenario::{Self, Scenario};
 
+    use ownership::ownership;
     use ownership::tx_authority;
     use ownership::publish_receipt::{Self, PublishReceipt};
 
@@ -91,6 +93,8 @@ module transfer_system::royalty_market_tests {
             let uid = capsule_baby::extend(&mut capsule_baby);
 
             create_sell_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &royalty, SELLER_ADDR, price);
+
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
 
             test_scenario::return_shared(capsule_baby);
             test_scenario::return_shared(royalty);
@@ -187,6 +191,7 @@ module transfer_system::royalty_market_tests {
             let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
             let uid = capsule_baby::extend(&mut capsule_baby);
 
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
             create_sell_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &royalty, SELLER_ADDR, price);
 
             let (marketplace, coin) = (@0xDEED, test_utils::mint_coin<SUI>(&mut scenario, 3000000));
@@ -195,6 +200,7 @@ module transfer_system::royalty_market_tests {
             {
                 // Fill the sell offer
                 fill_sell_offer_<CapsuleBaby, SUI>(&mut scenario, uid, BUYER_ADDR, &royalty, coin, marketplace);
+                assert!(ownership::get_owner(uid) == option::some(vector[BUYER_ADDR]), 0);
                 test_scenario::next_tx(&mut scenario, BUYER_ADDR);
             };
 
@@ -245,6 +251,7 @@ module transfer_system::royalty_market_tests {
             let uid = capsule_baby::extend(&mut capsule_baby);
 
             create_sell_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &royalty, SELLER_ADDR, price);
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
 
             let (marketplace, coin) = (@0xDEED, test_utils::mint_coin<SUI>(&mut scenario, 2100000));
             test_scenario::next_tx(&mut scenario, BUYER_ADDR);
@@ -252,6 +259,7 @@ module transfer_system::royalty_market_tests {
             {
                 // Fill the sell offer
                 fill_sell_offer_<CapsuleBaby, SUI>(&mut scenario, uid, BUYER_ADDR, &royalty, coin, marketplace);
+                assert!(ownership::get_owner(uid) == option::some(vector[BUYER_ADDR]), 0);
                 test_scenario::next_tx(&mut scenario, BUYER_ADDR);
             };
 
@@ -346,11 +354,12 @@ module transfer_system::royalty_market_tests {
     #[test]
     fun create_buy_offer() {
         let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
-        let scenario = test_utils::init_scenario(BUYER_ADDR);
+        let scenario = test_utils::init_scenario(SELLER_ADDR);
 
         create_capsule_baby(&mut scenario);
-        market_account_tests::create_account(&mut scenario);
         create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        market_account_tests::create_account(&mut scenario);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {
@@ -358,6 +367,8 @@ module transfer_system::royalty_market_tests {
             let market_account = test_scenario::take_shared<MarketAccount>(&scenario);
             let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
             let uid = capsule_baby::extend(&mut capsule_baby);
+
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
 
             market_account::deposit<SUI>(&mut market_account, test_utils::mint_coin(&mut scenario, 20000000));
             create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
@@ -374,11 +385,12 @@ module transfer_system::royalty_market_tests {
     #[expected_failure(abort_code = royalty_market::EOFFER_ALREADY_EXIST)]
     fun create_multiple_single_user_buy_offer_failure() {
         let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
-        let scenario = test_utils::init_scenario(BUYER_ADDR);
+        let scenario = test_utils::init_scenario(SELLER_ADDR);
 
         create_capsule_baby(&mut scenario);
-        market_account_tests::create_account(&mut scenario);
         create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario,BUYER_ADDR);
+        market_account_tests::create_account(&mut scenario);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {
@@ -402,11 +414,12 @@ module transfer_system::royalty_market_tests {
     #[test]
     fun create_multiple_different_user_buy_offer_failure() {
         let (price, royalty_bps, marketplace_bps) = (2000000, 1000, 200);
-        let scenario = test_utils::init_scenario(BUYER_ADDR);
+        let scenario = test_utils::init_scenario(SELLER_ADDR);
 
         create_capsule_baby(&mut scenario);
-        market_account_tests::create_account(&mut scenario);
         create_royalty<CapsuleBaby>(&mut scenario, SELLER_ADDR, royalty_bps, marketplace_bps);
+        test_scenario::next_tx(&mut scenario, BUYER_ADDR);
+        market_account_tests::create_account(&mut scenario);
         test_scenario::next_tx(&mut scenario, BUYER_ADDR);
 
         {
@@ -509,6 +522,8 @@ module transfer_system::royalty_market_tests {
             let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
             let uid = capsule_baby::extend(&mut capsule_baby);
 
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
+
             market_account::deposit(&mut market_account, test_utils::mint_coin<SUI>(&mut scenario, 3400000));
             create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
 
@@ -518,6 +533,7 @@ module transfer_system::royalty_market_tests {
             {
                 // Fill the buy offer
                 fill_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, BUYER_ADDR, &royalty, marketplace);
+            assert!(ownership::get_owner(uid) == option::some(vector[BUYER_ADDR]), 0);
                 test_scenario::next_tx(&mut scenario, SELLER_ADDR);
             };
 
@@ -567,6 +583,8 @@ module transfer_system::royalty_market_tests {
             let capsule_baby = test_scenario::take_shared<CapsuleBaby>(&scenario);
             let uid = capsule_baby::extend(&mut capsule_baby);
 
+            assert!(ownership::get_owner(uid) == option::some(vector[SELLER_ADDR]), 0);
+
             market_account::deposit(&mut market_account, test_utils::mint_coin<SUI>(&mut scenario, 2100000));
             create_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, &royalty, BUYER_ADDR, price);
 
@@ -576,6 +594,7 @@ module transfer_system::royalty_market_tests {
             {
                 // Fill the buy offer
                 fill_buy_offer_<CapsuleBaby, SUI>(&mut scenario, uid, &mut market_account, BUYER_ADDR, &royalty, marketplace);
+                assert!(ownership::get_owner(uid) == option::some(vector[BUYER_ADDR]), 0);
                 test_scenario::next_tx(&mut scenario, SELLER_ADDR);
             };
 
