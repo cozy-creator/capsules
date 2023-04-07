@@ -39,44 +39,44 @@ module transfer_system::market_account {
         transfer::share_object(account)
     }
 
-    public fun deposit<C>(account: &mut MarketAccount, payment: Coin<C>) {
+    public fun deposit<C>(self: &mut MarketAccount, payment: Coin<C>) {
         let balance_type = type_name::get<C>();
         let deposit = coin::into_balance(payment);
 
-        if(bag::contains<TypeName>(&account.balances, balance_type)) {
-            let balance = bag::borrow_mut<TypeName, Balance<C>>(&mut account.balances, balance_type);
+        if(bag::contains<TypeName>(&self.balances, balance_type)) {
+            let balance = bag::borrow_mut<TypeName, Balance<C>>(&mut self.balances, balance_type);
             balance::join(balance, deposit);
         } else {
-            bag::add<TypeName, Balance<C>>(&mut account.balances, balance_type, deposit)
+            bag::add<TypeName, Balance<C>>(&mut self.balances, balance_type, deposit)
         }
     }
 
-    public(friend) fun take<C>(account: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
-        assert_account_ownership(account, &tx_authority::begin(ctx));
+    public(friend) fun take<C>(self: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
+        assert_account_ownership(self, &tx_authority::begin(ctx));
 
         let balance_type = type_name::get<C>();
-        assert!(bag::contains<TypeName>(&account.balances, balance_type), ENO_COIN_BALANCE);
+        assert!(bag::contains<TypeName>(&self.balances, balance_type), ENO_COIN_BALANCE);
         
-        let balance = bag::borrow_mut<TypeName, Balance<C>>(&mut account.balances, balance_type);
+        let balance = bag::borrow_mut<TypeName, Balance<C>>(&mut self.balances, balance_type);
 
         let take_balance = balance::split(balance, amount);
         coin::from_balance(take_balance, ctx)
     }
 
-    public fun balance<C>(account: &MarketAccount): u64 {
+    public fun balance<C>(self: &MarketAccount): u64 {
         let balance_type = type_name::get<C>();
-        assert!(bag::contains<TypeName>(&account.balances, balance_type), ENO_COIN_BALANCE);
+        assert!(bag::contains<TypeName>(&self.balances, balance_type), ENO_COIN_BALANCE);
 
-        let balance = bag::borrow<TypeName, Balance<C>>(&account.balances, balance_type);
+        let balance = bag::borrow<TypeName, Balance<C>>(&self.balances, balance_type);
         balance::value(balance)
     }
 
-    public fun assert_account_ownership(account: &MarketAccount, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&account.id, auth), ENO_OWNER_AUTHORITY)
+    public fun assert_account_ownership(self: &MarketAccount, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY)
     }
 
     #[test_only]
-    public fun take_for_testing<C>(account: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
-        take(account, amount, ctx)
+    public fun take_for_testing<C>(self: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
+        take(self, amount, ctx)
     }
 }
