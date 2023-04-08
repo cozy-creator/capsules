@@ -2,8 +2,8 @@
 
 // Definitions:
 // Full-qualified type-name, or simply 'type name' for short. Contains no abbreviations or 0x address prefixes:
-// 0000000000000000000000000000000000000002::devnet_nft::DevNetNFT
-// 0000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000002::sui::SUI>
+// 0000000000000000000000000000000000000000000000000000000000000002::devnet_nft::DevNetNFT
+// 0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
 // 0000000000000000000000000000000000000001::string::String
 // This is <package_id>::<module_name>::<struct_name>
 //
@@ -38,8 +38,8 @@ module sui_utils::encode {
     // (package_id, module_name, struct name, generics). Supports both structs and primitive types.
     // Primitive types are considered to have an ID of 0x0 and a module name of "".
     // Example output:
-    // (0000000000000000000000000000000000000002, devnet_nft, DevnetNFT, [])
-    // ("0000000000000000000000000000000000000000", "", vector, ["0000000000000000000000000000000000000002::devnet_nft::DevnetNFT"])
+    // (0000000000000000000000000000000000000000000000000000000000000002, devnet_nft, DevnetNFT, [])
+    // ("0000000000000000000000000000000000000000", "", vector, ["0000000000000000000000000000000000000000000000000000000000000002::devnet_nft::DevnetNFT"])
     // Note that all of these operations assume that the Strings, despite being utf8, are actually ascii bytes.
     // If this assumption is violated, this will abort. We have an open PR in the Move core to allow utf8
     // strings to be more user-friendly.
@@ -247,8 +247,8 @@ module sui_utils::encode {
 #[test_only]
 module sui_utils::encode_test {
     use std::debug;
-    use std::string::{utf8};
-    use std::string::{Self, EINVALID_UTF8};
+    use std::option::Option;
+    use std::string::{Self, utf8, EINVALID_UTF8};
     use std::vector;
 
     use sui::test_scenario;
@@ -310,7 +310,7 @@ module sui_utils::encode_test {
     public fun invalid_string() {
         let scenario = test_scenario::begin(@0x69);
         {
-            let (_, _addr, _type, _) = encode::decompose_type_name(utf8(b"0000000000000000000000000000000000000000::gotcha_bitch"));
+            let (_, _addr, _type, _) = encode::decompose_type_name(utf8(b"0000000000000000000000000000000000000000000000000000000000000000::gotcha_bitch"));
         };
         test_scenario::end(scenario);
     }
@@ -345,7 +345,7 @@ module sui_utils::encode_test {
     public fun test_append_struct_name() {
         let module_addr1 = encode::package_id_and_module_name<SUI>();
         let struct1 = encode::append_struct_name_(module_addr1, utf8(b"Witness"));
-        assert!(struct1 == utf8(b"0000000000000000000000000000000000000002::sui::Witness"), 0);
+        assert!(struct1 == utf8(b"0000000000000000000000000000000000000000000000000000000000000002::sui::Witness"), 0);
 
         let module_addr2 = encode::package_id_and_module_name_(encode::type_name<SUI>());
         assert!(module_addr1 == module_addr2, 0);
@@ -378,6 +378,24 @@ module sui_utils::encode_test {
         assert!(struct_name == utf8(b"vector"), 0);
     }
 
+    #[test]
+    public fun module_name() {
+        let module_name = encode::module_name<SUI>();
+        assert!(module_name == utf8(b"sui"), 0);
+
+        let module_name = encode::module_name<Option<u64>>();
+        assert!(module_name == utf8(b"option"), 0);
+    }
+
+    #[test]
+    public fun package_id_and_module_name() {
+        let pkg_mod_name = encode::package_id_and_module_name<SUI>();
+        assert!(pkg_mod_name == utf8(b"0000000000000000000000000000000000000000000000000000000000000002::sui"), 0);
+
+        let pkg_mod_name = encode::package_id_and_module_name<Option<u64>>();
+        assert!(pkg_mod_name == utf8(b"0000000000000000000000000000000000000000000000000000000000000001::option"), 0);
+    }
+
     // There is currently a bug in Move core that prevents this from working. We'll bring this back
     // once it's fixed.
     #[test]
@@ -389,7 +407,7 @@ module sui_utils::encode_test {
 
         // assert!(struct_name == utf8(b"SillyStruct"), 0);
         // assert!(vector::length(&generics) == 3, 0);
-        // assert!(*vector::borrow(&generics, 0) == utf8(b"0000000000000000000000000000000000000002::sui::SUI"), 0);
+        // assert!(*vector::borrow(&generics, 0) == utf8(b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"), 0);
         // assert!(*vector::borrow(&generics, 1) == utf8(b"u64"), 0);
         // assert!(*vector::borrow(&generics, 2) == utf8(b"vector<u8>"), 0);
     }

@@ -11,12 +11,13 @@ import {
   array,
   union,
   any,
-  Struct
+  Struct,
+  define
 } from 'superstruct';
 
-// ===== Instantiate bcs, and define Option enums =====
+// ===== Declared Supported Types =====
 
-let supportedTypes = [
+const supportedTypes = [
   'address',
   'bool',
   'id',
@@ -30,10 +31,13 @@ let supportedTypes = [
   'Url',
   'vector<u8>',
   'VecMap'
-];
-let enums: { [key: string]: EnumTypeDefinition } = {};
+] as const;
 
-type SupportedType =
+type SupportedMoveTypes =
+  | typeof supportedTypes[number]
+  | `Option<${typeof supportedTypes[number]}>`;
+
+type SupportedJSTypes =
   | Uint8Array
   | boolean
   | number
@@ -41,102 +45,9 @@ type SupportedType =
   | string
   | number[]
   | Record<string, string>
+  | URL
   | { none: null }
   | { some: string };
-
-supportedTypes.forEach(typeName => {
-  enums[`Option<${typeName}>`] = {
-    none: null,
-    some: typeName
-  };
-
-  enums[`Option<vector<${typeName}>>`] = {
-    none: null,
-    some: `vector<${typeName}>`
-  };
-});
-
-let bcsConfig: BcsConfig = {
-  vectorType: 'vector',
-  addressLength: 20,
-  addressEncoding: 'hex',
-  types: { enums },
-  withPrimitives: true
-};
-
-let bcs = new BCS(bcsConfig);
-
-// ===== Register String and VecMap<String,String> primitive types =====
-
-bcs.registerType(
-  'String',
-  (writer, data: string) => {
-    let bytes = new TextEncoder().encode(data);
-    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-    return writer;
-  },
-  (reader: BcsReader) => {
-    let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder('utf8').decode(bytes);
-  },
-  value => is(value, MoveToStruct['String'])
-);
-
-// This is identical to the String writer / reader
-bcs.registerType(
-  'Url',
-  (writer, data: string) => {
-    let bytes = new TextEncoder().encode(data);
-    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-    return writer;
-  },
-  (reader: BcsReader) => {
-    let bytes = reader.readBytes(reader.readULEB());
-    return new TextDecoder('utf8').decode(bytes);
-  },
-  value => is(value, MoveToStruct['Url'])
-);
-
-// This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than
-// a primitive type
-
-bcs.registerType(
-  'VecMap',
-  (writer, data: Record<string, string>) => {
-    writer.writeULEB(Object.entries(data).length);
-    let strings = Object.entries(data).flat();
-
-    let byteArray = strings.map(string => {
-      return new TextEncoder().encode(string);
-    });
-
-    byteArray.forEach(bytes => {
-      writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
-    });
-    return writer;
-  },
-  reader => {
-    let data: Record<string, string> = {};
-
-    reader.readVec(reader => {
-      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
-      data[key] = value;
-    });
-
-    return data;
-  },
-  value => is(value, MoveToStruct['VecMap'])
-);
-
-// bcs.registerStructType('VecMap', {
-//   contents: 'vector<Entry>'
-// });
-
-// bcs.registerStructType('Entry', {
-//   k: 'String',
-//   v: 'String'
-// });
 
 type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
   -readonly [K in keyof T]: MoveToJSTypes[T[K]];
@@ -153,7 +64,7 @@ type MoveToJSTypes = {
   u128: bigint;
   u256: bigint;
   String: string;
-  Url: string;
+  Url: URL;
   'vector<address>': Uint8Array[];
   'vector<bool>': boolean[];
   'vector<id>': Uint8Array[];
@@ -193,6 +104,111 @@ type MoveToJSTypes = {
   'Option<VecMap>': { none: null } | { some: Record<string, string> };
 };
 
+// ===== Define Option enums =====
+
+let enums: { [key: string]: EnumTypeDefinition } = {};
+
+supportedTypes.forEach(typeName => {
+  enums[`Option<${typeName}>`] = {
+    none: null,
+    some: typeName
+  };
+
+  enums[`Option<vector<${typeName}>>`] = {
+    none: null,
+    some: `vector<${typeName}>`
+  };
+});
+
+// ===== Instantiate bcs =====
+
+let bcsConfig: BcsConfig = {
+  vectorType: 'vector',
+  addressLength: 20,
+  addressEncoding: 'hex',
+  types: { enums },
+  withPrimitives: true
+};
+
+let bcs = new BCS(bcsConfig);
+
+// ===== Register String, Url, and VecMap<String,String> custom serializers =====
+
+bcs.registerType(
+  'String',
+  (writer, data: string) => {
+    let bytes = new TextEncoder().encode(data);
+    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    return writer;
+  },
+  (reader: BcsReader) => {
+    let bytes = reader.readBytes(reader.readULEB());
+    return new TextDecoder('utf8').decode(bytes);
+  },
+  value => is(value, MoveToStruct['String'])
+);
+
+// This is identical to the String writer / reader
+bcs.registerType(
+  'Url',
+  (writer, data: string) => {
+    let bytes = new TextEncoder().encode(data);
+    writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    return writer;
+  },
+  (reader: BcsReader) => {
+    let bytes = reader.readBytes(reader.readULEB());
+    return new URL(new TextDecoder('utf8').decode(bytes));
+  },
+  value => is(value, MoveToStruct['Url'])
+);
+
+// This is a custom serializer for primitive types; for now we treat VecMap as a struct type rather than
+// a primitive type
+bcs.registerType(
+  'VecMap',
+  (writer, data: Record<string, string>) => {
+    writer.writeULEB(Object.entries(data).length);
+    let strings = Object.entries(data).flat();
+
+    let byteArray = strings.map(string => {
+      return new TextEncoder().encode(string);
+    });
+
+    byteArray.forEach(bytes => {
+      writer.writeVec(Array.from(bytes), (w, el) => w.write8(el));
+    });
+    return writer;
+  },
+  reader => {
+    let data: Record<string, string> = {};
+
+    reader.readVec(reader => {
+      let key = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      let value = new TextDecoder('utf8').decode(reader.readBytes(reader.readULEB()));
+      data[key] = value;
+    });
+
+    return data;
+  },
+  value => is(value, MoveToStruct['VecMap'])
+);
+
+// bcs.registerStructType('VecMap', {
+//   contents: 'vector<Entry>'
+// });
+
+// bcs.registerStructType('Entry', {
+//   k: 'String',
+//   v: 'String'
+// });
+
+// ===== Configure SuperStruct to allow for runtime validation =====
+
+const UrlSchema = define('url', (value: unknown): value is URL => {
+  return value instanceof URL;
+});
+
 const MoveToStruct: Record<string, Struct<any, any>> = {
   address: array(integer()),
   bool: boolean(),
@@ -204,7 +220,7 @@ const MoveToStruct: Record<string, Struct<any, any>> = {
   u128: bigint(),
   u256: bigint(),
   String: string(),
-  Url: string()
+  Url: UrlSchema
 };
 
 Object.keys(MoveToStruct).map(field => {
@@ -239,7 +255,7 @@ function moveStructValidator(
   return object(dynamicStruct);
 }
 
-// function serializeBcs(bcs: BCS, dataType: string, data: SupportedType): number[] {
+// function serializeBcs(bcs: BCS, dataType: string, data: SupportedJSTypes): number[] {
 //   return Array.from(bcs.ser(dataType, data).toBytes());
 // }
 
@@ -258,7 +274,7 @@ function moveStructValidator(
  */
 function serializeByField(
   bcs: BCS,
-  data: Record<string, SupportedType>,
+  data: Record<string, SupportedJSTypes>,
   schema: Record<string, string>,
   onlyKeys?: string[]
 ): number[][] {
@@ -276,6 +292,24 @@ function serializeByField(
   }
 
   return serializedData;
+}
+
+function newSerializer(
+  bcs: BCS,
+  data: Record<string, SupportedJSTypes>,
+  schema: Record<string, string>
+): [number[][], string[][]] {
+  const serializedData: number[][] = [];
+  const schemaFields: string[][] = [];
+
+  for (const [key, keyType] of Object.entries(schema)) {
+    const bytesArray = Array.from(bcs.ser(keyType, data[key]).toBytes());
+    serializedData.push(bytesArray);
+
+    schemaFields.push([key, keyType]);
+  }
+
+  return [serializedData, schemaFields];
 }
 
 /**
@@ -305,13 +339,16 @@ function deserializeByField<T>(
   return deserializedData;
 }
 
+// ===== Sui Response parsers and utility-functions =====
+
 function parseViewResultsFromStruct(result: DevInspectResults): Uint8Array {
   // @ts-ignore
   return new Uint8Array(result.results.Ok[0][1].returnValues[0][0]);
 }
 
-// If the on-chain move function is returning a vector of bytes, a useless length vector will be prepended that we must
-// remove. The client must know what type of response to expect and use this or the above function
+// If the on-chain move function is returning a vector of bytes, a useless length vector will be
+// prepended that we must remove. The client must know what type of response to expect and use this
+// or the above function
 function parseViewResultsFromVector(result: DevInspectResults): Uint8Array {
   // @ts-ignore
   const data = new Uint8Array(result.results.Ok[0][1].returnValues[0][0]);
@@ -343,7 +380,15 @@ function sliceULEB128(array: Uint8Array, start: number = 0): [number, Uint8Array
   return [total, array.slice(start + len + 1, array.length)];
 }
 
+const schemaToStringArray = (schema: Record<string, SupportedJSTypes>): string[][] => {
+  return Object.keys(schema).map(key => {
+    return [key, String(schema[key])];
+  });
+};
+
 export {
+  SupportedMoveTypes,
+  SupportedJSTypes,
   JSTypes,
   bcs,
   serializeByField,
@@ -351,5 +396,7 @@ export {
   parseViewResultsFromStruct,
   parseViewResultsFromVector,
   moveStructValidator,
-  sliceULEB128
+  sliceULEB128,
+  schemaToStringArray,
+  newSerializer
 };

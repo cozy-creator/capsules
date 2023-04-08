@@ -1,905 +1,395 @@
-// ========== Sui's On-Chain Display-Metadata Program ==========
+// Sui's On-Chain Template-system for Displaying Objects
+
+// Type objects are root-level owned objects storing default display data for a given type `T`.
+// Rather than using devInspect transactions along with data::view(), the intention is that Sui Fullnodes
+// will handle this all for clients behind the scenes.
 //
-// On-chain display data is stored in its deserialized state inside of dynamic fields attached to objects.
-// Schemas are root-level objects used to map field-names to types, which is necessary in the deserialization
-// process.
+// Type objects can also act as fallbacks when querying for the display-data of an object.
+// For example, if you're creating a Capsule like 0x599::outlaw_sky::Outlaw, and you have a dynamic-field for a
+// view-function like 'created_by' that will be identical for every Outlaw, it would be wasteful to duplicate
+// this field once for every object (10,000x times).
+// Instead you can leave that field undefined, and define it once on Display<0x599::outlaw_sky::Outlaw>.
+//
+// The intent for Display objects is that they should be owned and maintained by the package-publisher, or frozen.
 
 module display::display {
-    use std::string::{Self, String};
-    use std::option::{Self, Option};
+    use std::option::Option;
+    use std::string::String;
     use std::vector;
 
-    use sui::bcs::{Self};
+    use sui::object::{Self, UID};
+    use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
-    use sui::object::{UID, ID};
-    use sui::vec_map::{Self, VecMap};
-    use sui::url::Url;
-
-    use display::schema::{Self, Schema, Field};
+    use sui::transfer;
+    use sui::vec_map::VecMap;
 
     use sui_utils::encode;
-    use sui_utils::deserialize;
-    use sui_utils::dynamic_field2;
+    use sui_utils::struct_tag;
+    use sui_utils::typed_id;
+    use sui_utils::vec_map2;
 
     use ownership::ownership;
-    use ownership::tx_authority::TxAuthority;
+    use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::tx_authority::{Self, TxAuthority};
 
-    // Error enums
-    const EINCORRECT_DATA_LENGTH: u64 = 0;
-    const EINCORRECT_SCHEMA_SUPPLIED: u64 = 2;
-    const EINCOMPATIBLE_READER_SCHEMA: u64 = 3;
-    const EINCOMPATIBLE_FALLBACK: u64 = 4;
-    const ENO_MODULE_AUTHORITY: u64 = 5;
-    const ENO_OWNER_AUTHORITY: u64 = 6;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 7;
-    const EMISSING_VALUES_NEEDED_FOR_MIGRATION: u64 = 8;
-    const EKEY_IS_NOT_OPTIONAL: u64 = 9;
-    const EUNRECOGNIZED_TYPE: u64 = 10;
-    const EVALUE_UNDEFINED: u64 = 11;
+    use display::abstract_display::{Self, AbstractDisplay};
 
-    struct SchemaID has store, copy, drop { } // vector<u8>, the ID of an external schema
-    struct Key has store, copy, drop { slot: String }
+    use attach::data;
+    use attach::schema;
 
-    // `data` is an array of BCS-serialized values. Such as [ [3, 0, 0, 0], [2, 99, 100] ]
-    // All variable-length types are prepended with a ULEB18 length. The Schema object is
-    // needed to deserialize the data.
-    public fun attach(uid: &mut UID, data: vector<vector<u8>>, schema: &Schema, auth: &TxAuthority) {
-        dynamic_field::add(uid, SchemaID { }, schema::get_hash_id(schema));
-        attach_(uid, data, schema::get_fields(schema), auth);
+    // error enums
+    const EINVALID_PUBLISH_RECEIPT: u64 = 0;
+    const ETYPE_ALREADY_DEFINED: u64 = 1;
+    const ETYPE_IS_NOT_CONCRETE: u64 = 2;
+    const EVEC_LENGTH_MISMATCH: u64 = 3;
+    const EABSTRACT_DOES_NOT_MATCH_CONCRETE: u64 = 4;
+    const ETYPE_IN_RESOLVER_NOT_SPECIFIED: u64 = 5;
+
+    // ========= Concrete Type =========
+
+    // Owned, root-level object. Cannot be destroyed. Singleton, unique on `T`.
+    // We could potentially make these storeable as well; it depends if the Sui Fullnode will be able to
+    // find it to do resolution.
+    struct Display<phantom T> has key {
+        id: UID,
+        resolvers: VecMap<String, vector<String>>
+        // <data::Key { slot: String }> : <T: store>, data-fields owned by owner
     }
 
-    // If you attach dispay-data directly without storing a schema ID, it's up to the client to
-    // understand which fields exist and what their value-types are
-    public fun attach_(uid: &mut UID, data: vector<vector<u8>>, fields: VecMap<String, Field>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+    // Added to publish receipt
+    struct Key has store, copy, drop { slot: String } // slot is a module + struct name, value is boolean
 
-        let i = 0;
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, optional) = schema::field_into_components(field);
-            let value = *vector::borrow(&data, i);
-
-            set_field(uid, Key { slot: *key }, type, optional, value, true);
-            i = i + 1;
-        };
-    }
-
-    // If `overwrite_existing` == true, then values are overwritten. Otherwise they are filled-in, in the sense that
-    // data will only be written if (1) it is missing, or (2) if the existing data is of the wrong type.
-    // This is strict on keys, in the sense that if you specify keys that do not exist on the schema, this
-    // will abort rather than silently ignoring them or allowing you to write to keys outside of the schema.
-    public fun update(
-        uid: &mut UID,
-        keys: vector<String>,
-        data: vector<vector<u8>>,
-        schema: &Schema,
-        overwrite_existing: bool,
-        auth: &TxAuthority
-    ) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
-        assert!(vector::length(&keys) == vector::length(&data), EINCORRECT_DATA_LENGTH);
-
-        let i = 0;
-        while (i < vector::length(&keys)) {
-            let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
-            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
-            let value = *vector::borrow(&data, i);
-
-            set_field(
-                uid,
-                Key { slot: key },
-                option::destroy_some(type_maybe),
-                option::destroy_some(optional_maybe),
-                value,
-                overwrite_existing);
-            i = i + 1;
-        };
-    }
-
-    // Useful if you want to borrow / borrow_mut but want to avoid an abort in case the value doesn't exist
-    public fun exists_(uid: &UID, key: String): bool {
-        dynamic_field::exists_(uid, Key { slot: key } )
-    }
-
-    public fun exists_with_type<T: store>(uid: &UID, key: String): bool {
-        dynamic_field::exists_with_type<Key, T>(uid, Key { slot: key } )
-    }
-
-    // We allow any metadata field to be read without any permission. T must be correct, otherwise this will abort
-    public fun borrow<T: store>(uid: &UID, key: String): &T {
-        dynamic_field::borrow<Key, T>(uid, Key { slot: key } )
-    }
-
-    // For atomic updates (like incrementing a counter) use this rather than an `overwrite` to ensure no
-    // writes are lost. `T` must be the type corresponding to the schema, and the value must be defined, or
-    // this will abort
-    public fun borrow_mut<T: store>(uid: &mut UID, key: String, auth: &TxAuthority): &mut T {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-
-        dynamic_field::borrow_mut<Key, T>(uid, Key { slot: key } )
-    }
-
-    // You can accomplish this by using `overwrite` with option bytes set to 0 (none) for all keys you
-    // want to remove, but this function exists for convenience
-    public fun delete_optional(uid: &mut UID, keys: vector<String>, schema: &Schema, auth: &TxAuthority) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
-
-        let i = 0;
-        while (i < vector::length(&keys)) {
-            let key = *vector::borrow(&keys, i);
-            let (type_maybe, optional_maybe) = schema::get_field(schema, key);
-            if (option::is_none(&type_maybe)) abort EKEY_DOES_NOT_EXIST_ON_SCHEMA;
-            if (!option::destroy_some(optional_maybe)) abort EKEY_IS_NOT_OPTIONAL;
-
-            drop_field(uid, Key { slot: key }, option::destroy_some(type_maybe));
-            i = i + 1;
-        };
-    }
+    // Added to abstract-type to ensure that each concrete type (set of generics) can only ever be defined once
+    struct KeyGenerics has store, copy, drop { generics: vector<String> }
     
-    // Wipes all metadata, including the schema. This allows you to start from scratch again using a new
-    // schema and new data using attach().
-    public fun detach(uid: &mut UID, schema: &Schema, auth: &TxAuthority) {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
+    // Module authority
+    struct Witness has drop { }
 
-        let (i, fields) = (0, schema::get_fields(schema));
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _) = schema::field_into_components(field);
+    // ========= Create Type Metadata =========
 
-            drop_field(uid, Key { slot: *key }, type);
-            i = i + 1;
-        };
-
-        dynamic_field2::drop<SchemaID, vector<u8>>(uid, SchemaID { });
-    }
-
-    // Moves from old-schema -> new-schema.
-    // Keys and data act as fill-ins; i.e., if there is already a value at 'name' of the type specified in
-    // new_schema, then the old view will be left in place. However, if the value is missing, or if the type
-    // is different from the one specified in new_schema, the data will be used to fill it in.
-    // You must supply [keys, data] for (1) any new fields, (2) any fields that were optional but are now
-    // mandatory and are missing on this object, and (3) any fields whose types are changing in the new
-    // schema
-    public fun migrate(
-        uid: &mut UID,
-        old_schema: &Schema,
-        new_schema: &Schema,
+    // Convenience entry function
+    public entry fun claim<T>(
+        publisher: &mut PublishReceipt,
         keys: vector<String>,
-        data: vector<vector<u8>>,
-        auth: &TxAuthority
+        resolver_strings: vector<vector<String>>,
+        ctx: &mut TxContext
     ) {
-        assert!(schema::equals_(old_schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        assert_valid_ownership(uid, auth);
-
-        // Drop all of the old_schema's fields which no longer exist in the new schema
-        let fields = schema::difference(old_schema, new_schema);
-        let i = 0;
-        while (i < vec_map::size(&fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&fields, i);
-            let (type, _) = schema::field_into_components(field);
-            drop_field(uid, Key { slot: *key }, type);
-        };
-
-        // Drop any of the fields whose types are changing
-        let new_fields = schema::get_fields(new_schema);
-        let i = 0;
-        while (i < vec_map::size(&new_fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (type, _) = schema::field_into_components(field);
-            let (old_type_maybe, _) = schema::get_field(old_schema, *key);
-            if (option::is_some(&old_type_maybe)) {
-                let old_type = option::destroy_some(old_type_maybe);
-                if (old_type != type) drop_field(uid, Key { slot: *key }, old_type);
-            };
-            i = i + 1;
-        };
-
-        dynamic_field2::set(uid, SchemaID { }, schema::get_hash_id(new_schema));
-
-        // Fill-in all the newly supplied values
-        update(uid, keys, data, new_schema, false, auth);
-
-        // Check to make sure that all required fields are defined
-        let i = 0;
-        while (i < vec_map::size(&new_fields)) {
-            let (key, field) = vec_map::get_entry_by_idx(&new_fields, i);
-            let (_, optional) = schema::field_into_components(field);
-            if (!optional) {
-                assert!(dynamic_field::exists_(uid, Key { slot: *key }), EMISSING_VALUES_NEEDED_FOR_MIGRATION);
-            };
-            i = i + 1;
-        };
+        let display = claim_<T>(publisher, keys, resolver_strings, ctx);
+        transfer::transfer(display, tx_context::sender(ctx));
     }
 
-    // ====== Manual Editing of Fields ======
-    // Instead of using a stored schema ID, you can operate on the fields directly using your own
-    // fields. It's up to the application to properly track fields that exist and their types.
-
-    public fun set_field_manually(
-        uid: &mut UID,
-        key: String,
-        value: vector<u8>,
-        new_field: Field,
-        old_field: Option<Field>,
-        auth: &TxAuthority
-    ) {
-        assert_valid_ownership(uid, auth);
-
-        if (option::is_some(&old_field)) {
-            let (type, _) = schema::field_into_components(&option::destroy_some(old_field));
-            drop_field(uid, Key { slot: key }, type);
-        };
-
-        let (type, optional) = schema::field_into_components(&new_field);
-        set_field(uid, Key { slot: key }, type, optional, value, true);
-    }
-
-    public fun remove_field_manually(uid: &mut UID, key: String, old_field: Field, auth: &TxAuthority) {
-        assert_valid_ownership(uid, auth);
-
-        let (type, _) = schema::field_into_components(&old_field);
-        drop_field(uid, Key { slot: key }, type);
-    }
-
-    // ============= devInspect (view) Functions ============= 
-
-    // This is the same as calling `view` with all the keys in its schema
-    public fun view_all(uid: &UID, schema: &Schema): vector<u8> {
-        view(uid, schema::into_keys(schema), schema)
-    }
-
-    // The response is raw BCS bytes; the client app will need to consult this object's cannonical schema for the
-    // corresponding keys that were queried in order to deserialize the results.
+    // `T` must not contain any generics. If it does, you must first use `define_abstract()` to create
+    // an AbstractDisplay object, which is then used with `create_from_abstract()` to define a concrete type
+    // per instance of its generics.
     //
-    // We don't assert that you have to be using the correct schema, although this will almost certainly abort
-    // if you use the wrong schema.
-    public fun view(uid: &UID, keys: vector<String>, schema: &Schema): vector<u8> {
-        // assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-        let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
-
-        while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            vector::append(&mut response, view_field(uid, slot, schema));
-            i = i + 1;
-        };
-
-        response
-    }
-
-    // Same as above, but vector<vector<u8>> rather than appending all the values into a single vector<u8>
-    // This only matters for on-chain responses; for off-chain responses, they'll be appended together anyway
-    public fun view_parsed(uid: &UID, keys: vector<String>, fields: &VecMap<String, Field>): vector<vector<u8>> {
-        let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
-
-        while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            vector::push_back(&mut response, view_field_(uid, slot, fields));
-            i = i + 1;
-        };
-
-        response
-    }
-
-    // Note that this doesn't validate that the schema you supplied is the cannonical schema for this object,
-    // or that the keys  you've specified exist on your suppplied schema. Deserialize these results with the
-    // schema you supplied, not with the object's cannonical schema
-    public fun view_field(uid: &UID, slot: String, schema: &Schema): vector<u8> {
-        let (type_maybe, optional_maybe) = schema::get_field(schema, slot);
-
-        if (dynamic_field::exists_(uid, Key { slot }) && option::is_some(&type_maybe)) {
-            let type = option::destroy_some(type_maybe);
-
-            // We only prepend option-bytes if the key is optional
-            let bytes = if (option::destroy_some(optional_maybe)) { 
-                vector[1u8] // option::is_some
-            } else {
-                vector::empty<u8>()
-            };
-
-            vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
-
-            bytes
-        } else if (option::is_some(&type_maybe)) {
-            vector[0u8] // option::is_none
-        } else {
-            abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
-        }
-    }
-
-    public fun view_field_(uid: &UID, slot: String, fields: &VecMap<String, Field>): vector<u8> {
-        if (vec_map::contains(fields, &slot)) {
-            if (!dynamic_field::exists_(uid, Key { slot })) {
-                return vector[0u8] // option::is_none
-            };
-
-            let field = vec_map::get(fields, &slot);
-            let (type, optional) = schema::field_into_components(field);
-
-            // We only prepend option-bytes if the key is optional
-            let bytes = if (optional) { 
-                vector[1u8] // option::is_some
-            } else {
-                vector::empty<u8>()
-            };
-
-            vector::append(&mut bytes, get_bcs_bytes(uid, slot, type));
-
-            bytes
-        } else {
-            abort EKEY_DOES_NOT_EXIST_ON_SCHEMA
-        }
-    }
-
-    // Query all keys specified inside of `reader_schema`
-    // Note that the reader_schema and the object's own schema must be compatible, in the sense that any key
-    // overlaps are the same type.
-    // Maybe we could take into account optionality or do some sort of type coercian to relax this compatability
-    // requirement? I.e., turn a u8 into a u64
-    public fun view_with_reader_schema(
-        uid: &UID,
-        reader_schema: &Schema,
-        object_schema: &Schema
-    ): vector<u8> {
-        assert!(schema::is_compatible(reader_schema, object_schema), EINCOMPATIBLE_READER_SCHEMA);
-        assert!(schema::equals_(object_schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
-
-        let (reader_fields, i, keys) = (schema::get_fields(reader_schema), 0, vector::empty<String>());
-
-        while (i < vec_map::size(&reader_fields)) {
-            let (key, _) = vec_map::get_entry_by_idx(&reader_fields, i);
-            vector::push_back(&mut keys, *key);
-            i = i + 1;
-        };
-
-        view(uid, keys, object_schema)
-    }
-
-    public fun view_all_with_default(
-        uid: &UID,
-        fallback: &UID,
-        schema: &Schema
-    ): vector<u8> {
-        view_with_default(uid, fallback, schema::into_keys(schema), schema)
-    }
-
-    // If the fallback object uses a schema that is not compatible with the object's schema,
-    // this may abort if one of the keys is undefined on the main-object, but defined on the fallback object
-    // and of a different type
-    public fun view_with_default(
-        uid: &UID,
-        fallback: &UID,
+    // The `resolver_strings` input to this function should look like:
+    // [ [type, resolver-1, resolver-2], [type, resolver-1], ... ]
+    public fun claim_<T>(
+        publisher: &mut PublishReceipt,
         keys: vector<String>,
-        schema: &Schema,
-    ): vector<u8> {
-        assert!(schema::equals_(schema, get_schema_hash_id(uid)), EINCORRECT_SCHEMA_SUPPLIED);
+        resolver_strings: vector<vector<String>>,
+        ctx: &mut TxContext
+    ): Display<T> {
+        assert!(encode::package_id<T>() == publish_receipt::into_package_id(publisher), EINVALID_PUBLISH_RECEIPT);
+        assert!(!encode::has_generics<T>(), ETYPE_IS_NOT_CONCRETE);
 
-        let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
+        // Ensures that this concrete type can only ever be defined once
+        let key = Key { slot: encode::module_and_struct_name<T>() };
+        let uid = publish_receipt::uid_mut(publisher);
+        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+        dynamic_field::add(uid, key, true);
 
-        while (i < len) {
-            let slot = *vector::borrow(&keys, i);
-            let res = view_field(uid, slot, schema);
-            if (res != vector[0u8]) {
-                vector::append(&mut response, view_field(uid, slot, schema));
-            } else {
-                vector::append(&mut response, view_field(fallback, slot, schema));
-            };
+        // We do not enforce any value for 'types' here. The only input-validation we do is to ensure that at
+        // the first string is specified in the vector of resolver strings; the type.
+        let i = 0;
+        while (i < vector::length(&keys)) {
+            let resolver = *vector::borrow(&resolver_strings, i);
+            assert!(vector::length(&resolver) > 0, ETYPE_IN_RESOLVER_NOT_SPECIFIED);
             i = i + 1;
         };
 
-        response
+        let resolvers = vec_map2::create(keys, resolver_strings);
+
+        claim_internal<T>(resolvers, ctx)
     }
 
-    // ========= Helper Functions ========= 
-
-    // Gets the hash_id of the schema that is bound to this object, if any
-    public fun get_schema_hash_id(uid: &UID): vector<u8> {
-        if (dynamic_field::exists_with_type<SchemaID, vector<u8>>(uid, SchemaID { } )) {
-            *dynamic_field::borrow<SchemaID, vector<u8>>(uid, SchemaID { } )
-        } else {
-            vector<u8>[]
-        }
-    }
-
-    public fun assert_valid_ownership(uid: &UID, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-    }
-
-    // ============ (de)serializes objects ============ 
-
-    // Two of these are private functions only useable within Display so that the schema cannot be bypassed
-    // Aborts if the type is incorrect because the bcs deserialization will fail
-    //
-    // Supported types: address, bool, objectID, u8, u16, u32, u64, u128, u256, String (utf8),
-    // VecMap<String, String>, Url, and vectors of these types, as well as vector<vector<u8>>
-
-    fun set_field(
-        uid: &mut UID,
-        key: Key,
-        type_string: String,
-        optional: bool,
-        value: vector<u8>,
-        overwrite: bool
+    // Convenience entry function
+    public entry fun claim_from_abstract<T>(
+        abstract: &mut AbstractDisplay,
+        ctx: &mut TxContext
     ) {
-        let type = *string::bytes(&type_string);
-
-        // Empty byte-arrays are treated as undefined
-        if (vector::length(&value) == 0) {
-            if (optional) {
-                drop_field(uid, key, type_string);
-                return
-            // These types are allowed to be empty arrays and still count as being "defined"
-            } else if ( type == b"String" || type == b"VecMap" || encode::is_vector(type_string) ) {
-                value = if (optional) { vector[1u8, 0u8] } else { vector[0u8] };
-            } else { abort EKEY_IS_NOT_OPTIONAL };
-        };
-
-        // Field is optional and undefined
-        if (optional && *vector::borrow(&value, 0) == 0u8) {
-            drop_field(uid, key, type_string);
-            return
-        };
-
-        // Index to start deserializing
-        let i = if (optional) { 1 } else { 0 };
-
-        if (type == b"address") {
-            let (addr, _) = deserialize::address_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, addr);
-        } 
-        else if (type == b"bool") {
-            let (boolean, _) = deserialize::bool_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, boolean);
-        } 
-        else if (type == b"id") {
-            let (object_id, _) = deserialize::id_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, object_id);
-        } 
-        else if (type == b"u8") {
-            let integer = vector::borrow(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, *integer);
-        }
-        else if (type == b"u16") {
-            let (integer, _) = deserialize::u16_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, integer);
-        } 
-        else if (type == b"u32") {
-            let (integer, _) = deserialize::u32_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, integer);
-        } 
-        else if (type == b"u64") {
-            let (integer, _) = deserialize::u64_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, integer);
-        } 
-        else if (type == b"u128") {
-            let (integer, _) = deserialize::u128_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, integer);
-        } 
-        else if (type == b"u256") {
-            let (integer, _) = deserialize::u256_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, integer);
-        } 
-        else if (type == b"String") {
-            let (string, _) = deserialize::string_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, string);
-        }
-        else if (type == b"Url") {
-            let (url, _) = deserialize::url_(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, url);
-        } 
-        else if (type == b"vector<address>") {
-            let (vec, _) = deserialize::vec_address(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<bool>") {
-            let (vec, _) = deserialize::vec_bool(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<id>") {
-            let (vec, _) = deserialize::vec_id(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u8>") {
-            let (vec, _) = deserialize::vec_u8(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u16>") {
-            let (vec, _) = deserialize::vec_u16(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u32>") {
-            let (vec, _) = deserialize::vec_u32(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u64>") {
-            let (vec, _) = deserialize::vec_u64(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u128>") {
-            let (vec, _) = deserialize::vec_u128(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<u256>") {
-            let (vec, _) = deserialize::vec_u256(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<vector<u8>>") {
-            let (vec, _) = deserialize::vec_vec_u8(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec);
-        }
-        else if (type == b"vector<String>") {
-            let (strings, _) = deserialize::vec_string(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, strings);
-        }
-        else if (type == b"vector<Url>") {
-            let (urls, _) = deserialize::vec_url(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, urls);
-        }
-        else if (type == b"VecMap") {
-            let (vec_map, _) = deserialize::vec_map_string_string(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec_map);
-        }
-        else if (type == b"vector<VecMap>") {
-            let (vec_maps, _) = deserialize::vec_vec_map_string_string(&value, i);
-            if (overwrite || !dynamic_field::exists_(uid, key))
-                dynamic_field2::set(uid, key, vec_maps);
-        }
-        else {
-            abort EUNRECOGNIZED_TYPE
-        }
+        let display = claim_from_abstract_<T>(abstract, &tx_authority::begin(ctx), ctx);
+        transfer(display, tx_context::sender(ctx));
     }
 
-    // Unfortunately sui::dynamic_field does not have a general 'drop' function; the value of the type
-    // being dropped MUST be known. This makes dropping droppable assets unecessarily complex, hence
-    // this lengthy function in place of what should be one line of code. I know... believe me I've asked.
-    fun drop_field(uid: &mut UID, key: Key, type_string: String) {
-        let type = *string::bytes(&type_string);
+    // Returns a concrete type based on an abstract type, like Type<Coin<0x2::sui::SUI>> from
+    // AbstractDisplay Coin<T>
+    // The raw_fields supplied will be used as a Schema to define the concrete type's display, and must be the same 
+    // schema specified in the abstract type's `schema_id` field
+    public fun claim_from_abstract_<T>(
+        abstract: &mut AbstractDisplay,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ): Display<T> {
+        let struct_tag = struct_tag::get<T>();
+        assert!(struct_tag::is_same_abstract_type(
+            &abstract_display::into_struct_tag(abstract), &struct_tag), EABSTRACT_DOES_NOT_MATCH_CONCRETE);
 
-        if (type == b"address") {
-            dynamic_field2::drop<Key, address>(uid, key);
-        } 
-        else if (type == b"bool") {
-            dynamic_field2::drop<Key, bool>(uid, key);
-        } 
-        else if (type == b"id") {
-            dynamic_field2::drop<Key, ID>(uid, key);
-        } 
-        else if (type == b"u8") {
-            dynamic_field2::drop<Key, u8>(uid, key);
-        } 
-        else if (type == b"u64") {
-            dynamic_field2::drop<Key, u64>(uid, key);
-        } 
-        else if (type == b"u128") {
-            dynamic_field2::drop<Key, u128>(uid, key);
-        } 
-        else if (type == b"String") {
-            dynamic_field2::drop<Key, String>(uid, key);
-        }
-        else if (type == b"Url") {
-            dynamic_field2::drop<Key, Url>(uid, key);
-        } 
-        else if (type == b"vector<address>") {
-            dynamic_field2::drop<Key, vector<address>>(uid, key);
-        }
-        else if (type == b"vector<bool>") {
-            dynamic_field2::drop<Key, vector<bool>>(uid, key);
-        }
-        else if (type == b"vector<id>") {
-            dynamic_field2::drop<Key, vector<ID>>(uid, key);
-        }
-        else if (type == b"vector<u8>") {
-            dynamic_field2::drop<Key, vector<u8>>(uid, key);
-        }
-        else if (type == b"vector<u64>") {
-            dynamic_field2::drop<Key, vector<u64>>(uid, key);
-        }
-        else if (type == b"vector<u128>") {
-            dynamic_field2::drop<Key, vector<u128>>(uid, key);
-        }
-        else if (type == b"vector<String>") {
-            dynamic_field2::drop<Key, vector<String>>(uid, key);
-        }
-        else if (type == b"vector<Url>") {
-            dynamic_field2::drop<Key, vector<Url>>(uid, key);
-        }
-        else if (type == b"VecMap") {
-            dynamic_field2::drop<Key, VecMap<String, String>>(uid, key);
-        }
-        else if (type == b"vector<VecMap>") {
-            dynamic_field2::drop<Key, vector<VecMap<String, String>>>(uid, key);
-        }
-        else {
-            abort EUNRECOGNIZED_TYPE
-        }
+        // We use the existing resolvers and fields from the abstract type
+        let resolvers = *abstract_display::borrow_resolvers(abstract);
+
+        // The owner of the abstract type must authorize this action; the ownership check is done
+        // within this function
+        let uid = abstract_display::uid_mut(abstract, auth);
+
+        // Ensures that this concrete type can only ever be created once
+        let generics = struct_tag::generics(&struct_tag);
+        let key = KeyGenerics { generics };
+        assert!(!dynamic_field::exists_(uid, key), ETYPE_ALREADY_DEFINED);
+        dynamic_field::add(uid, key, true);
+
+        claim_internal<T>(resolvers, ctx)
     }
 
-    // If we get dynamic_field::get_bcs_bytes we can simplify this down into 2 or 3 lines
-    public fun get_bcs_bytes(uid: &UID, slot: String, type_string: String): vector<u8> {
-        let key = Key { slot };
-        assert!(dynamic_field::exists_(uid, key), EVALUE_UNDEFINED);
+    // This is used by abstract_type as well, to define concrete types from abstract types
+    fun claim_internal<T>(
+        resolvers: VecMap<String, vector<String>>,
+        ctx: &mut TxContext
+    ): Display<T> {
+        let display = Display {
+            id: object::new(ctx),
+            resolvers
+        };
 
-        let type = *string::bytes(&type_string);
+        let auth = tx_authority::begin_with_type(&Witness { });
+        let typed_id = typed_id::new(&display);
+        ownership::as_owned_object(&mut display.id, typed_id, &auth);
 
-        if (type == b"address") {
-            let addr = dynamic_field::borrow<Key, address>(uid, key);
-            bcs::to_bytes(addr)
-        } 
-        else if (type == b"bool") {
-            let boolean = dynamic_field::borrow<Key, bool>(uid, key);
-            bcs::to_bytes(boolean)
-        } 
-        else if (type == b"id") {
-            let object_id = dynamic_field::borrow<Key, ID>(uid, key);
-            bcs::to_bytes(object_id)
-        } 
-        else if (type == b"u8") {
-            let int = dynamic_field::borrow<Key, u8>(uid, key);
-            bcs::to_bytes(int)
-        } 
-        else if (type == b"u64") {
-            let int = dynamic_field::borrow<Key, u64>(uid, key);
-            bcs::to_bytes(int)
-        } 
-        else if (type == b"u128") {
-            let int = dynamic_field::borrow<Key, u128>(uid, key);
-            bcs::to_bytes(int)
-        } 
-        else if (type == b"String") {
-            let string = dynamic_field::borrow<Key, String>(uid, key);
-            bcs::to_bytes(string)
-        }
-        else if (type == b"Url") {
-            let url = dynamic_field::borrow<Key, Url>(uid, key);
-            bcs::to_bytes(url)
-        } 
-        else if (type == b"vector<address>") {
-            let vec = dynamic_field::borrow<Key, vector<address>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<bool>") {
-            let vec = dynamic_field::borrow<Key, vector<bool>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<id>") {
-            let vec = dynamic_field::borrow<Key, vector<ID>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<u8>") {
-            let vec = dynamic_field::borrow<Key, vector<u8>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<u64>") {
-            let vec = dynamic_field::borrow<Key, vector<u64>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<u128>") {
-            let vec = dynamic_field::borrow<Key, vector<u128>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<String>") {
-            let vec = dynamic_field::borrow<Key, vector<String>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"vector<Url>") {
-            let vec = dynamic_field::borrow<Key, vector<Url>>(uid, key);
-            bcs::to_bytes(vec)
-        }
-        else if (type == b"VecMap") {
-            let vec_map = dynamic_field::borrow<Key, VecMap<String, String>>(uid, key);
-            bcs::to_bytes(vec_map)
-        }
-        else if (type == b"vector<VecMap>") {
-            let vec_vec_map = dynamic_field::borrow<Key, vector<VecMap<String, String>>>(uid, key);
-            bcs::to_bytes(vec_vec_map)
-        }
-        else {
-            abort EUNRECOGNIZED_TYPE
-        }
+        display
+    }
+
+    // ====== Modify Resolvers ======
+    // This is Display's own custom API for editing the resolvers stored on the Display object.
+    
+    // Combination of add and edit. If a key already exists, it will be overwritten, otherwise
+    // it will be added.
+    public entry fun set_resolvers<T>(
+        self: &mut Display<T>,
+        keys: vector<String>,
+        resolver_strings: vector<vector<String>>,
+    ) {
+        let (i, len) = (0, vector::length(&keys));
+        assert!(len == vector::length(&resolver_strings), EVEC_LENGTH_MISMATCH);
+
+        while (i < len) {
+            vec_map2::set(
+                &mut self.resolvers,
+                *vector::borrow(&keys, i),
+                *vector::borrow(&resolver_strings, i)
+            );
+            i = i + 1;
+        };
+    }
+
+    /// Remove keys from the Type object
+    public entry fun remove_resolvers<T>(self: &mut Display<T>, keys: vector<String>) {
+        let (i, len) = (0, vector::length(&keys));
+        while (i < len) {
+            vec_map2::remove_maybe(&mut self.resolvers, *vector::borrow(&keys, i));
+            i = i + 1;
+        };
+    }
+
+    // ======== Accessor Functions =====
+
+    public fun borrow_resolvers<T>(self: &Display<T>): &VecMap<String, vector<String>> {
+        &self.resolvers
+    }
+
+    public fun borrow_mut_resolvers<T>(self: &mut Display<T>): &mut VecMap<String, vector<String>> {
+        &mut self.resolvers
+    }
+
+    // ======== View Functions =====
+
+    // Display objects serve as convenient view-function fallbacks
+    public fun view_with_default<T>(
+        uid: &UID,
+        namespace: Option<address>,
+        display: &Display<T>
+    ): vector<u8> {
+        data::view_with_default(uid, &display.id, namespace, schema::into_keys(uid, namespace))
+    }
+
+    // ======== For Owners ========
+    // Because Type lacks the `store` ability, polymorphic transfer and freeze do not work outside of this module
+
+    public entry fun transfer<T>(self: Display<T>, new_owner: address) {
+        transfer::transfer(self, new_owner);
+    }
+
+    // Makes the display immutable. This cannot be undone
+    public entry fun freeze_<T>(self: Display<T>) {
+        transfer::freeze_object(self);
+    }
+
+    public fun uid<T>(self: &Display<T>): &UID {
+        &self.id
+    }
+
+    // `Type` is an owned object, so there's no need for an ownership check
+    public fun uid_mut<T>(self: &mut Display<T>): &mut UID {
+        &mut self.id
     }
 }
 
 #[test_only]
-module display::metadata_tests {
-    use std::string::{String, utf8};
+module display::display_tests {
     use std::vector;
     use std::option;
+    use std::string::{utf8, String};
 
-    use sui::bcs;
-    use sui::object::{Self, UID};
-    use sui::transfer;
     use sui::test_scenario::{Self, Scenario};
-    use sui::typed_id;
+    use sui::transfer;
+    use sui::vec_map;
 
-    use display::display;
-    use display::schema;
+    use display::display::{Self, Display};
+    use display::abstract_display::{AbstractDisplay};
+    use display::abstract_display_tests::{Self, TestAbstractDisplay};
 
-    use ownership::tx_authority;
-    use ownership::ownership;
+    use ownership::publish_receipt::{Self, PublishReceipt};
 
-    struct Witness has drop {}
+    struct TEST_OTW has drop {}
 
-    struct TestObject has key {
-        id: UID
+    struct TestDisplay {}
+
+    const SENDER: address = @0xBABE;
+
+    fun create_publish_receipt(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+        let receipt = publish_receipt::test_claim(&TEST_OTW {}, ctx);
+
+        transfer::public_transfer(receipt, SENDER);
     }
 
-    // Error constant
-    const EINVALID_METADATA: u64 = 0;
+    fun get_keys_and_resolvers(): (vector<String>, vector<vector<String>>) {
+        let keys = vector[utf8(b"name"), utf8(b"url"), utf8(b"description")];
+        let resolvers = vector[
+            vector[utf8(b"Project name")],
+            vector[utf8(b"https://projecturl.com")],
+            vector[utf8(b"Project description")],
+        ];
 
-    const SENDER: address = @0x99;
-
-    public fun extend(test_object: &mut TestObject): &mut UID {
-        &mut test_object.id
+        (keys, resolvers)
     }
 
-    public fun assert_correct_serialization(data: vector<vector<u8>>, schema_data: vector<vector<String>>): Scenario {
-        // Tx1: Create a schema
-        let scenario_val = test_scenario::begin(SENDER);
-        let scenario = &mut scenario_val;
-        {
-            let ctx = test_scenario::ctx(scenario);
-            schema::create(schema_data, ctx);
+    fun create_display(scenario: &mut Scenario, publisher: &mut PublishReceipt, keys: vector<String>, resolver_strings: vector<vector<String>>) {
+        let ctx = test_scenario::ctx(scenario);
+        display::create<TestDisplay>(publisher, keys, resolver_strings, ctx);
+    }
+
+    fun assert_display_resolvers<T>(display: &Display<T>, keys: vector<String>, resolver_strings: vector<vector<String>>) {
+        let resolvers = display::borrow_resolvers(display);
+        let (i, len) = (0, vector::length(&keys));
+
+        while(i < len) {
+            let key = vector::borrow(&keys, i);
+            let resolver_str = vector::borrow(&resolver_strings, i);
+
+            assert!(vec_map::get(resolvers, key) == resolver_str, 0);
+
+            i = i + 1;
         };
+    }
 
-        // Tx2: Create an object and attach metadata
-        test_scenario::next_tx(scenario, SENDER);
-        let schema = test_scenario::take_immutable<schema::Schema>(scenario);
+    #[test]
+    fun test_create_display() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
+
+        create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
         {
-            let ctx = test_scenario::ctx(scenario);
-
-            let object = TestObject { id: object::new(ctx) };
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-            let typed_id = typed_id::new(&object);
-
-            ownership::initialize_with_module_authority(&mut object.id, typed_id, &auth);
-
-            display::attach(&mut object.id, data, &schema, &auth);
-
-            transfer::share_object(object);
-        };
-
-        // Tx3: view metadata and assert that it was deserialized correctly
-        test_scenario::next_tx(scenario, SENDER);
-        let test_object = test_scenario::take_shared<TestObject>(scenario);
-        {
-            let uid = extend(&mut test_object);
-            display::view_field(uid, utf8(b"name"), &schema);
-
-            let keys = schema::into_keys(&schema);
-            let i = 0;
-
-            while (i < vector::length(&keys)) {
-                let key = *vector::borrow(&keys, i);
-                let bcs_bytes = display::view_field(uid, key, &schema);
-                assert!(&bcs_bytes == vector::borrow(&data, i), EINVALID_METADATA);
-                i = i + 1;
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            create_display(&mut scenario, &mut receipt, keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let display = test_scenario::take_from_sender<Display<TestDisplay>>(&scenario);
+                
+                assert_display_resolvers(&display, keys, resolvers);
+                test_scenario::return_to_sender(&scenario, display);
             };
+
+            test_scenario::return_to_sender(&scenario, receipt);
         };
-        test_scenario::return_immutable(schema);
-        test_scenario::return_shared(test_object);
 
-        scenario_val
+        test_scenario::end(scenario);
     }
 
     #[test]
-    public fun nft1() {
-        let schema_data = vector<vector<String>>[ 
-            vector[utf8(b"name"), utf8(b"String")],
-            vector[utf8(b"description"), utf8(b"Option<String>")],
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"power_level"), utf8(b"u64")] 
-        ];
-        let data = vector<vector<u8>>[ 
-            bcs::to_bytes(&b"Kyrie"), 
-            bcs::to_bytes(&option::some(vector<u8>[])), 
-            bcs::to_bytes(&b"https://wikipedia.org/"), 
-            bcs::to_bytes(&19999u64) 
-        ];
+    fun test_create_abstract_display() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
 
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
+        abstract_display_tests::create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
 
-    #[test]
-    public fun nft2() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"description"), utf8(b"Option<String>")], 
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"power_level"), utf8(b"u64")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[6, 79, 117, 116, 108, 97, 119], 
-            vector[1, 65, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67, 97, 112, 115, 117, 108, 101, 67, 114, 101, 97, 116, 111, 114, 32, 102, 111, 114, 32, 111, 117, 114, 32, 116, 117, 116, 111, 114, 105, 97, 108], 
-            vector[77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], 
-            vector[199, 0, 0, 0, 0, 0, 0, 0], 
-            vector[ 0 ]
-        ];
-
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
-
-    #[test]
-    public fun nft3() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"description"), utf8(b"Option<String>")], 
-            vector[utf8(b"image"), utf8(b"String")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[10, 121, 48, 48, 116, 32,  35, 56, 49,  55, 51], 
-            vector[ 0 ], 
-            vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
-            vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101,   8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116,   4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
-
-        test_scenario::end(assert_correct_serialization(data, schema_data));
-    }
-
-    #[test]
-    public fun test_update() {
-        let schema_data = vector[ 
-            vector[utf8(b"name"), utf8(b"String")], 
-            vector[utf8(b"url"), utf8(b"Url")], 
-            vector[utf8(b"attributes"), utf8(b"VecMap")] 
-        ];
-
-        let data = vector[ 
-            vector[10, 121, 48, 48, 116, 32,  35, 56, 49,  55, 51], 
-            vector[37, 104, 116, 116, 112, 115,  58,  47, 47, 109, 101, 116,  97, 100,  97, 116,  97,  46, 121,  48,  48, 116, 115,  46,  99, 111, 109, 47, 121,  47,  56,  49,  55,  50,  46, 112, 110, 103], 
-            vector[7, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5,  87, 104, 105, 116, 101,   3,  70, 117, 114,  14,  80, 97, 114,  97, 100, 105, 115, 101, 32, 71, 114, 101, 101, 110,  4,  70,  97,  99, 101, 9,  87, 104, 111, 108, 101, 115, 111, 109, 101, 8,  67, 108, 111, 116, 116, 104, 101, 115,  12,  83, 117, 109, 109, 101, 114,  32, 83, 104, 105, 114, 116, 4,  72, 101,  97, 100,  17,  66, 101,  97, 110, 105, 101,  32,  40,  98, 108,  97,  99, 107, 111, 117, 116, 41, 7,  69, 121, 101, 119, 101,  97, 114,  14,  77, 101, 108, 114, 111, 115, 101,  32,  66, 114, 105,  99, 107, 115, 3, 49, 47, 49, 4, 78, 111, 110, 101] ];
-        
-        let scenario_val = assert_correct_serialization(data, schema_data);
-        let scenario = &mut scenario_val;
-
-        // Tx4: Update the display data
-        test_scenario::next_tx(scenario, SENDER);
-        let schema = test_scenario::take_immutable<schema::Schema>(scenario);
-        let test_object = test_scenario::take_shared<TestObject>(scenario);
         {
-            let new_data = bcs::to_bytes(&utf8(b"New Name"));
-            let auth = tx_authority::begin_with_type(&Witness {});
-            let uid = extend(&mut test_object);
-            display::update(uid, vector[utf8(b"name")], vector[new_data], &schema, true, &auth);
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            abstract_display_tests::create_abstract_display(&mut scenario, &mut receipt, option::none(), keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let abstract_display = test_scenario::take_shared<AbstractDisplay>(&scenario);
+                let ctx = test_scenario::ctx(&mut scenario);
+                display::create_from_abstract<TestAbstractDisplay<TestDisplay>>(&mut abstract_display, ctx);
+                test_scenario::next_tx(&mut scenario, SENDER);
 
-            let bcs_bytes = display::view_field(uid, utf8(b"name"), &schema);
-            assert!(bcs_bytes == new_data, EINVALID_METADATA);
+                {
+                    let display = test_scenario::take_from_sender<Display<TestAbstractDisplay<TestDisplay>>>(&scenario);
+                
+                    assert_display_resolvers(&display, keys, resolvers);
+                    test_scenario::return_to_sender(&scenario, display);
+                };
+
+                test_scenario::return_shared(abstract_display);
+            };
+
+            test_scenario::return_to_sender(&scenario, receipt);
         };
-        test_scenario::return_immutable(schema);
-        test_scenario::return_shared(test_object);
 
-        test_scenario::end(scenario_val);
+        test_scenario::end(scenario);
     }
+
+    #[test]
+    fun test_remove_display_resolvers() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
+
+        create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            create_display(&mut scenario, &mut receipt, keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let display = test_scenario::take_from_sender<Display<TestDisplay>>(&scenario);
+                assert_display_resolvers(&display, keys, resolvers);
+
+                display::remove_resolvers(&mut display, keys);
+                assert!(vec_map::is_empty(display::borrow_resolvers(&display)), 0);
+
+                test_scenario::return_to_sender(&scenario, display);
+            };
+
+            test_scenario::return_to_sender(&scenario, receipt);
+        };
+
+        test_scenario::end(scenario);
+    }
+
 }

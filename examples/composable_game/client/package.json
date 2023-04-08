@@ -1,0 +1,17 @@
+{
+  "name": "client",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Paul Fidika",
+  "license": "MIT",
+  "dependencies": {
+    "@mysten/sui.js": "^0.30.0",
+    "blakejs": "^1.2.1",
+    "superstruct": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.2"
+  }
+}

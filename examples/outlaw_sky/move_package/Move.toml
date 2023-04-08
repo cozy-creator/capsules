@@ -9,6 +9,7 @@ SuiUtils = { local = "../../../packages/sui_utils" }
 Ownership = { local = "../../../packages/ownership" }
 SuiDisplay = { local = "../../../packages/display" }
 TransferSystem = { local = "../../../packages/transfer_system" }
+Attach = { local = "../../../packages/attach" }
 
 [addresses]
 outlaw_sky = "0x9068e5747939c54df068111fcb3fbe836010020f"

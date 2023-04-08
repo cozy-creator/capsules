@@ -61,7 +61,7 @@ module sui_utils::ascii2 {
                 &ascii::into_bytes(*string), i))
     }
 
-    // Addresses are 20 bytes, whereas the string-encoded address is 40 bytes.
+    // Addresses are 32 bytes, whereas the string-encoded address is 64 bytes.
     // Outputted strings do not include the 0x prefix.
     public fun addr_into_string(addr: address): String {
         let ascii_bytes = vector::empty<u8>();
@@ -88,7 +88,7 @@ module sui_utils::ascii2 {
     public fun ascii_bytes_into_id(ascii_bytes: vector<u8>): ID {
         let (i, addr_bytes) = (0, vector::empty<u8>());
 
-        // combine every pair of bytes; we will go from 40 bytes down to 20
+        // combine every pair of bytes; we will go from 64 bytes down to 32
         while (i < vector::length(&ascii_bytes)) {
             let low: u8 = ascii_to_u8(*vector::borrow(&ascii_bytes, i + 1));
             let high: u8 = ascii_to_u8(*vector::borrow(&ascii_bytes, i)) * 16u8;
@@ -200,7 +200,7 @@ module sui_utils::ascii_test {
         let _ctx = test_scenario::ctx(&mut scenario);
         {
             let string = ascii2::addr_into_string(@0x23a);
-            assert!(string(b"000000000000000000000000000000000000023a") == string, 0);
+            assert!(string(b"000000000000000000000000000000000000000000000000000000000000023a") == string, 0);
         };
         test_scenario::end(scenario);
     }

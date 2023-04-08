@@ -1,0 +1,14 @@
+[package]
+name = "ScriptTransactions"
+version = "0.1.0"
+authors = ["Paul Fidika (paul@fidika.com)"]
+published-at = "0x1579f09714588edf97ba4ee9d4cf38978021167fd3787472239926089fbeb93e"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+Attach = { local = "../packages/attach" }
+SuiDisplay = { local = "../packages/display" }
+Ownership = { local = "../packages/ownership" }
+
+[addresses]
+script_tx = "0x1579f09714588edf97ba4ee9d4cf38978021167fd3787472239926089fbeb93e"

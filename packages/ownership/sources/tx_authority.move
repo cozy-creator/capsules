@@ -3,17 +3,18 @@
 // carefully guard access to it, as it represents the authority of the module at runtime.
 
 module ownership::tx_authority {
-    use std::address;
-    use std::string::{Self, String};
-    use std::hash;
+    use std::option::{Self, Option};
+    use std::string::{Self, String, utf8};
     use std::vector;
 
     use sui::bcs;
+    use sui::hash;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
 
-    use sui_utils::vector2;
     use sui_utils::encode;
+    use sui_utils::string2;
+    use sui_utils::struct_tag::{Self, StructTag};
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
@@ -64,6 +65,12 @@ module ownership::tx_authority {
         vector::contains(&auth.addresses, &addr)
     }
 
+    // Defaults to `true` if the signing address is option::none
+    public fun is_signed_by_(addr: Option<address>, auth: &TxAuthority): bool {
+        if (option::is_none(&addr)) return true;
+        is_signed_by(option::destroy_some(addr), auth)
+    }
+
     public fun is_signed_by_module<T>(auth: &TxAuthority): bool {
         is_signed_by(witness_addr<T>(), auth)
     }
@@ -107,10 +114,10 @@ module ownership::tx_authority {
     }
 
     public fun type_string_into_address(type: String): address {
-        let typename_bytes = bcs::to_bytes(&type);
-        let hashed_typename = hash::sha3_256(typename_bytes);
-        let truncated = vector2::slice(&hashed_typename, 0, address::length());
-        bcs::peel_address(&mut bcs::new(truncated))
+        let typename_bytes = string::bytes(&type);
+        let hashed_typename = hash::blake2b256(typename_bytes);
+        // let truncated = vector2::slice(&hashed_typename, 0, address::length());
+        bcs::peel_address(&mut bcs::new(hashed_typename))
     }
 
     // ========= Module-Signing Witness =========
@@ -122,6 +129,17 @@ module ownership::tx_authority {
 
     public fun witness_addr_(type: String): address {
         let witness_type = witness_string_(type);
+        type_string_into_address(witness_type)
+    }
+
+    public fun witness_addr_from_struct_tag(tag: &StructTag): address {
+        let witness_type = string2::empty();
+        string::append(&mut witness_type, string2::from_id(struct_tag::package_id(tag)));
+        string::append(&mut witness_type, utf8(b"::"));
+        string::append(&mut witness_type, struct_tag::module_name(tag));
+        string::append(&mut witness_type, utf8(b"::"));
+        string::append(&mut witness_type, utf8(WITNESS_STRUCT));
+
         type_string_into_address(witness_type)
     }
 
@@ -140,6 +158,19 @@ module ownership::tx_authority {
         if (!vector::contains(&auth.addresses, &addr)) {
             vector::push_back(&mut auth.addresses, addr);
         };
+    }
+
+    #[test_only]
+    public fun begin_for_testing(addr: address): TxAuthority {
+        TxAuthority { addresses: vector[addr] }
+    }
+
+    #[test_only]
+    public fun add_for_testing(addr: address, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: auth.addresses };
+        add_internal(addr, &mut new_auth);
+
+        new_auth
     }
 }
 

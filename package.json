@@ -6,7 +6,7 @@
   "author": "bytedeveloper <abdulrahmanyusuf125@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "@mysten/sui.js": "^0.29.1",
+    "@mysten/sui.js": "^0.30.0",
     "sui-carton": "^0.0.2-alpha",
     "superstruct": "^1.0.3"
   }
