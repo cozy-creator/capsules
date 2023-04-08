@@ -200,7 +200,7 @@ module sui_utils::ascii_test {
         let _ctx = test_scenario::ctx(&mut scenario);
         {
             let string = ascii2::addr_into_string(@0x23a);
-            assert!(string(b"000000000000000000000000000000000000023a") == string, 0);
+            assert!(string(b"000000000000000000000000000000000000000000000000000000000000023a") == string, 0);
         };
         test_scenario::end(scenario);
     }

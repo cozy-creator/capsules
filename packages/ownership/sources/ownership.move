@@ -98,7 +98,7 @@ module ownership::ownership {
 
     // Requires module, owner, and transfer authorities all to sign off on this migration
     public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
-        assert!(is_authorized_by_module(uid, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
         assert!(is_authorized_by_transfer(uid, auth), ENO_TRANSFER_AUTHORITY);
 
@@ -222,5 +222,264 @@ module ownership::ownership {
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
         option::some(ownership.type)
+    }
+}
+
+#[test_only]
+module ownership::ownership_tests {
+    use sui::object::{Self, UID};
+    use sui::test_scenario::{Self, Scenario};
+    use sui::transfer;
+
+    use sui_utils::typed_id;
+
+    use ownership::ownership;
+    use ownership::tx_authority::{Self, TxAuthority};
+
+    struct Witness has drop {}
+
+    struct TestObject has key {
+        id: UID
+    }
+
+    const ADDR1: address = @0xBACE;
+    const ADDR2: address = @0xFAAE;
+
+    const ENOT_OWNER: u64 = 0;
+
+    public fun uid(object: &TestObject): &UID {
+        &object.id
+    }
+
+    public fun uid_mut(object: &mut TestObject, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&object.id, auth), ENOT_OWNER);
+
+        &mut object.id
+    }
+
+    fun create_test_object(scenario: &mut Scenario, owner: vector<address>, transfer_auth: vector<address>) {
+        let ctx = test_scenario::ctx(scenario);
+        let object = TestObject { 
+            id: object::new(ctx) 
+        };
+
+        let typed_id = typed_id::new(&object);
+        let auth = tx_authority::begin_with_type(&Witness {});
+
+        ownership::as_shared_object_(&mut object.id, typed_id, owner, transfer_auth, &auth);
+        transfer::share_object(object)
+    }
+
+    #[test]
+    fun test_transfer_ownership() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let uid = uid_mut(&mut object, &auth);
+            let new_owner = vector[ADDR2];
+            
+            ownership::transfer(uid, new_owner, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ownership::ownership::ENO_TRANSFER_AUTHORITY)]
+    fun test_unauthorized_transfer_ownership_failure() {
+        let scenario = test_scenario::begin(ADDR1);
+
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let uid = uid_mut(&mut object, &auth);
+
+            test_scenario::next_tx(&mut scenario, ADDR2);
+            {
+                let ctx = test_scenario::ctx(&mut scenario);
+                let auth = tx_authority::begin(ctx);
+                let new_owner = vector[ADDR2];
+
+                ownership::transfer(uid, new_owner, &auth);
+            };
+
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_migrate_transfer_auth() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+            let new_owner = vector[ADDR2];
+            
+            ownership::migrate_transfer_auth(uid, new_owner, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ownership::ownership::ENO_MODULE_AUTHORITY)]
+    fun test_migrate_transfer_module_auth_failue() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let uid = uid_mut(&mut object, &auth);
+            let new_owner = vector[ADDR2];
+            
+            ownership::migrate_transfer_auth(uid, new_owner, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ownership::ownership::ENO_OWNER_AUTHORITY)]
+    fun test_migrate_transfer_owner_auth_failue() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let uid = uid_mut(&mut object, &auth);
+
+            {
+                let new_owner = vector[ADDR2];
+                let auth = tx_authority::begin_with_type(&Witness {});
+                ownership::migrate_transfer_auth(uid, new_owner, &auth);
+            };
+
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ownership::ownership::ENO_TRANSFER_AUTHORITY)]
+    fun test_migrate_transfer_transfer_auth_failue() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            let transfer_auth = vector[ADDR2];
+            create_test_object(&mut scenario, owner, transfer_auth);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let uid = uid_mut(&mut object, &auth);
+
+            {
+                let new_owner = vector[ADDR2];
+                let auth = tx_authority::add_type_capability(&Witness {}, &auth);
+                ownership::migrate_transfer_auth(uid, new_owner, &auth);
+            };
+
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_immutable_ownership() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+            
+            ownership::make_owner_immutable(uid, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ownership::ownership::ENO_TRANSFER_AUTHORITY)]
+    fun test_immutable_ownership_transfer_failue() {
+        let scenario = test_scenario::begin(ADDR1);
+        
+        {
+            let owner = vector[ADDR1];
+            create_test_object(&mut scenario, owner, owner);
+            test_scenario::next_tx(&mut scenario, ADDR1);
+        };
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+            let new_owner = vector[ADDR2];
+            
+            ownership::make_owner_immutable(uid, &auth);
+            ownership::transfer(uid, new_owner, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
     }
 }

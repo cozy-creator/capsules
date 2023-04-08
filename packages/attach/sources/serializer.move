@@ -19,10 +19,7 @@ module attach::serializer {
     use sui_utils::dynamic_field2;
 
     // Error enums
-    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
-    const EINCORRECT_DATA_LENGTH: u64 = 1;
-    const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 2;
-    const EUNRECOGNIZED_TYPE: u64 = 3;
+    const EUNRECOGNIZED_TYPE: u64 = 0;
     
     // Aborts if `type_string` does not match `value` (the binary data) supplied, because the bcs
     // deserialization will fail
@@ -469,4 +466,179 @@ module attach::serializer {
             abort EUNRECOGNIZED_TYPE
         }
     }
+}
+
+#[test_only]
+module attach::serializer_tests {
+    use std::string::{String, utf8};
+    use std::vector;
+
+    use sui::bcs;
+    use sui::transfer;
+    use sui::object::{Self, UID};
+    use sui::test_scenario::{Self, Scenario};
+
+    use sui_utils::string2;
+
+    use attach::serializer;
+
+    const SENDER: address = @0x99;
+
+    struct TestObject has key {
+        id: UID
+    }
+
+    fun create_test_object(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+        let object = TestObject { 
+            id: object::new(ctx) 
+        };
+
+        transfer::share_object(object)
+    }
+
+    fun set_fields<T: store + copy + drop>(uid: &mut UID, keys: vector<T>, types: vector<String>, values: vector<vector<u8>>) {
+        let (i, len) = (0, vector::length(&keys));
+        while (i < len) {
+            let key = *vector::borrow(&keys, i);
+            let type = *vector::borrow(&types, i);
+            let value = *vector::borrow(&values, i);
+
+            serializer::set_field(uid, key, type, string2::empty(), value, true);
+
+            i = i + 1;
+        }
+    }
+
+    fun assert_deserialize_fields<T: store + copy + drop>(uid: &UID, keys: vector<T>, types: vector<String>, values: vector<vector<u8>>) {
+        let (i, len) = (0, vector::length(&keys));
+        while (i < len) {
+            let key = *vector::borrow(&keys, i);
+            let type = *vector::borrow(&types, i);
+            let value = *vector::borrow(&values, i);
+
+            let bytes = serializer::get_bcs_bytes(uid, key, type);
+
+            if (type == utf8(b"String")) {
+                assert!(bcs::peel_vec_u8(&mut bcs::new(bytes)) == bcs::peel_vec_u8(&mut bcs::new(value)), 0)
+            } else if(type == utf8(b"u8")) {
+                assert!(bcs::peel_u8(&mut bcs::new(bytes)) == *vector::borrow(&value, 0), 0)
+            };
+
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_set_field() {
+        let scenario = test_scenario::begin(SENDER);
+        let key = b"name";
+        let type = utf8(b"String");
+        let value = utf8(b"Max");
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let uid = &mut object.id;
+
+            serializer::set_field_(uid, key, type, string2::empty(), value, true);
+            let bytes = serializer::get_bcs_bytes(uid, key, type);
+
+            assert!(utf8(bcs::peel_vec_u8(&mut bcs::new(bytes))) == value, 0);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_set_field_serialized() {
+        let scenario = test_scenario::begin(SENDER);
+        let keys = vector[b"name", b"about", b"age"];
+        let types = vector[utf8(b"String"), utf8(b"String"), utf8(b"u8")];
+        let values = vector[bcs::to_bytes(&b"Max"), bcs::to_bytes(&b"Great guy"), bcs::to_bytes(&30)];
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let uid = &mut object.id;
+
+            set_fields(uid, keys, types, values);
+            assert_deserialize_fields(uid, keys, types, values);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1, location = sui::dynamic_field)]
+    fun test_drop_fields() {
+        let scenario = test_scenario::begin(SENDER);
+        let keys = vector[b"name", b"about", b"age"];
+        let types = vector[utf8(b"String"), utf8(b"String"), utf8(b"u8")];
+        let values = vector[bcs::to_bytes(&b"Max"), bcs::to_bytes(&b"Great guy"), bcs::to_bytes(&30)];
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+            let uid = &mut object.id;
+
+            set_fields(uid, keys, types, values);
+            assert_deserialize_fields(uid, keys, types, values);
+
+            {
+                let (key, type) = (b"key", utf8(b"String"));
+
+                serializer::drop_field(uid, key, type);
+                serializer::get_bcs_bytes(uid, key, type);
+            };
+
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_set_field_duplicate() {
+        let scenario = test_scenario::begin(SENDER);
+        let key = b"name";
+        let type = utf8(b"String");
+        let value = utf8(b"Max");
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let source_object = test_scenario::take_shared<TestObject>(&scenario);
+            let source_uid = &mut source_object.id;
+
+            serializer::set_field_(source_uid, key, type, string2::empty(), value, true);
+            create_test_object(&mut scenario);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            {
+                let dest_object = test_scenario::take_shared<TestObject>(&scenario);
+                let dest_uid = &mut dest_object.id;
+
+                serializer::duplicate(source_uid, dest_uid, key, key, type, string2::empty(), true);
+
+                let bytes = serializer::get_bcs_bytes(dest_uid, key, type);
+                assert!(utf8(bcs::peel_vec_u8(&mut bcs::new(bytes))) == value, 0);
+
+                test_scenario::return_shared(dest_object);
+            };
+
+            test_scenario::return_shared(source_object);
+        };
+
+        test_scenario::end(scenario);
+    }
+
 }

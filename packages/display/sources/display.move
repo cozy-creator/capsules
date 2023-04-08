@@ -244,63 +244,152 @@ module display::display {
 }
 
 #[test_only]
-module display::type_tests {
-    use std::string::{Self, String};
-    use sui::test_scenario;
-    use sui::transfer;
-    use sui::tx_context;
-    use display::display;
-    use display::publish_receipt;
+module display::display_tests {
+    use std::vector;
+    use std::option;
+    use std::string::{utf8, String};
 
-    use data::data;
-    use data::schema;
+    use sui::test_scenario::{Self, Scenario};
+    use sui::transfer;
+    use sui::vec_map;
+
+    use display::display::{Self, Display};
+    use display::abstract_display::{AbstractDisplay};
+    use display::abstract_display_tests::{Self, TestAbstractDisplay};
+
+    use ownership::publish_receipt::{Self, PublishReceipt};
 
     struct TEST_OTW has drop {}
 
     struct TestDisplay {}
 
-    #[test]
-    public fun test_define_type() {
-        let sender = @0x123;
+    const SENDER: address = @0xBABE;
 
-        let schema_fields = vector[ vector[ string::utf8(b"name"), string::utf8(b"String")], vector[ string::utf8(b"description"), string::utf8(b"Option<String>")], vector[ string::utf8(b"image"), string::utf8(b"String")], vector[ string::utf8(b"power_level"), string::utf8(b"u64")]];
+    fun create_publish_receipt(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+        let receipt = publish_receipt::test_claim(&TEST_OTW {}, ctx);
 
-        let data = vector[ vector[6, 79, 117, 116, 108, 97, 119], vector[1, 35, 84, 104, 101, 115, 101, 32, 97, 114, 101, 32, 100, 101, 109, 111, 32, 79, 117, 116, 108, 97, 119, 115, 32, 99, 114, 101, 97, 116, 101, 100, 32, 98, 121, 32, 67], vector[34, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103], vector[199, 0, 0, 0, 0, 0, 0, 0] ];
-
-        let scenario_val = test_scenario::begin(sender);
-        let scenario = &mut scenario_val;
-        {
-            let ctx = test_scenario::ctx(scenario);
-            schema::create(schema_fields, ctx);
-        };
-
-        test_scenario::next_tx(scenario, sender);
-        {
-            let schema = test_scenario::take_immutable<schema::Schema>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            let publisher = publish_receipt::test_claim(&TEST_OTW {}, ctx);
-
-            type::define<TestDisplay>(&mut publisher, data, vector<vector<String>>[], schema_fields, ctx);
-
-            test_scenario::return_immutable(schema);
-            transfer::transfer(publisher, tx_context::sender(ctx));
-        };
-
-        test_scenario::next_tx(scenario, sender);
-        {
-            let type_object = test_scenario::take_from_address<type::Type<display::type_tests::TestDisplay>>(scenario, sender);
-
-            let uid = type::extend(&mut type_object);
-
-            let name = data::borrow<String>(uid, string::utf8(b"name"));
-            assert!(*name == string::utf8(b"Outlaw"), 0);
-
-            let power_level = data::borrow<u64>(uid, string::utf8(b"power_level"));
-            assert!(*power_level == 199, 0);
-
-            test_scenario::return_to_address(sender, type_object);
-        };
-
-        test_scenario::end(scenario_val);
+        transfer::public_transfer(receipt, SENDER);
     }
+
+    fun get_keys_and_resolvers(): (vector<String>, vector<vector<String>>) {
+        let keys = vector[utf8(b"name"), utf8(b"url"), utf8(b"description")];
+        let resolvers = vector[
+            vector[utf8(b"Project name")],
+            vector[utf8(b"https://projecturl.com")],
+            vector[utf8(b"Project description")],
+        ];
+
+        (keys, resolvers)
+    }
+
+    fun create_display(scenario: &mut Scenario, publisher: &mut PublishReceipt, keys: vector<String>, resolver_strings: vector<vector<String>>) {
+        let ctx = test_scenario::ctx(scenario);
+        display::create<TestDisplay>(publisher, keys, resolver_strings, ctx);
+    }
+
+    fun assert_display_resolvers<T>(display: &Display<T>, keys: vector<String>, resolver_strings: vector<vector<String>>) {
+        let resolvers = display::borrow_resolvers(display);
+        let (i, len) = (0, vector::length(&keys));
+
+        while(i < len) {
+            let key = vector::borrow(&keys, i);
+            let resolver_str = vector::borrow(&resolver_strings, i);
+
+            assert!(vec_map::get(resolvers, key) == resolver_str, 0);
+
+            i = i + 1;
+        };
+    }
+
+    #[test]
+    fun test_create_display() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
+
+        create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            create_display(&mut scenario, &mut receipt, keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let display = test_scenario::take_from_sender<Display<TestDisplay>>(&scenario);
+                
+                assert_display_resolvers(&display, keys, resolvers);
+                test_scenario::return_to_sender(&scenario, display);
+            };
+
+            test_scenario::return_to_sender(&scenario, receipt);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_create_abstract_display() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
+
+        abstract_display_tests::create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            abstract_display_tests::create_abstract_display(&mut scenario, &mut receipt, option::none(), keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let abstract_display = test_scenario::take_shared<AbstractDisplay>(&scenario);
+                let ctx = test_scenario::ctx(&mut scenario);
+                display::create_from_abstract<TestAbstractDisplay<TestDisplay>>(&mut abstract_display, ctx);
+                test_scenario::next_tx(&mut scenario, SENDER);
+
+                {
+                    let display = test_scenario::take_from_sender<Display<TestAbstractDisplay<TestDisplay>>>(&scenario);
+                
+                    assert_display_resolvers(&display, keys, resolvers);
+                    test_scenario::return_to_sender(&scenario, display);
+                };
+
+                test_scenario::return_shared(abstract_display);
+            };
+
+            test_scenario::return_to_sender(&scenario, receipt);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_remove_display_resolvers() {
+        let scenario = test_scenario::begin(SENDER);
+        let (keys, resolvers) = get_keys_and_resolvers();
+
+        create_publish_receipt(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let receipt = test_scenario::take_from_sender<PublishReceipt>(&scenario);
+            create_display(&mut scenario, &mut receipt, keys, resolvers);
+            test_scenario::next_tx(&mut scenario, SENDER);
+            
+            {
+                let display = test_scenario::take_from_sender<Display<TestDisplay>>(&scenario);
+                assert_display_resolvers(&display, keys, resolvers);
+
+                display::remove_resolvers(&mut display, keys);
+                assert!(vec_map::is_empty(display::borrow_resolvers(&display)), 0);
+
+                test_scenario::return_to_sender(&scenario, display);
+            };
+
+            test_scenario::return_to_sender(&scenario, receipt);
+        };
+
+        test_scenario::end(scenario);
+    }
+
 }

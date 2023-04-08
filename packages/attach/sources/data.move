@@ -700,4 +700,29 @@ module attach::data_tests {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = data::ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE)]
+    public fun test_unauthorized_namespace_failure() {
+        let scenario = test_scenario::begin(SENDER);
+        let namespace = option::some(current_package());
+        let (fields, values) = get_serialized_test_data();
+
+        create_test_object(&mut scenario);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let fake_addr = @0xDEAD;
+            let object = test_scenario::take_shared<TestObject>(&scenario);
+
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::add_for_testing(fake_addr, &tx_authority::begin(ctx));
+            let uid = uid_mut(&mut object, &auth);
+
+            data::deserialize_and_set_(uid, namespace, values, fields, &auth);
+            test_scenario::return_shared(object);
+        };
+
+        test_scenario::end(scenario);
+    }
 }

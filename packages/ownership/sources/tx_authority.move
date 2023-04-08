@@ -159,6 +159,19 @@ module ownership::tx_authority {
             vector::push_back(&mut auth.addresses, addr);
         };
     }
+
+    #[test_only]
+    public fun begin_for_testing(addr: address): TxAuthority {
+        TxAuthority { addresses: vector[addr] }
+    }
+
+    #[test_only]
+    public fun add_for_testing(addr: address, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: auth.addresses };
+        add_internal(addr, &mut new_auth);
+
+        new_auth
+    }
 }
 
 #[test_only]
