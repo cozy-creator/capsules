@@ -1,237 +1,434 @@
-/// Data dispenser
-/// 
-/// Dispenser for data creation and distribution on the Sui network.
-
 module dispenser::dispenser {
     use std::vector;
+    use std::type_name;
+    use std::ascii::string;
     use std::option::{Self, Option};
 
-    use sui::object::{Self, UID, ID};
+    use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
+    use sui::dynamic_field;
     use sui::transfer;
-    use sui::randomness::{Self, Randomness};
 
     use ownership::ownership;
-    use ownership::tx_authority;
+    use ownership::tx_authority::{Self, TxAuthority};
 
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
+    use sui_utils::typed_id;
+    use sui_utils::rand;
 
     use dispenser::schema::{Self, Schema};
 
 
     // ========== Storage structs ==========
 
-    struct Dispenser has key {
+    struct Dispenser<phantom T> has key, store {
         id: UID,
-        /// Number of available items in the dispenser
-        available_items: u64,
-        /// Number of loaded items, including dispensed items
-        loaded_items: u64,
-        /// Vector of available items; bcs encoded
-        items: vector<vector<u8>>, 
-        /// ID of the randomness object, if dispenser is non sequential 
-        randomness_id: Option<ID>,
-        /// Dispenser configuration
-        config: DispenserConfig, 
-
-        // there is ownership metadata which is be attached to this object by the capsule's ownership package
-        // this enables us to make the dispenser accessible to everyone but still owned
-    }
-
-    struct DispenserConfig has store {
-        /// Capacity of the dispenser i.e maximum number of items the dispenser can hold
-        capacity: u64,
-        /// Indicates whether items are dispensed sequentially or not
-        is_sequential: bool,
-        /// Indicates whether the dispenser can be reloaded after fully loaded or not
-        is_reloadable: bool,
-        /// Schema of the items the dispenser should hold
+        /// The address of the package that originated or created this dispenser
+        origin: address,
+        /// The dispenser configuration information
+        config: Config,
+        /// The number of items available in the dispenser
+        items_count: u64,
+        /// Schema used to validate every items if the `is_serialized` config is set to `true`
         schema: Option<Schema>
+
+        // There's an `ownership::ownership::Key { }` attached to the dispenser. 
+        // This contains the information about the ownership, module authority of the dispenser.
+
+        // The items of the dispenser are attached the dispenser with a `dispenser::dispenser::Key { slot: u64 }` key
     }
 
-
-    // ========= Event structs ==========
-
-    struct DispenserCreated has copy, drop {
-        id: ID,
-        owner: address
+    struct Config has store, copy, drop {
+        /// Indicates whether the dispenser items are serialized (BCS encoded)
+        is_serialized: bool,
+        /// Indicates whether the dispenser should dispense sequentially or randmomly
+        is_sequential: bool,
+        /// Maximum number of items that can be loaded into the dispenser
+        maximum_capacity: u64,
     }
 
-    struct DispenserLoaded has copy, drop {
-        id: ID,
-        items_count: u64
-    }
-
-    struct ItemDispensed has copy, drop {
-        id: ID,
-        item: vector<u8>
-    }
-
+    // key used to store a given item in the dispenser
+    struct Key has store, copy, drop { slot: u64 }
 
     // ========== Witness structs =========
-
-    struct RANDOMNESS_WITNESS has drop {}
     struct Witness has drop {}
 
 
     // ========== Error constants ==========
 
-    const EInvalidAuth: u64 = 0;
-    const ELoadEmptyItems: u64 = 1;
-    const ECapacityExceeded: u64 = 2;
-    const ESchemaNotSet: u64 = 3;
-    const EDispenserEmpty: u64 = 4;
-    const EInvalidDispenserType: u64 = 5;
-    const ERandomnessMismatch: u64 = 6;
-    const EMissingRandomness: u64 = 7;
-    const ESchemaAlreadySet: u64 = 8;
+    const EINVALID_OWNER_AUTH: u64 = 0;
+    const EINVALID_MODULE_AUTH: u64 = 1;
+    const ELOAD_EMPTY_ITEMS: u64 = 2;
+    const ECAPACITY_EXCEEDED: u64 = 3;
+    const ESCHEMA_NOT_SET: u64 = 4;
+    const EDISPENSER_EMPTY: u64 = 5;
+    const ESCHEMA_ALREADY_SET: u64 = 6;
+    const EDISPENSER_TYPE_MISMATCH: u64 = 7;
 
     // ========== Public functions ==========
+
+    public fun create<W: drop, T: copy + store + drop>(
+        witness: &W,
+        owner_maybe: Option<address>,
+        maximum_capacity: u64,
+        is_serialized: bool,
+        is_sequential: bool,
+        schema_maybe: Option<vector<vector<u8>>>,
+        ctx: &mut TxContext
+    ) {
+        let dispenser = create_<W, T>(witness, owner_maybe, maximum_capacity, is_serialized, is_sequential, schema_maybe, ctx);
+        transfer::share_object(dispenser)
+    }
     
-    /// Initializes the dispenser and returns it by value
-    public fun initialize(owner: Option<address>, capacity: u64, is_sequential: bool, is_reloadable: bool, schema: Option<vector<vector<u8>>>, ctx: &mut TxContext): Dispenser {
+    /// Creates the dispenser and returns it by value
+    public fun create_<W: drop, T: copy + store + drop>(
+        _witness: &W,
+        owner_maybe: Option<address>,
+        maximum_capacity: u64,
+        is_serialized: bool,
+        is_sequential: bool,
+        schema_maybe: Option<vector<vector<u8>>>,
+        ctx: &mut TxContext
+    ): Dispenser<T> {
+        let origin = tx_authority::type_into_address<W>();
+
         let dispenser = Dispenser {
             id: object::new(ctx),
-            available_items: 0, 
-            loaded_items: 0,
-            items: vector::empty(),
-            randomness_id: option::none(),
-            config: DispenserConfig {
-                capacity,
+            origin,
+            items_count: 0,
+            schema: option::none(),
+            config: Config {
+                is_serialized,
                 is_sequential,
-                is_reloadable,
-                schema: option::none(),
+                maximum_capacity,
             }
         };
 
-        let owner = if(option::is_some(&owner)) option::extract(&mut owner) else tx_context::sender(ctx);
+        let owner = if(option::is_some(&owner_maybe)) {
+            option::destroy_some(owner_maybe)
+        } else {
+            tx_context::sender(ctx)
+        };
+
+        let typed_id = typed_id::new(&dispenser);
         let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        let proof = ownership::setup(&dispenser);
+        ownership::as_shared_object_(&mut dispenser.id, typed_id, vector[owner], vector::empty(), &auth);
 
-        // initialize the dispenser ownership, using the capsule standard
-        ownership::initialize(&mut dispenser.id, proof, &auth);
+        if(is_serialized) {
+            assert!(type_name::into_string(type_name::get<T>()) == string(b"vector<u8>"), 0);
+            assert!(option::is_some(&schema_maybe), 0);
 
-        // set the dispenser data schema if provided
-        if(option::is_some(&schema)) {
-            set_schema(&mut dispenser, option::extract(&mut schema), ctx);
+            set_schema(&mut dispenser, option::destroy_some(schema_maybe), &auth);
         };
-
-        // fill randomness if the dispenser is not sequential
-        if(!is_sequential) { 
-            fill_randomness(&mut dispenser, ctx); 
-        };
-        
-        ownership::initialize_owner_and_transfer_authority<SimpleTransfer>(&mut dispenser.id, owner, &auth);
 
         dispenser
     }
 
-    /// Sets the schema of the dispenser item. aborts if schema is already set
-    public fun set_schema(self: &mut Dispenser, schema: vector<vector<u8>>, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-        assert!(option::is_none(&self.config.schema), ESchemaAlreadySet);
+    public fun load_serialized(self: &mut Dispenser<vector<u8>>, items: vector<vector<u8>>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(self.config.is_serialized, EDISPENSER_TYPE_MISMATCH);
+        assert!(option::is_some(&self.schema), ESCHEMA_NOT_SET);
+        assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
 
-        option::fill(&mut self.config.schema, schema::create(schema));
-    }
-
-    /// Loads items into the dispenser
-    public fun load(self: &mut Dispenser, items: vector<vector<u8>>, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
-        assert!(!vector::is_empty(&items), ELoadEmptyItems);
-        assert!((option::is_some(&self.config.schema)), ESchemaNotSet);
-
+        let schema = option::borrow(&self.schema);
         let (i, items_count) = (0, vector::length(&items));
 
-        if(!self.config.is_reloadable) {
-            // assert that the number of loaded items is less than the dispenser capacity
-            assert!(self.loaded_items < self.config.capacity, ECapacityExceeded);
-
-            // assert that the number of loaded items combined with the items to be loaded does not exceed the dispenser capacity
-            assert!(self.loaded_items + items_count <= self.config.capacity, ECapacityExceeded);
-        };
-
-        let available_capacity = self.config.capacity - self.available_items;
-        assert!(items_count <= available_capacity, ECapacityExceeded);
-
         while (i < items_count) {
-            let value = vector::pop_back(&mut items);
-            let schema = option::borrow(&self.config.schema);
+            let item = vector::pop_back(&mut items);
+            schema::validate(schema, item);
 
-            // validate the items being loaded into the dispenser against the set schema to 
-            // ensure the items validity and integrity
-            schema::validate(schema, value);
-            vector::push_back(&mut self.items, value);
+            dynamic_field::add<Key, vector<u8>>(&mut self.id, Key { slot: i }, item);
+
+            i = i + 1;
+        };
+     
+        self.items_count = items_count;
+    }
+
+    public fun load<T: copy + store + drop>(self: &mut Dispenser<T>, items: vector<T>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
+
+        let (i, items_count) = (0, vector::length(&items));
+        while (i < items_count) {
+            let item = vector::pop_back(&mut items);
+            dynamic_field::add<Key, T>(&mut self.id, Key { slot: i }, item);
 
             i = i + 1;
         };
 
-        vector::destroy_empty(items);
-
-        self.loaded_items = self.loaded_items + items_count;
-        self.available_items = self.available_items + items_count;
+        self.items_count =  items_count;
     }
 
-    /// Dispenses the dispenser items randomly after collecting the required payment from the transaction sender
-    /// It uses the Sui randomness module to generate the random value
-    public fun random_dispense(self: &mut Dispenser, randomness: &mut Randomness<RANDOMNESS_WITNESS>, signature: vector<u8>, ctx: &mut TxContext): vector<u8> {
-        assert!(!self.config.is_sequential, EInvalidDispenserType);
-        assert!(option::is_some(&self.randomness_id), EMissingRandomness);
-        assert!(option::borrow(&self.randomness_id) == object::borrow_id(randomness), ERandomnessMismatch);
-        assert!(self.available_items != 0, EDispenserEmpty);
+    public fun dispense<W: drop, T: copy + store + drop>(self: &mut Dispenser<T>, _witness: &W, ctx: &mut TxContext): T {
+        assert!(tx_authority::type_into_address<W>() == self.origin, EINVALID_MODULE_AUTH);
 
-        // set the randomness signature which is generated from the client
-        randomness::set(randomness, signature);
-        let random_bytes = option::borrow(randomness::value(randomness));
+        if(self.config.is_sequential) {
+            self.items_count = self.items_count - 1;
+            dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count })
+        } else {
+            let slot = rand::rng(0, self.items_count, ctx);
+            self.items_count = self.items_count - 1;
 
-        // select a random number based on the number items available. 
-        // the selected random number is the index of the item to be dispensed
-        let index = randomness::safe_selection((self.available_items), random_bytes);
+            let selected_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot });
+            let last_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count });
 
-        // randomness objects can only be set and consumed once, so we extract the previous randomess and fill it with a new one
-        refill_randomness(self, ctx);
+            // replace the selected item with the last item
+            dynamic_field::add<Key, T>(&mut self.id, Key { slot }, last_item);
 
-        self.available_items = self.available_items - 1;
-
-        // swap the item at the index with the last item and pops it, so the items order is not preserved. 
-        // this is ideal because it's O(1) and order preservation is not disired because the selection is random
-        vector::swap_remove(&mut self.items, index)
-    }
-
-    /// Dispenses the dispenser items sequentially after collecting the required payment from the transaction sender
-    public fun sequential_dispense(self: &mut Dispenser): vector<u8> {
-        assert!(self.config.is_sequential, EInvalidDispenserType);
-        assert!(self.available_items != 0, EDispenserEmpty);
-
-        self.available_items = self.available_items - 1;
-
-        // pops the last item in the vector (corresponds to the original first item). items order is preserved.
-        vector::pop_back(&mut self.items)
-    }
-
-    /// Makes the dispenser a shared object
-    public fun publish(self: Dispenser) {
-        transfer::share_object(self);
+            selected_item
+        }
     }
 
     /// Returns the mutable reference of the dispenser id
-    public fun extend(self: &mut Dispenser, ctx: &mut TxContext): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), EInvalidAuth);
+    public fun extend<T>(self: &mut Dispenser<T>, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
 
         &mut self.id
     }
 
-    // ========== Helper Functions ==========
+    /// Sets the schema of the dispenser item. aborts if schema is already set
+    fun set_schema<T>(self: &mut Dispenser<T>, schema: vector<vector<u8>>, auth: &TxAuthority) {
+        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(option::is_none(&self.schema), ESCHEMA_ALREADY_SET);
 
-    fun fill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
-        let randomness = randomness::new(RANDOMNESS_WITNESS {}, ctx);
-        let randomness_id = object::id(&randomness);
-
-        option::fill(&mut self.randomness_id, randomness_id);
-        randomness::share_object(randomness);
+        option::fill(&mut self.schema, schema::create(schema));
     }
 
-    fun refill_randomness(self: &mut Dispenser, ctx: &mut TxContext) {
-        option::extract(&mut self.randomness_id);
-        fill_randomness(self, ctx);
+}
+
+#[test_only]
+module dispenser::dispenser_test {
+    use std::option::{Self, Option};
+    use std::string::{String, utf8};
+    use std::vector;
+
+    use sui::test_scenario::{Self, Scenario};
+    use sui::bcs;
+
+    use ownership::tx_authority;
+
+    use dispenser::dispenser::{Self, Dispenser};
+
+    const ADMIN: address = @0xFAEC;
+
+    struct Witness has drop {}
+
+    struct DispenserData has copy, store, drop {
+        value: String
     }
+
+    fun create_dispenser<T: copy + store + drop>(
+        scenario: &mut Scenario,
+        owner: Option<address>,
+        is_serialized: bool,
+        is_sequential: bool,
+        schema: Option<vector<vector<u8>>>
+    ) {
+        let ctx = test_scenario::ctx(scenario);
+        dispenser::create<Witness, T>(&Witness { },owner, 5, is_serialized, is_sequential, schema, ctx);
+    }
+
+    fun get_dispenser_serialized_items(): vector<vector<u8>> {
+        vector[
+            bcs::to_bytes(&b"Sui"), 
+            bcs::to_bytes(&b"Move"), 
+            bcs::to_bytes(&b"Capsule"), 
+            bcs::to_bytes(&b"Object"), 
+            bcs::to_bytes(&b"Metadata")
+        ]
+    }
+
+    fun get_dispenser_items(): vector<String> {
+        vector[
+            utf8(b"Sui"), 
+            utf8(b"Move"), 
+            utf8(b"Capsule"), 
+            utf8(b"Object"), 
+            utf8(b"Metadata")
+        ]
+    }
+
+
+    #[test]
+    fun test_sequential_dispenser() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<DispenserData>(&mut scenario, option::none(), false, true, option::none());
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        
+        let items = get_dispenser_items();
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            let load_items = vector[];
+            let (i, len) = (0, vector::length(&items));
+
+            while(i < len) {
+                let item = DispenserData { value: vector::pop_back(&mut items) };
+                vector::push_back(&mut load_items, item);
+                i = i + 1;
+            };
+
+            dispenser::load(&mut dispenser, load_items, &auth);
+            
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let (i, len) = (0, vector::length(&items));
+
+            while (i < len) {
+                let item = dispenser::dispense(&mut dispenser, &Witness {}, ctx);
+                assert!(&item ==  &DispenserData { value: *vector::borrow(&items, i) }, 0);
+
+                i = i + 1;
+            };
+
+            test_scenario::return_shared(dispenser);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_serialized_sequential_dispenser() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+        test_scenario::next_tx(&mut scenario, ADMIN);
+
+        let items = get_dispenser_serialized_items();
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            dispenser::load_serialized(&mut dispenser, items, &auth);
+            
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let (i, len) = (0, vector::length(&items));
+
+            while (i < len) {
+                let item = dispenser::dispense(&mut dispenser, &Witness {}, ctx);
+                assert!(&item == vector::borrow(&items, i), 0);
+
+                i = i + 1;
+            };
+
+            test_scenario::return_shared(dispenser);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_random_dispenser() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, false, option::some(vector[b"String"]));
+        test_scenario::next_tx(&mut scenario, ADMIN);
+
+        let items = get_dispenser_serialized_items();
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            dispenser::load_serialized(&mut dispenser, items, &auth);
+            
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let _ctx = test_scenario::ctx(&mut scenario);
+            let (i, len) = (0, vector::length(&items));
+
+            while (i < len) {
+                // let item = dispenser::dispense(&mut dispenser, Witness {}, ctx);
+                // std::debug::print(&utf8(item));
+                // assert!(&item == vector::borrow(&items, i), 0);
+
+                i = i + 1;
+            };
+
+            test_scenario::return_shared(dispenser);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::dispenser::EINVALID_OWNER_AUTH)]
+    fun test_invalid_dispenser_auth_failure() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+        test_scenario::next_tx(&mut scenario, @0xABCE);
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let items = get_dispenser_serialized_items();
+
+            dispenser::load_serialized(&mut dispenser, items, &auth);
+            test_scenario::return_shared(dispenser);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::dispenser::ELOAD_EMPTY_ITEMS)]
+    fun test_empty_dispenser_failure() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            dispenser::load_serialized(&mut dispenser, vector::empty(), &auth);
+            test_scenario::return_shared(dispenser);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::schema::EUNRECOGNIZED_TYPE)]
+    fun test_dispenser_unrecognized_type_failure() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"int8"]));
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let items = get_dispenser_serialized_items();
+
+            dispenser::load_serialized(&mut dispenser, items, &auth);
+            test_scenario::return_shared(dispenser);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
 }
