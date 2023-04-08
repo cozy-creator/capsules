@@ -135,7 +135,6 @@ module dispenser::dispenser {
         while (i < items_count) {
             let item = vector::pop_back(&mut items);
             schema::validate(schema, item);
-
             dynamic_field::add<Key, vector<u8>>(&mut self.id, Key { slot: i }, item);
 
             i = i + 1;
