@@ -14,4 +14,20 @@ module sui_utils::dynamic_field2 {
             dynamic_field::remove<Key, Value>(uid, key);
         };
     }
+
+    public fun get_with_default<Key: store + copy + drop, Value: store + copy + drop>(uid: &UID, key: Key, default: Value): Value {
+        if (dynamic_field::exists_with_type<Key, Value>(uid, key)) {
+            *dynamic_field::borrow<Key, Value>(uid, key)
+        } else {
+            default
+        }
+    }
+
+    public fun borrow_mut_fill<Key: store + copy + drop, Value: store + drop>(uid: &mut UID, key: Key, default: Value): &mut Value {
+        if (!dynamic_field::exists_with_type<Key, Value>(uid, key)) {
+            set(uid, key, default);
+        };
+
+        dynamic_field::borrow_mut<Key, Value>(uid, key)
+    }   
 }

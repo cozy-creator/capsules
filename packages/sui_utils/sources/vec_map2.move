@@ -61,6 +61,15 @@ module sui_utils::vec_map2 {
         old_value_maybe
     }
 
+    public fun borrow_mut_fill<K: copy + drop, V: store + drop>(self: &mut VecMap<K, V>, key: K, default_value: V): &mut V {
+        let index_maybe = vec_map::get_idx_opt(self, &key);
+        if (!option::is_some(&index_maybe)) {
+            vec_map::insert(self, key, default_value);
+        };
+
+        vec_map::borrow_mut(self, key)
+    }
+
     // More efficient than doing 'vec_map::contains' followed by 'vec_map::get', because that iterates through the
     // map twice, whereas this only iterates through it once
     public fun get_maybe<K: copy + drop, V: copy>(self: &VecMap<K, V>, key: K): Option<V> {

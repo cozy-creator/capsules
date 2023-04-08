@@ -6,7 +6,7 @@ module outlaw_sky::outlaw_sky {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::vec_map::{Self, VecMap};
-    
+
     use sui_utils::typed_id;
     use sui_utils::vec_map2;
 
@@ -17,6 +17,9 @@ module outlaw_sky::outlaw_sky {
     use attach::data;
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
+
+    use outlaw_sky::warship::Witness as Namespace;
+    use outlaw_sky::warship::Warship;
 
     // Error constants
     const ENOT_OWNER: u64 = 0;
@@ -114,6 +117,43 @@ module outlaw_sky::outlaw_sky {
             Witness {}, &mut outlaw.id, utf8(b"power_level"), 0);
 
         *power_level = *power_level + 1;
+    }
+    
+    // This is using a delegation from Foreign -> Witness
+    public entry fun edit_other_namespace(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore) {
+        let auth = tx_authority::begin_from_type(&Witness {});
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    }
+
+    // This is using a delegation from Foreign -> address
+    public entry fun edit_other_namespace2(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore, ctx: &mut TxContext) {
+        let auth = tx_authority::begin(ctx);
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    }
+
+    public entry fun edit_as_someone_else(warship: &mut Warship, new_name: String, store: &DelegationStore) {
+        // Get a different namespace
+        let auth = tx_authority::begin_from_type(&Witness {});
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+
+        // We have a permission added to this warship; warship.owner has granted our ctx-address permission to edit
+        // Delegation { for: our-ctx }
+        let uid = warship::uid_mut(warship, &auth);
+        data::set_(&mut warship.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+
+        // warship.owner has granted Witness permission to edit
+        // Delegation { for: Witness }
+
+        // Warship module has granted our ctx-address permission to edit
+        // DelegationStore { for: our-ctx }
+
+        // Warship module has granted Witness permission to edit
+        // DelegationStore { for: Witness }
     }
 
     // ==== General Functions ====

@@ -19,7 +19,8 @@ module ownership::tx_authority {
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
     struct TxAuthority has drop {
-        addresses: vector<address>
+        full_signers: vector<address>,
+        partial_signers: VecMap<address, u16>
     }
 
     // ========= Begin =========
@@ -45,16 +46,23 @@ module ownership::tx_authority {
 
     // ========= Add Authorities =========
 
+    public fun add_signer(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { addresses: *&auth.addresses };
+        add_signer_internal(tx_context::sender(ctx), &mut new_auth);
+
+        new_auth
+    }
+
     public fun add_id_capability<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { addresses: *&auth.addresses };
-        add_internal(object::id_address(cap), &mut new_auth);
+        add_full_signer_internal(object::id_address(cap), &mut new_auth);
 
         new_auth
     }
 
     public fun add_type_capability<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { addresses: *&auth.addresses };
-        add_internal(type_into_address<T>(), &mut new_auth);
+        add_full_signer_internal(type_into_address<T>(), &mut new_auth);
 
         new_auth
     }
@@ -152,12 +160,61 @@ module ownership::tx_authority {
         encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
     }
 
+    // ========= Delegation System =========
+
+    public fun add_from_delegation_store(store: DelegationStore, auth: &TxAuthority): TxAuthority {
+        let partial_signers = auth.partial_signers;
+
+        let i = 0;
+        while (i < vector::length(&auth.full_signers)) {
+            let key = Delegation { for: addr };
+            if (dynamic_field::exists_(&store.id, &key)) {
+                let delegated_permissions = dynamic_field::borrow<Delegation, u16>(&store.id, key);
+                add_partial_signer_internal(&mut partial_signers, store.owner, delegated_permissions);
+            };
+            i = i + 1;
+        };
+
+        TxAuthority {
+            full_signers: auth.full_signers,
+            partial_signers
+        }
+    }
+    
+    // ====== General Permission-Checkers ======
+
+    public fun is_partial_signer_with_role(addr: address, auth: &TxAuthority, role: u8): bool {
+        let acl_maybe = vec_map2::get_maybe(&auth.partial_signers, namespace);
+        if (option::is_some(&acl_maybe)) {
+            let acl = option::destroy_some(acl_maybe);
+            if (acl::has_role(acl, role)) { return true };
+        };
+
+        false
+    }
+
+    public fun is_full_signer(addr: address, auth: &TxAuthority): bool {
+        let i = 0;
+        while (i < vector::length(&auth.full_signers)) {
+            let full_signer = *vector::borrow(&auth.full_signers, i);
+            if (full_signer == addr) { return true };
+            i = i + 1;
+        };
+
+        false
+    }
+
     // ========= Internal Functions =========
 
-    fun add_internal(addr: address, auth: &mut TxAuthority) {
+    fun add_full_signer_internal(addr: address, auth: &mut TxAuthority) {
         if (!vector::contains(&auth.addresses, &addr)) {
             vector::push_back(&mut auth.addresses, addr);
         };
+    }
+
+    fun add_partial_signer_internal(partial_signers: &mut VecMap<address, u16>, addr: address, new_permissions: u16) {
+        let existing_permissions = vec_map2::borrow_mut_fill(partial_signers, store.owner, 0u16);
+        *existing_permissions = *existing_permissions | new_permissions;
     }
 }
 

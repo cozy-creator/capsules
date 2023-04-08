@@ -61,7 +61,8 @@ module attach::data {
         values: vector<T>,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
@@ -246,11 +247,7 @@ module attach::data {
     ): &mut T {
         assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-        if (!exists_with_type<T>(uid, namespace, key)) {
-            set_(uid, namespace, vector[key], vector[default], auth);
-        };
-
-        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
+        dynamic_field2::borrow_mut_fill<Key, T>(uid, Key { namespace, key }, default)
     }
 
     // ===== Copy Functions =====
