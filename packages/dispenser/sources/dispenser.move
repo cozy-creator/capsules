@@ -145,6 +145,7 @@ module dispenser::dispenser {
 
     public fun load<T: copy + store + drop>(self: &mut Dispenser<T>, items: vector<T>, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!self.config.is_serialized, EDISPENSER_TYPE_MISMATCH);
         assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
 
         let (i, items_count) = (0, vector::length(&items));
