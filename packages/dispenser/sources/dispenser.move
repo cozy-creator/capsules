@@ -63,6 +63,7 @@ module dispenser::dispenser {
     const EDISPENSER_EMPTY: u64 = 5;
     const ESCHEMA_ALREADY_SET: u64 = 6;
     const EDISPENSER_TYPE_MISMATCH: u64 = 7;
+    const EMAXIMUM_CAPACITY_EXCEEDED: u64 = 8;
 
     // ========== Public functions ==========
 
@@ -130,9 +131,11 @@ module dispenser::dispenser {
         assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
 
         let schema = option::borrow(&self.schema);
-        let (i, items_count) = (0, vector::length(&items));
+        let (i, len) = (0, vector::length(&items));
 
-        while (i < items_count) {
+        assert!(self.items_count + len <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+
+        while (i < len) {
             let item = vector::pop_back(&mut items);
             schema::validate(schema, item);
             dynamic_field::add<Key, vector<u8>>(&mut self.id, Key { slot: i }, item);
@@ -140,7 +143,7 @@ module dispenser::dispenser {
             i = i + 1;
         };
      
-        self.items_count = items_count;
+        self.items_count = self.items_count + len;
     }
 
     public fun load<T: copy + store + drop>(self: &mut Dispenser<T>, items: vector<T>, auth: &TxAuthority) {
@@ -170,9 +173,9 @@ module dispenser::dispenser {
             self.items_count = self.items_count - 1;
 
             let selected_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot });
-            let last_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count });
 
             // replace the selected item with the last item
+            let last_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count });
             dynamic_field::add<Key, T>(&mut self.id, Key { slot }, last_item);
 
             selected_item
@@ -193,7 +196,6 @@ module dispenser::dispenser {
 
         option::fill(&mut self.schema, schema::create(schema));
     }
-
 }
 
 #[test_only]
@@ -430,5 +432,4 @@ module dispenser::dispenser_test {
 
         test_scenario::end(scenario);
     }
-
 }
