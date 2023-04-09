@@ -2,21 +2,6 @@
 /// 
 /// This guard can be used to restrict thirdparty packages call to your module functions. \
 /// It leverages the witness pattern to ensure that a package calling a module function is allowed.
-/// 
-/// Example:
-/// 
-/// ```move
-/// let guard = guard::initialize<Witness>(&Witness {}, ctx);
-/// 
-/// // create package guard by passing the allowed package witness
-/// package::create<Witness, AllowedPackageWitness>(&mut guard);
-/// 
-/// // create package guard by passing the allowed package id
-/// package::create_<Witness>(&mut guard, allowed_package_id);
-/// 
-/// // validate a the package calling a function is allowed
-/// package::validate<Witness, ThirdPartyPackageWitness>(&guard);
-/// ```
 
 
 module guard::package {
@@ -37,13 +22,13 @@ module guard::package {
     const EInvalidPackage: u64 = 1;
 
     /// Creates a new package guard using allowed package witness `W`
-    public fun create<T, W>(guard: &mut Guard<T>) {
+    public fun create<T, W: drop>(guard: &mut Guard<T>, witness: &T, _package_witness: &W) {
         let id = encode::package_id<W>();
-        create_(guard, id);
+        create_(guard, witness, id);
     }
 
     /// Creates a new package guard using the allowed package id
-    public fun create_<T>(guard: &mut Guard<T>, id: ID) {
+    public fun create_<T>(guard: &mut Guard<T>, _witness: &T, id: ID) {
         let package = Package {
             value: id
         };
@@ -55,7 +40,7 @@ module guard::package {
     }
 
     /// Validates that the package witness `W` against the guard type `T`
-    public fun validate<T, W>(guard: &Guard<T>) {
+    public fun validate<T, W: drop>(guard: &Guard<T>, _witness: &T, _package_witness: &W) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::uid(guard);
         
@@ -68,7 +53,7 @@ module guard::package {
     }
 
    /// Updates the package guard with a new allowed package witness `W`
-   public fun update<T, W>(guard: &mut Guard<T>) {
+   public fun update<T, W>(guard: &mut Guard<T>, _witness: &T) {
         let key = guard::key(PACKAGE_GUARD_ID);
         let uid = guard::extend(guard);
         
@@ -92,16 +77,17 @@ module guard::package_test {
     use guard::guard_test;
 
     struct Witness has drop {}
-
-    struct FakeWitness has drop {}
+    struct PackageWitness has drop {}
 
 
     fun initialize_scenario(sender: address): Scenario {
-       let scenario = guard_test::initialize_scenario(&Witness {}, sender);      
+        let witness = Witness {};
+        let package_witness = PackageWitness {};
+        let scenario = guard_test::initialize_scenario(&witness, sender);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            package::create<Witness, Witness>(&mut guard);
+            package::create(&mut guard, &witness, &package_witness);
             test_scenario::return_shared(guard);
         };
 
@@ -111,13 +97,15 @@ module guard::package_test {
     #[test]
     fun test_validate_package() {
         let sender = @0xFEAC;
+        let witness = Witness {};
+        let package_witness = PackageWitness {};
         let scenario = initialize_scenario(sender);
 
         test_scenario::next_tx(&mut scenario, sender);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            package::validate<Witness, Witness>(&guard);
+            package::validate(&guard, &witness, &package_witness);
             test_scenario::return_shared(guard);
         };
 

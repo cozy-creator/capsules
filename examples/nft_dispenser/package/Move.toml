@@ -1,0 +1,11 @@
+[package]
+name = "nft_dispenser"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+Dispenser = { local = "../../../packages/dispenser" }
+Guard = { local = "../../../packages/guard" }
+
+[addresses]
+nft_dispenser =  "0x0"
