@@ -46,4 +46,19 @@ module sui_utils::vector2 {
 
         slice
     }
+
+    // Returns a mutable reference to vec[index], padding the vector out with empty values if necessary because the
+    // index isn't that big yet. Note that vector indexes are limited in length to 256^2, the maximum size of a u16.
+    public fun borrow_mut_padding<T: store + copy + drop>(vec: &mut vector<T>, index: u16, default_value: T): &mut T {
+        let len = vector::length(vec);
+        let new_len = (index as u64) + 1;
+        if (len < new_len) {
+            let i = new_len - len;
+            while (i > 0) {
+                vector::push_back(vec, default_value);
+                i = i - 1;
+            };
+        };
+        vector::borrow_mut(vec, (index as u64))
+    }
 }

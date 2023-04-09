@@ -1,3 +1,4 @@
+#[test_only]
 module transfer_system::test_utils {
     use sui::test_scenario::{Self, Scenario};
     use sui::coin::{Self, Coin};
