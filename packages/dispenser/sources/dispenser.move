@@ -155,7 +155,7 @@ module dispenser::dispenser {
         let (i, len) = (0, vector::length(&items));
         let items_count = self.items_count + len;
 
-        assert!(self.items_count + len <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+        assert!(items_count <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
 
         while (i < items_count) {
             let item = vector::pop_back(&mut items);
