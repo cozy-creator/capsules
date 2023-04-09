@@ -412,7 +412,6 @@ module dispenser::dispenser_test {
         test_scenario::end(scenario);
     }
 
-
     #[test]
     #[expected_failure(abort_code = dispenser::schema::EUNRECOGNIZED_TYPE)]
     fun test_dispenser_unrecognized_type_failure() {
@@ -432,4 +431,29 @@ module dispenser::dispenser_test {
 
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = dispenser::dispenser::EMAXIMUM_CAPACITY_EXCEEDED)]
+    fun test_dispenser_maximum_capacity_failure() {
+        let scenario = test_scenario::begin(ADMIN);
+        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+        test_scenario::next_tx(&mut scenario, ADMIN);
+
+        let items = get_dispenser_serialized_items();
+
+        {
+            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            vector::push_back(&mut items, bcs::to_bytes(&b"Test"));
+            dispenser::load_serialized(&mut dispenser, items, &auth);
+            
+            test_scenario::return_shared(dispenser);
+            test_scenario::next_tx(&mut scenario, ADMIN);
+        } ;
+
+        test_scenario::end(scenario);
+    }
+
 }
