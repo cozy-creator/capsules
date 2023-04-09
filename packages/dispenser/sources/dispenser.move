@@ -132,8 +132,9 @@ module dispenser::dispenser {
 
         let schema = option::borrow(&self.schema);
         let (i, len) = (0, vector::length(&items));
+        let items_count = self.items_count + len;
 
-        assert!(self.items_count + len <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+        assert!(items_count <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
 
         while (i < len) {
             let item = vector::pop_back(&mut items);
@@ -143,7 +144,7 @@ module dispenser::dispenser {
             i = i + 1;
         };
      
-        self.items_count = self.items_count + len;
+        self.items_count = items_count;
     }
 
     public fun load<T: copy + store + drop>(self: &mut Dispenser<T>, items: vector<T>, auth: &TxAuthority) {
@@ -151,7 +152,11 @@ module dispenser::dispenser {
         assert!(!self.config.is_serialized, EDISPENSER_TYPE_MISMATCH);
         assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
 
-        let (i, items_count) = (0, vector::length(&items));
+        let (i, len) = (0, vector::length(&items));
+        let items_count = self.items_count + len;
+
+        assert!(self.items_count + len <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+
         while (i < items_count) {
             let item = vector::pop_back(&mut items);
             dynamic_field::add<Key, T>(&mut self.id, Key { slot: i }, item);
