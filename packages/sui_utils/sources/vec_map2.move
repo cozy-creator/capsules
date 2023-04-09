@@ -63,8 +63,8 @@ module sui_utils::vec_map2 {
 
     // More efficient than doing 'vec_map::contains' followed by 'vec_map::get', because that iterates through the
     // map twice, whereas this only iterates through it once
-    public fun get_maybe<K: copy + drop, V: copy>(self: &VecMap<K, V>, key: K): Option<V> {
-        let index_maybe = vec_map::get_idx_opt(self, &key);
+    public fun get_maybe<K: copy, V: copy>(self: &VecMap<K, V>, key: &K): Option<V> {
+        let index_maybe = vec_map::get_idx_opt(self, key);
 
         if (option::is_some(&index_maybe)) {
             let index = option::destroy_some(index_maybe);
@@ -75,15 +75,15 @@ module sui_utils::vec_map2 {
         }
     }
 
-    public fun remove_maybe<K: copy + drop, V: copy>(self: &mut VecMap<K, V>, key: K): Option<V> {
-        let index_maybe = vec_map::get_idx_opt(self, &key);
+    public fun remove_maybe<K: copy, V: copy>(self: &mut VecMap<K, V>, key: &K): (Option<K>, Option<V>) {
+        let index_maybe = vec_map::get_idx_opt(self, key);
 
         if (option::is_some(&index_maybe)) {
             let index = option::destroy_some(index_maybe);
-            let (_, value) = vec_map::remove_entry_by_idx(self, index);
-            option::some(value)
+            let (key, value) = vec_map::remove_entry_by_idx(self, index);
+            (option::some(key), option::some(value))
         } else {
-            option::none()
+            (option::none(), option::none())
         }
     }
 }

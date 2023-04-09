@@ -195,7 +195,7 @@ module display::display {
     public entry fun remove_resolvers<T>(self: &mut Display<T>, keys: vector<String>) {
         let (i, len) = (0, vector::length(&keys));
         while (i < len) {
-            vec_map2::remove_maybe(&mut self.resolvers, *vector::borrow(&keys, i));
+            vec_map2::remove_maybe(&mut self.resolvers, vector::borrow(&keys, i));
             i = i + 1;
         };
     }

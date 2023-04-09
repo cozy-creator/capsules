@@ -99,7 +99,7 @@ module attach::schema {
 
         let (i, types) = (0, vector::empty<String>());
         while (i < vector::length(&keys)) {
-            let type_maybe = vec_map2::remove_maybe(schema, *vector::borrow(&keys, i));
+            let (_, type_maybe) = vec_map2::remove_maybe(schema, vector::borrow(&keys, i));
             if (option::is_some(&type_maybe)) {
                 vector::push_back(&mut types, option::destroy_some(type_maybe));
             } else {
@@ -170,7 +170,7 @@ module attach::schema {
     public fun get_type(uid: &UID, namespace: Option<address>, key: String): Option<String> {
         if (!exists_(uid, namespace)) { return option::none() };
         let schema = borrow(uid, namespace);
-        vec_map2::get_maybe(schema, key)
+        vec_map2::get_maybe(schema, &key)
     }
 
     // ==== Utility Functions ====
