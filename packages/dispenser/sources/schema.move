@@ -11,12 +11,10 @@ module dispenser::schema {
     use sui_utils::deserialize;
 
     struct Schema has store, drop {
-        schema_id: vector<u8>,
         fields: vector<vector<u8>>
     }
 
-    const EUnspportedType: u64 = 0;
-    const EInvalidDataLength: u64 = 1;
+    const EUNRECOGNIZED_TYPE: u64 = 0;
 
     const SUPPORTED_TYPES: vector<vector<u8>> = vector[b"address", b"bool", b"id", b"u8", b"u16", b"u32", b"u64", b"u128", b"u256", b"String", b"vector<address>", b"vector<bool>", b"vector<id>", b"vector<u8>", b"vector<u16>", b"vector<u32>", b"vector<u64>", b"vector<u128>", b"vector<u256>", b"vector<String>", b"VecMap<String,String>", b"vector<vector<u8>>"];
 
@@ -24,70 +22,67 @@ module dispenser::schema {
         let (i, len) = (0, vector::length(&fields));
 
         while(i < len) {
-            assert!(is_supported_type(vector::borrow(&fields, i)), EUnspportedType);
+            assert!(is_supported_type(vector::borrow(&fields, i)), EUNRECOGNIZED_TYPE);
             i = i + 1;
         };
 
-        Schema {
-            schema_id: compute_schema_id(fields),
-            fields
-        }
+        Schema { fields }
     }
 
     public fun validate(schema: &Schema, data: vector<u8>) {
         let (i, len) = (0, vector::length(&schema.fields));
-        let start = 0;
+        let index = 0;
 
         while(i < len) {
             let type = *vector::borrow(&schema.fields, i);
 
             if (type == b"address") {
-                (_, start) = deserialize::address_(&data, start);
+                (_, index) = deserialize::address_(&data, index);
             } else if (type == b"bool") {
-                (_, start) = deserialize::bool_(&data, start);
+                (_, index) = deserialize::bool_(&data, index);
             } else if (type == b"id") {
-                (_, start) = deserialize::id_(&data, start);
+                (_, index) = deserialize::id_(&data, index);
             } else if (type == b"u8") {
-                vector::borrow(&data, start);
-                start = start + 1;
+                vector::borrow(&data, index); 
+                index = index + 1;
             } else if (type == b"u16") {
-                (_, start) = deserialize::u16_(&data, start);
+                (_, index) = deserialize::u16_(&data, index);
             } else if (type == b"u32") {
-                (_, start) = deserialize::u32_(&data, start);
+                (_, index) = deserialize::u32_(&data, index);
             } else if (type == b"u64") {
-                (_, start) = deserialize::u64_(&data, start);
+                (_, index) = deserialize::u64_(&data, index);
             } else if (type == b"u128") {
-                (_, start) = deserialize::u128_(&data, start);      
+                (_, index) = deserialize::u128_(&data, index);      
             } else if (type == b"u256") {
-                (_, start) = deserialize::u256_(&data, start);
+                (_, index) = deserialize::u256_(&data, index);
             } else if (type == b"String") {
-                (_, start) = deserialize::string_(&data, start);
+                (_, index) = deserialize::string_(&data, index);
             } else if (type == b"vector<address>") {
-                (_, start) = deserialize::vec_address(&data, start);
+                (_, index) = deserialize::vec_address(&data, index);
             } else if (type == b"vector<bool>") {
-                (_, start) = deserialize::vec_bool(&data, start);
+                (_, index) = deserialize::vec_bool(&data, index);
             } else if (type == b"vector<id>") {
-                (_, start) = deserialize::vec_id(&data, start);
+                (_, index) = deserialize::vec_id(&data, index);
             } else if (type == b"vector<u8>") {
-                (_, start) = deserialize::vec_u8(&data, start);
+                (_, index) = deserialize::vec_u8(&data, index);
             } else if (type == b"vector<u16>") {
-                (_, start) = deserialize::vec_u16(&data, start);
+                (_, index) = deserialize::vec_u16(&data, index);
             } else if (type == b"vector<u32>") {
-                (_, start) = deserialize::vec_u32(&data, start);
+                (_, index) = deserialize::vec_u32(&data, index);
             } else if (type == b"vector<u64>") {
-                (_, start) = deserialize::vec_u64(&data, start);
+                (_, index) = deserialize::vec_u64(&data, index);
             } else if (type == b"vector<u128>") {
-                (_, start) = deserialize::vec_u128(&data, start);
+                (_, index) = deserialize::vec_u128(&data, index);
             } else if (type == b"vector<u256>") {
-                (_, start) = deserialize::vec_u256(&data, start);
+                (_, index) = deserialize::vec_u256(&data, index);
             } else if (type == b"vector<vector<u8>>") {
-                (_, start) = deserialize::vec_vec_u8(&data, start);
+                (_, index) = deserialize::vec_vec_u8(&data, index);
             } else if (type == b"vector<String>") {
-                (_, start) = deserialize::vec_string(&data, start);
+                (_, index) = deserialize::vec_string(&data, index);
             } else if (type == b"VecMap<String,String>") {
-                (_, start) = deserialize::vec_map_string_string(&data, start);
+                (_, index) = deserialize::vec_map_string_string(&data, index);
             } else {
-                abort EUnspportedType
+                abort EUNRECOGNIZED_TYPE
             };
 
             i = i + 1;

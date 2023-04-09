@@ -14,11 +14,11 @@ module guard::allowlist {
     const EKeyNotSet: u64 = 0;
     const EAddressNotAllowed: u64 = 1;
 
-    public fun empty<T>(guard: &mut Guard<T>) {
-        create(guard, vector::empty<address>());
+    public fun empty<T>(guard: &mut Guard<T>, witness: &T) {
+        create(guard, witness, vector::empty<address>());
     }
 
-    public fun create<T>(guard: &mut Guard<T>, addresses: vector<address>) {
+    public fun create<T>(guard: &mut Guard<T>, _witness: &T, addresses: vector<address>) {
         let allow_list =  Allowlist { 
             addresses 
         };
@@ -29,18 +29,18 @@ module guard::allowlist {
         dynamic_field::add<Key, Allowlist>(uid, key, allow_list)
     }
 
-    public fun validate<T>(guard: &Guard<T>, addresses: vector<address>) {
+    public fun validate<T>(guard: &Guard<T>, witness: &T, addresses: vector<address>) {
         let (i, len) = (0, vector::length(&addresses));
 
         while(i < len) {
             let addr = vector::pop_back(&mut addresses);
-            assert!(is_allowed(guard, addr), EAddressNotAllowed);
+            assert!(is_allowed(guard, witness, addr), EAddressNotAllowed);
 
             i = i + 1;
         }
     }
 
-    public fun allow<T>(guard: &mut Guard<T>, addresses: vector<address>) {
+    public fun allow<T>(guard: &mut Guard<T>, _witness: &T, addresses: vector<address>) {
         let key = guard::key(ALLOWLIST_GUARD_ID);
         let uid = guard::extend(guard);
 
@@ -56,7 +56,7 @@ module guard::allowlist {
         }
     }
 
-    public fun is_allowed<T>(guard: &Guard<T>, addr: address): bool {
+    public fun is_allowed<T>(guard: &Guard<T>, _witness: &T, addr: address): bool {
         let key = guard::key(ALLOWLIST_GUARD_ID);
         let uid = guard::uid(guard);
 
@@ -79,11 +79,12 @@ module guard::allowlist_test {
     struct Witness has drop {}
 
     fun initialize_scenario(sender: address, addresses: vector<address>): Scenario {
-       let scenario = guard_test::initialize_scenario(&Witness {}, sender);      
+        let witness = Witness {};
+        let scenario = guard_test::initialize_scenario(&witness, sender);      
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            allowlist::create<Witness>(&mut guard, addresses);
+            allowlist::create<Witness>(&mut guard, &witness, addresses);
             test_scenario::return_shared(guard);
         };
 
@@ -94,12 +95,13 @@ module guard::allowlist_test {
     fun test_validate_allowlist() {
         let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
         let scenario = initialize_scenario(sender, addresses);
+        let witness = Witness {};
 
         test_scenario::next_tx(&mut scenario, sender);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            allowlist::validate(&mut guard, addresses);
+            allowlist::validate(&mut guard, &witness, addresses);
             test_scenario::return_shared(guard);
         };
 
@@ -110,12 +112,13 @@ module guard::allowlist_test {
     fun test_allow_allowlist() {
         let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
         let scenario = initialize_scenario(sender, addresses);
+        let witness = Witness {};
 
         test_scenario::next_tx(&mut scenario, sender);
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
             
-            allowlist::allow(&mut guard, vector[@0xAE5C]);
+            allowlist::allow(&mut guard, &witness, vector[@0xAE5C]);
             test_scenario::return_shared(guard);
         };
 
@@ -123,7 +126,7 @@ module guard::allowlist_test {
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
 
-            allowlist::validate(&guard, vector[@0xAE5C, @0x1AFB]);
+            allowlist::validate(&guard, &witness, vector[@0xAE5C, @0x1AFB]);
             test_scenario::return_shared(guard);
         };
 
@@ -135,12 +138,13 @@ module guard::allowlist_test {
     fun test_validate_allowlist_failure() {
         let (sender, addresses) = (@0xFEAC, vector[@0x1AFB, @0xBABA, @0xEAFC]);
         let scenario = initialize_scenario(sender, addresses);
+        let witness = Witness {};
 
         test_scenario::next_tx(&mut scenario, sender);
 
         {
             let guard = test_scenario::take_shared<Guard<Witness>>(&scenario);
-            allowlist::validate(&mut guard, vector[@0xAE5C]);
+            allowlist::validate(&mut guard, &witness, vector[@0xAE5C]);
             test_scenario::return_shared(guard);
         };
 
