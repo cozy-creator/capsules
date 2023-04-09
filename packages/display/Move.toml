@@ -2,7 +2,7 @@
 name = "SuiDisplay"
 version = "0.5.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
-published-at = "0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee"
+published-at = "0x014f4f1182e0b4d59933d601695f120effbb799545779ab1f56104974f6c5619"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -12,4 +12,4 @@ TransferSystem = { local = "../transfer_system" }
 Attach = { local = "../attach" }
 
 [addresses]
-display =  "0xbd0da70fa80ce1b43da7d9058dc7c6c7f8281a9a447a2ce5216815bab33bd5ee"
+display =  "0x014f4f1182e0b4d59933d601695f120effbb799545779ab1f56104974f6c5619"
