@@ -44,6 +44,7 @@ module transfer_system::collateralization {
     const EINVALID_DUE_DATE: u64 = 3;
     const EASSET_ID_MISMATCH: u64 = 4;
     const ECOLLATERAL_ID_MISMATCH: u64 = 5;
+    const EASSET_ALREADY_COLLATERALIZED: u64 = 6;
 
     // Request status enums
     const REQUEST_INITIALIZED: u8 = 0;
@@ -74,12 +75,13 @@ module transfer_system::collateralization {
         let auth = tx_authority::begin(ctx);
         assert!(ownership::is_authorized_by_owner(collateral, &auth), ENO_OWNER_AUTH);
         
-        // Ensures that the collateral type is valid
-        assert!(match_object_type<C>(collateral), EINVALID_OBJECT_TYPE);
-
-        // Ensures that the asset type is valid
-        assert!(match_object_type<A>(asset), EINVALID_OBJECT_TYPE);
+        // Ensures that the asset `A` and collateral `C` types are valid
+        assert!(matches_object_type<C>(collateral), EINVALID_OBJECT_TYPE);
+        assert!(matches_object_type<A>(asset), EINVALID_OBJECT_TYPE);
        
+        // Ensures that asset is not already(currently) collateralized
+        assert!(!dynamic_field::exists_(asset, Key { }), EASSET_ALREADY_COLLATERALIZED);
+
         // Ensures that the due date is in the future
         assert!(clock::timestamp_ms(clock) < due_date, EINVALID_DUE_DATE);
 
@@ -106,7 +108,7 @@ module transfer_system::collateralization {
         // Ensures that the collateralization accepter owns the asset
         assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
 
-        // Ensures that the specified collateral and asset matches the request's
+        // Ensures that the specified collateral and asset matcheses the request's
         assert!(object::uid_to_inner(asset) == request.asset_id, EASSET_ID_MISMATCH);
         assert!(object::uid_to_inner(collateral) == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
 
@@ -136,7 +138,7 @@ module transfer_system::collateralization {
 
     // ========== Helper functions ===========
 
-    fun match_object_type<T>(object: &UID): bool {
+    fun matches_object_type<T>(object: &UID): bool {
         let object_type = ownership::get_type(object);
         assert!(option::is_some(&object_type), 0);
 
