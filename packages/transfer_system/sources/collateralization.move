@@ -119,7 +119,7 @@ module transfer_system::collateralization {
         let lender = ownership::get_owner(asset);
         let requester = ownership::get_owner(collateral);
 
-        // TODO: update the collateral asset. Ensure that it's locked (non transferrable)
+        // TODO: update the collateral item. Ensure that it's locked (non transferrable)
 
         // Attach the collateralization data to the asset
         let c_data = CData {
