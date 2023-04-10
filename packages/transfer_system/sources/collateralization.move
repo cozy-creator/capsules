@@ -162,6 +162,45 @@ module transfer_system::collateralization {
         request.status = REQUEST_REJECTED
     }
 
+    public fun return_asset<A, C>(
+        request: &mut Request<A, C>,
+        clock: &Clock,
+        asset: &mut UID,
+        collateral: &mut UID,
+        auth: &TxAuthority
+    ) {
+        assert!(request.status == REQUEST_ACCEPTED, EUNEXPECTED_STATUS);
+
+        // Ensures that the asset returner owns the asset
+        assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
+
+        // Ensures that the specified collateral and asset matcheses the request's
+        assert!(object::uid_to_inner(asset) == request.asset_id, EASSET_ID_MISMATCH);
+        assert!(object::uid_to_inner(collateral) == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
+
+        let due_at = request.due_date + request.grace_period;
+
+        // If asset is being returned on/before due date (with grace period)
+        if(due_at <= clock::timestamp_ms(clock)) {
+            request.status = REQUEST_COMPLETED;
+
+            // TODO: Transfer the ownership of the collateral back to the borrower
+
+
+            // Remove the `CData` from the collateralized asset
+            let c_data = dynamic_field::remove<Key, CData>(asset, Key { });
+
+            assert!(c_data.request_id == object::id(request), EREQUEST_ID_MISMATCH);
+            assert!(c_data.collateral_id == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
+
+            // Transfer the collateralized asset back to the original owner
+            let auth = tx_authority::begin_with_type(&Witness {});
+            ownership::transfer(asset, c_data.owner, &auth)
+        } else {
+            // what should we do here?
+        }
+    }
+
     public fun claim_collateral<A, C>(
         request: &mut Request<A, C>,
         clock: &Clock,
