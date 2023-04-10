@@ -32,7 +32,7 @@ module transfer_system::collateralization {
     struct CData has store, drop {
         request_id: ID,
         collateral_id: ID,
-        lender: vector<address>
+        owner: vector<address>
     }
 
     struct Key has store, copy, drop { }
@@ -118,7 +118,7 @@ module transfer_system::collateralization {
         // Update the grace period provided
         request.grace_period = request.grace_period + grace_period;
 
-        let lender = ownership::get_owner(asset);
+        let owner = ownership::get_owner(asset);
         let requester = ownership::get_owner(collateral);
 
         // TODO: update the collateral item. Ensure that it's locked (non transferrable)
@@ -126,7 +126,7 @@ module transfer_system::collateralization {
         // Attach the collateralization data to the asset
         let c_data = CData {
             request_id: object::id(request),
-            lender: option::destroy_some(lender),
+            owner: option::destroy_some(owner),
             collateral_id: object::uid_to_inner(collateral),
         };
         dynamic_field::add<Key, CData>(asset, Key { }, c_data);
