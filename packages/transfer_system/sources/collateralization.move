@@ -43,8 +43,10 @@ module transfer_system::collateralization {
     const EINVALID_OBJECT_TYPE: u64 = 2;
     const EINVALID_DUE_DATE: u64 = 3;
     const EASSET_ID_MISMATCH: u64 = 4;
-    const ECOLLATERAL_ID_MISMATCH: u64 = 5;
-    const EASSETS_ALREADY_COLLATERALIZED: u64 = 6;
+    const EREQUEST_ID_MISMATCH: u64 = 5;
+    const ECOLLATERAL_ID_MISMATCH: u64 = 6;
+    const EASSETS_ALREADY_COLLATERALIZED: u64 = 7;
+    const EUNEXPECTED_STATUS: u64 = 8;
 
     // Request status enums
     const REQUEST_INITIALIZED: u8 = 0;
@@ -100,7 +102,7 @@ module transfer_system::collateralization {
         request
     }
 
-    public fun accept<A: key, C: key>(
+    public fun accept<A, C>(
         request: &mut Request<A, C>,
         clock: &Clock,
         asset: &mut UID,
@@ -108,6 +110,8 @@ module transfer_system::collateralization {
         grace_period: u64,
         auth: &TxAuthority
     ) {
+        assert!(request.status == REQUEST_INITIALIZED, EUNEXPECTED_STATUS);
+
         // Ensures that the collateralization accepter owns the asset
         assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
 
@@ -145,7 +149,9 @@ module transfer_system::collateralization {
         ownership::transfer(asset, option::destroy_some(requester), &auth);
     }
 
-    public fun reject<A: key, C: key>(request: &mut Request<A, C>, asset: &UID, collateral: &UID, auth: &TxAuthority) {
+    public fun reject<A, C>(request: &mut Request<A, C>, asset: &UID, collateral: &UID, auth: &TxAuthority) {
+        assert!(request.status == REQUEST_INITIALIZED, EUNEXPECTED_STATUS);
+
         // Ensures that the collateralization rejecter owns the asset
         assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
 
@@ -154,6 +160,38 @@ module transfer_system::collateralization {
         assert!(object::uid_to_inner(collateral) == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
 
         request.status = REQUEST_REJECTED
+    }
+
+    public fun claim_collateral<A, C>(
+        request: &mut Request<A, C>,
+        clock: &Clock,
+        asset: &mut UID,
+        collateral: &mut UID,
+        auth: &TxAuthority
+    ) {
+        assert!(request.status == REQUEST_ACCEPTED, EUNEXPECTED_STATUS);
+
+        // Ensures that the collateralization accepter owns the asset
+        assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
+
+        // Ensures that the specified collateral and asset matcheses the request's
+        assert!(object::uid_to_inner(asset) == request.asset_id, EASSET_ID_MISMATCH);
+        assert!(object::uid_to_inner(collateral) == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
+
+        // Ensures that the due data and the grace period has elapsed
+        let due_at = request.due_date + request.grace_period;
+        assert!(due_at > clock::timestamp_ms(clock), EINVALID_DUE_DATE);
+       
+        request.status = REQUEST_OVERDUE;
+
+        // TODO: Transfer the ownership of the collateral to the lender
+
+
+        // Remove the `CData` from the collateralized asset
+        let c_data = dynamic_field::remove<Key, CData>(asset, Key { });
+
+        assert!(c_data.request_id == object::id(request), EREQUEST_ID_MISMATCH);
+        assert!(c_data.collateral_id == request.collateral_id, ECOLLATERAL_ID_MISMATCH)
     }
 
     // ========== Helper functions ===========
