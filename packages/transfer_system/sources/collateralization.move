@@ -145,6 +145,17 @@ module transfer_system::collateralization {
         ownership::transfer(asset, option::destroy_some(requester), &auth);
     }
 
+    public fun reject<A: key, C: key>(request: &mut Request<A, C>, asset: &UID, collateral: &UID, auth: &TxAuthority) {
+        // Ensures that the collateralization rejecter owns the asset
+        assert!(ownership::is_authorized_by_owner(asset, auth), ENO_OWNER_AUTH);
+
+        // Ensures that the specified collateral and asset matcheses the request's
+        assert!(object::uid_to_inner(asset) == request.asset_id, EASSET_ID_MISMATCH);
+        assert!(object::uid_to_inner(collateral) == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
+
+        request.status = REQUEST_REJECTED
+    }
+
     // ========== Helper functions ===========
 
     fun matches_object_type<T>(object: &UID): bool {
