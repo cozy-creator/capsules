@@ -79,8 +79,11 @@ module transfer_system::collateralization {
         assert!(matches_object_type<C>(collateral), EINVALID_OBJECT_TYPE);
         assert!(matches_object_type<A>(asset), EINVALID_OBJECT_TYPE);
        
-        // Ensures that asset is not already(currently) collateralized
+        // Ensures that asset and collateral are not already (currently) collateralized
         assert!(!dynamic_field::exists_(asset, Key { }), EASSET_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(collateral, Key { }), EASSET_ALREADY_COLLATERALIZED);
+
+        // TODO: Ensure that asset and collateral are not already (currently) not locked
 
         // Ensures that the due date is in the future
         assert!(clock::timestamp_ms(clock) < due_date, EINVALID_DUE_DATE);
@@ -114,6 +117,12 @@ module transfer_system::collateralization {
 
         // Ensures that the due date is in the future
         assert!(clock::timestamp_ms(clock) < request.due_date, EINVALID_DUE_DATE);
+       
+        // Ensures that asset and collateral are not already (currently) collateralized
+        assert!(!dynamic_field::exists_(asset, Key { }), EASSET_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(collateral, Key { }), EASSET_ALREADY_COLLATERALIZED);
+
+        // TODO: Ensure that asset and collateral are not already (currently) not locked
 
         // Update the grace period provided
         request.grace_period = request.grace_period + grace_period;
