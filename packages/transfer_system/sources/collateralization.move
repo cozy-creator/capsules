@@ -36,6 +36,6 @@ module transfer_system::collateralization {
 
     const REQUEST_INITIALIZED: u8 = 0;
     const REQUEST_ACCEPTED: u8 = 1;
-    const REQUEST_REPAID: u8 = 2;
+    const REQUEST_COMPLETED: u8 = 2;
     const REQUEST_OVERDUE: u8 = 3;
 }
