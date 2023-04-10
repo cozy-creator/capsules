@@ -44,7 +44,7 @@ module transfer_system::collateralization {
     const EINVALID_DUE_DATE: u64 = 3;
     const EASSET_ID_MISMATCH: u64 = 4;
     const ECOLLATERAL_ID_MISMATCH: u64 = 5;
-    const EASSET_ALREADY_COLLATERALIZED: u64 = 6;
+    const EASSETS_ALREADY_COLLATERALIZED: u64 = 6;
 
     // Request status enums
     const REQUEST_INITIALIZED: u8 = 0;
@@ -80,8 +80,8 @@ module transfer_system::collateralization {
         assert!(matches_object_type<A>(asset), EINVALID_OBJECT_TYPE);
        
         // Ensures that asset and collateral are not already (currently) collateralized
-        assert!(!dynamic_field::exists_(asset, Key { }), EASSET_ALREADY_COLLATERALIZED);
-        assert!(!dynamic_field::exists_(collateral, Key { }), EASSET_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(asset, Key { }), EASSETS_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(collateral, Key { }), EASSETS_ALREADY_COLLATERALIZED);
 
         // TODO: Ensure that asset and collateral are not already (currently) not locked
 
@@ -119,8 +119,8 @@ module transfer_system::collateralization {
         assert!(clock::timestamp_ms(clock) < request.due_date, EINVALID_DUE_DATE);
        
         // Ensures that asset and collateral are not already (currently) collateralized
-        assert!(!dynamic_field::exists_(asset, Key { }), EASSET_ALREADY_COLLATERALIZED);
-        assert!(!dynamic_field::exists_(collateral, Key { }), EASSET_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(asset, Key { }), EASSETS_ALREADY_COLLATERALIZED);
+        assert!(!dynamic_field::exists_(collateral, Key { }), EASSETS_ALREADY_COLLATERALIZED);
 
         // TODO: Ensure that asset and collateral are not already (currently) not locked
 
