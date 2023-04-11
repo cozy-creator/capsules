@@ -71,7 +71,9 @@ Now let's call into the `create` function that we deployed in Step-1. This will 
 
 turns into this:
 
-`sui client call --package 0xeefcc463171fa02291bc96e8b398a1f8a0e81430e067ead2baf296adc80d2092 --module outlaw_sky --function create --args "[ [5, 75, 121, 114, 105, 101], [], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [1, 0, 0, 0, 0, 0, 0, 0], [ 2, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101 ] ]"  0xa21a2068358eae20f38cebbb4381cc6d10e14d7d --gas-budget 8000`
+`sui client call --package 0xeefcc463171fa02291bc96e8b398a1f8a0e81430e067ead2baf296adc80d2092 --module outlaw_sky --function create --args "[ [5, 75, 121, 114, 105, 101], [], [77, 104, 116, 116, 112, 115, 58, 47, 47, 112, 98, 115, 46, 116, 119, 105, 109, 103, 46, 99, 111, 109, 47, 112, 114, 111, 102, 105, 108, 101, 95, 105, 109, 97, 103, 101, 115, 47, 49, 53, 54, 57, 55, 50, 55, 51, 50, 52, 48, 56, 49, 51, 50, 56, 49, 50, 56, 47, 55, 115, 85, 110, 74, 118, 82, 103, 95, 52, 48, 48, 120, 52, 48, 48, 46, 106, 112, 103], [1, 0, 0, 0, 0, 0, 0, 0], [ 2, 10, 66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 5, 87, 104, 105, 116, 101, 4, 70, 97, 99, 101, 9, 87, 104, 111, 108, 101, 115, 111, 109, 101 ] ]" "[ [\"name\", \"String\"], [ \"description\", \"String\" ], [ \"image\", \"String\" ], [ \"power_level\", \"u64\" ], [ \"attributes\", \"VecMap\"] ]" --gas-budget 8000`
+
+"[ [name, String], [ description, String], [image, Url], [ power_level, u64], [ attributes, VecMap ] ]"
 
 This transaction will return a result that looks like this:
 
@@ -250,7 +252,7 @@ And viola! All our metadata is gone. A real digital asset collection probably wo
 
 ## Demo Factory Command
 
-`sui client call --package 0xeefcc463171fa02291bc96e8b398a1f8a0e81430e067ead2baf296adc80d2092 --module demo_factory --function create --gas-budget 8000`
+`sui client call --package 0xeefcc463171fa02291bc96e8b398a1f8a0e81430e067ead2baf296adc80d2092 --module demo_factory --function create --gas-budget 15000`
 
 ## Sui Typescript SDK
 
@@ -269,9 +271,25 @@ Schema Object = 0xa21a2068358eae20f38cebbb4381cc6d10e14d7d
 ### Benchmarking:
 
 - devnetNFT: 517 nanoSUI
-- demo factory: 2,521 nanoSUI (1 child object)
+- demo factory: 2,521 nanoSUI (1 child object) (had a budget of 8k though?)
 - outlaw-sky demo: 5,118 nanoSUI (9 child objects)
 
 - outlaw-sky demo (new ownership system): 6,634 nanoSUI (6 child objects)
 - creating type object (new): 13,509 (7 child objects)
   - This used to be under 10k nanoSUI, but the price went up at least 35%
+
+### v0.29 Benchmarking (devnet):
+
+- demo factory: 10,082 nanoSUI (1 child object)
+- outlaw-sky demo: 5,274 nanoSUI (7 child objects) (188 per SUI)
+
+### v0.31 Benchmarking (devnet):
+
+- demo factory: 16,956,280 nanoSUI (1 child object)
+- outlaw-sky demo: 26,008,680 nanoSUI (7 child objects)
+
+This means you can generate 37 NFTs per dollar (assuming SUI = $1).
+1,000,000 nanoSUI is the minimum cost for a transaction
+
+This works out to about 3 cents per NFT
+$300 for a 10k collection
