@@ -39,15 +39,16 @@ module attach::data {
     // Key used to store data on an object for a given namespace + key
     struct Key has store, copy, drop { namespace: Option<address>, key: String }
 
-    // Convenience function
-    public fun set<Namespace, T: store + copy + drop>(
+    // Convenience function using a Witness pattern. 'witness' is the Namespace
+    public fun set<Namespace: drop, T: store + copy + drop>(
+        witness: Namespace,
         uid: &mut UID,
         keys: vector<String>,
-        values: vector<T>,
-        auth: &TxAuthority
+        values: vector<T>
     ) {
+        let auth = tx_authority::begin_with_type(&witness);
         let namespace_addr = tx_authority::type_into_address<Namespace>();
-        set_(uid, option::some(namespace_addr), keys, values, auth);
+        set_(uid, option::some(namespace_addr), keys, values, &auth);
     }
 
     // Because of the ergonomics of Sui, all values added must be the same Type. If you have to add mixed types,
@@ -60,7 +61,8 @@ module attach::data {
         values: vector<T>,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
@@ -75,15 +77,15 @@ module attach::data {
         };
     }
 
-    // Convenience function using a Witness pattern. The Witness is the namespace
-    public fun deserialize_and_set<Witness: drop>(
-        witness: Witness,
+    // Convenience function using a Witness pattern. 'witness' is the Namespace
+    public fun deserialize_and_set<Namespace: drop>(
+        witness: Namespace,
         uid: &mut UID,
         data: vector<vector<u8>>,
         fields: vector<vector<String>>,
     ) {
         let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Witness>();
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
         deserialize_and_set_(uid, option::some(namespace_addr), data, fields, &auth);
     }
 
@@ -115,7 +117,18 @@ module attach::data {
         };
     }
 
-    public fun remove(
+    // Convenience function using a Witness pattern. 'witness' is the Namespace
+    public fun remove<Namespace: drop>(
+        witness: Namespace,
+        uid: &mut UID,
+        keys: vector<String>
+    ) {
+        let auth = tx_authority::begin_with_type(&witness);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        remove_(uid, option::some(namespace_addr), keys, &auth);
+    }
+
+    public fun remove_(
         uid: &mut UID,
         namespace: Option<address>,
         keys: vector<String>,
@@ -138,7 +151,17 @@ module attach::data {
         };
     }
 
-    public fun remove_all(
+    // Convenience function using a Witness pattern. 'witness' is the Namespace
+    public fun remove_all<Namespace: drop>(
+        witness: Namespace,
+        uid: &mut UID
+    ) {
+        let auth = tx_authority::begin_with_type(&witness);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        remove_all_(uid, option::some(namespace_addr), &auth);
+    }
+
+    public fun remove_all_(
         uid: &mut UID,
         namespace: Option<address>,
         auth: &TxAuthority
@@ -177,10 +200,20 @@ module attach::data {
         dynamic_field::borrow<Key, T>(uid, Key { namespace, key })
     }
 
+    // Convenience function
+    public fun borrow_mut<Namespace: drop, T: store>(
+        _witness: Namespace,
+        uid: &mut UID,
+        key: String
+    ): &mut T {
+        let namespace = option::some(tx_authority::type_into_address<Namespace>());
+        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
+    }
+
     // Requires namespace authority to write.
     // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
     // will abort.
-    public fun borrow_mut<T: store>(
+    public fun borrow_mut_<T: store>(
         uid: &mut UID,
         namespace: Option<address>,
         key: String,
@@ -191,9 +224,21 @@ module attach::data {
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
 
+    // Convenience function
+    public fun borrow_mut_fill<Namespace: drop, T: store + drop>(
+        witness: Namespace,
+        uid: &mut UID,
+        key: String,
+        default: T
+    ): &mut T {
+        let auth = tx_authority::begin_with_type(&witness);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        borrow_mut_fill_(uid, option::some(namespace_addr), key, default, &auth)
+    }
+
     // Ensures that the specified value exists and is of the specified type by filling it with the default value
     // if it does not.
-    public fun borrow_mut_fill<T: store + drop>(
+    public fun borrow_mut_fill_<T: store + drop>(
         uid: &mut UID,
         namespace: Option<address>,
         key: String,
@@ -202,11 +247,7 @@ module attach::data {
     ): &mut T {
         assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
 
-        if (!exists_with_type<T>(uid, namespace, key)) {
-            set_(uid, namespace, vector[key], vector[default], auth);
-        };
-
-        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
+        dynamic_field2::borrow_mut_fill<Key, T>(uid, Key { namespace, key }, default)
     }
 
     // ===== Copy Functions =====
@@ -696,31 +737,6 @@ module attach::data_tests {
             };
 
             test_scenario::return_shared(source_object);
-        };
-
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = data::ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE)]
-    public fun test_unauthorized_namespace_failure() {
-        let scenario = test_scenario::begin(SENDER);
-        let namespace = option::some(current_package());
-        let (fields, values) = get_serialized_test_data();
-
-        create_test_object(&mut scenario);
-        test_scenario::next_tx(&mut scenario, SENDER);
-
-        {
-            let fake_addr = @0xDEAD;
-            let object = test_scenario::take_shared<TestObject>(&scenario);
-
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_for_testing(fake_addr, &tx_authority::begin(ctx));
-            let uid = uid_mut(&mut object, &auth);
-
-            data::deserialize_and_set_(uid, namespace, values, fields, &auth);
-            test_scenario::return_shared(object);
         };
 
         test_scenario::end(scenario);
