@@ -222,6 +222,37 @@ module ownership::tx_authority {
         encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
     }
 
+    // ========= Delegation System =========
+
+    struct Delegations<Witness: drop> has key {
+        inner: VecMap<address, u16>
+    }
+
+    // Convenience function
+    public fun begin_with_delegation(stored: &Delegations<Witness>, ctx: &TxContext): TxAuthority {
+        let auth = begin(ctx);
+        claim_delegation(stored, &auth)
+    }
+
+    public fun claim_delegation<Witness: drop>(
+        stored: &Delegations<Witness>,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = TxAuthority { 
+            addresses: auth.addresses,
+            delegations: auth.delegations
+        };
+
+        let i = 0;
+        while (i < vector::length(&new_auth.addresses)) {
+            let addr = *vector::borrow(&new_auth.addresses, i);
+            acl::or_merge(&mut new_auth.delegations, vec_map::get(stored, for));
+            i = i + 1;
+        };
+
+        new_auth
+    }
+
     // ========= Internal Functions =========
 
     fun add_internal(addr: address, auth: &mut TxAuthority) {
