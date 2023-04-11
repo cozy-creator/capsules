@@ -1,51 +1,57 @@
 module outlaw_sky::outlaw_sky {
     use std::string::{String, utf8};
-    use sui::bcs;
+    use std::option::Option;
+
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::typed_id;
     use sui::transfer;
     use sui::vec_map::{Self, VecMap};
+
+    use sui_utils::typed_id;
+    use sui_utils::vec_map2;
+
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
-    use display::display;
-    use display::schema::Schema;
-    use display::publish_receipt;
+    use ownership::publish_receipt;
+
+    use attach::data;
+
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
+
+    // use outlaw_sky::warship::Witness as Namespace;
+    // use outlaw_sky::warship::Warship;
 
     // Error constants
     const ENOT_OWNER: u64 = 0;
 
-    // Genesis-witness and witness
+    // Genesis-witness and module-authority witness
     struct OUTLAW_SKY has drop {}
     struct Witness has drop { }
 
+    // Shared, root-level object
     struct Outlaw has key, store {
         id: UID
         // Ownership fields
-        // Metadata fields
+        // Data fields
     }
 
-    public entry fun create(data: vector<vector<u8>>, schema: &Schema, ctx: &mut TxContext) {
+    // ==== Admin Functions ====
+    // In production, you would gate each of these functions to make sure they're being called by an
+    // authorized party rather than just anyone.
+
+    public entry fun create(data: vector<vector<u8>>, fields: vector<vector<String>>, ctx: &mut TxContext) {
         let auth = tx_authority::begin_with_type(&Witness {});
+        let owner = vector[tx_context::sender(ctx)];
         let outlaw = Outlaw { 
             id: object::new(ctx) 
         };
         let typed_id = typed_id::new(&outlaw);
 
-        ownership::initialize_with_module_authority(&mut outlaw.id, typed_id, &auth);
+        ownership::as_shared_object<Outlaw, SimpleTransfer>(&mut outlaw.id, typed_id, owner, &auth);
 
-        display::attach(&mut outlaw.id, data, schema, &auth);
-
-        let owner = vector[tx_context::sender(ctx)];
-        ownership::as_shared_object<SimpleTransfer>(&mut outlaw.id, owner, &auth);
+        data::deserialize_and_set(Witness {}, &mut outlaw.id, data, fields);
 
         transfer::share_object(outlaw);
-    }
-
-    // This function is needed until we can use UID's directly in devInspect transactions
-    public fun view_all(outlaw: &Outlaw, schema: &Schema): vector<u8> {
-        display::view_all(&outlaw.id, schema)
     }
 
     // We need this wrapper because (1) we need &mut outlaw.id from an entry function, which is not possible until
@@ -53,71 +59,118 @@ module outlaw_sky::outlaw_sky {
     // on all changes to metadata.
     public entry fun update(
         outlaw: &mut Outlaw,
-        keys: vector<String>,
         data: vector<vector<u8>>,
-        schema: &Schema,
-        ctx: &mut TxContext
+        fields: vector<vector<String>>,
+        _ctx: &mut TxContext
     ) {
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        display::update(&mut outlaw.id, keys, data, schema, true, &auth);
+        data::deserialize_and_set(Witness {}, &mut outlaw.id, data, fields);
     }
 
     // We cannot delete shared objects yet, like the Outlaw itself, but we _can_ delete metadata
-    public entry fun detach(outlaw: &mut Outlaw, schema: &Schema, ctx: &mut TxContext) {
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
-        display::detach(&mut outlaw.id, schema, &auth);
+    public entry fun remove_all(outlaw: &mut Outlaw, _ctx: &mut TxContext) {
+        data::remove_all(Witness {}, &mut outlaw.id);
     }
 
     public fun load_dispenser() { 
         // TO DO
     }
 
-    // Public extend
-    public fun extend(outlaw: &mut Outlaw, auth: &TxAuthority): (&mut UID) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, auth), ENOT_OWNER);
-
-        &mut outlaw.id
-    }
-
     fun init(genesis: OUTLAW_SKY, ctx: &mut TxContext) {
         let receipt = publish_receipt::claim(&genesis, ctx);
-        transfer::transfer(receipt, tx_context::sender(ctx));
+        transfer::public_transfer(receipt, tx_context::sender(ctx));
     }
 
     // ====== User Functions ====== 
-    // Note that these functions assume that the metadata schema used includes the specified strings, of the specified types
-    // These assumptions are hardcoded here
+    // These are samples of how user-facing functions work
 
-    // This is a sample of how a user-facing function would work
-    // This is an overwrite-update, which means that the entire metadata field is replaced
-    public entry fun rename(outlaw: &mut Outlaw, new_name: String, schema: &Schema, ctx: &TxContext) {
-        let keys = vector[utf8(b"name")];
-        let data = vector[bcs::to_bytes(&new_name)];
-        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+    // This will overwrite the field 'name' in the `Witness` namespace with a new string
+    public entry fun rename(outlaw: &mut Outlaw, new_name: String, ctx: &TxContext) {
+        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
-        display::update(&mut outlaw.id, keys, data, schema, true, &auth);
+        data::set(Witness {}, &mut outlaw.id, vector[utf8(b"name")], vector[new_name]);
     }
 
-    // This is a sample of how atomic updates work, versus overwrite-updates
+    // This is a sample of how atomic updates work; the existing value is borrowed and then modified,
+    // rather than simply being overwritten. This is safter for concurrently running processes
     public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
-        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = display::borrow_mut<VecMap<String, String>>(&mut outlaw.id, utf8(b"attributes"), &auth);
-        vec_map::insert(attributes, key, value);
+        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+
+        let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
+            Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
+
+        vec_map2::set(attributes, key, value);
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
-        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
-        let attributes = display::borrow_mut<VecMap<String, String>>(&mut outlaw.id, utf8(b"attributes"), &auth);
-        vec_map::remove(attributes, &key);
+        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+
+        let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
+            Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
+            
+        vec_map2::remove_maybe(attributes, key);
     }
 
     public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {
-        let slot = utf8(b"power_level");
-        let auth = tx_authority::add_type_capability(&Witness { }, &tx_authority::begin(ctx));
+        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
-        let power_level = display::borrow_mut<u64>(&mut outlaw.id, slot, &auth);
+        let power_level = data::borrow_mut_fill<Witness, u64>(
+            Witness {}, &mut outlaw.id, utf8(b"power_level"), 0);
 
         *power_level = *power_level + 1;
+    }
+    
+    // This is using a delegation from Foreign -> Witness
+    public entry fun edit_other_namespace(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore) {
+        let auth = tx_authority::begin_from_type(&Witness {});
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    }
+
+    // This is using a delegation from Foreign -> address
+    public entry fun edit_other_namespace2(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore, ctx: &mut TxContext) {
+        let auth = tx_authority::begin(ctx);
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    }
+
+    public entry fun edit_as_someone_else(warship: &mut Warship, new_name: String, store: &DelegationStore) {
+        // Get a different namespace
+        let auth = tx_authority::begin_from_type(&Witness {});
+        auth = tx_authority::add_from_delegation_store(store, &auth);
+        let namespace_addr = tx_authority::type_into_address<Namespace>();
+
+        // We have a permission added to this warship; warship.owner has granted our ctx-address permission to edit
+        // Delegation { for: our-ctx }
+        let uid = warship::uid_mut(warship, &auth);
+        data::set_(&mut warship.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+
+        // warship.owner has granted Witness permission to edit
+        // Delegation { for: Witness }
+
+        // Warship module has granted our ctx-address permission to edit
+        // DelegationStore { for: our-ctx }
+
+        // Warship module has granted Witness permission to edit
+        // DelegationStore { for: Witness }
+    }
+
+    // ==== General Functions ====
+
+    // This function is needed until we can use UID's directly in devInspect transactions
+    public fun view_all(outlaw: &Outlaw, namespace: Option<address>): vector<u8> {
+        data::view_all(&outlaw.id, namespace)
+    }
+
+    public fun uid(outlaw: &Outlaw): (&UID) {
+        &outlaw.id
+    }
+
+    public fun uid_mut(outlaw: &mut Outlaw, auth: &TxAuthority): (&mut UID) {
+        assert!(ownership::is_authorized_by_owner(&outlaw.id, auth), ENOT_OWNER);
+
+        &mut outlaw.id
     }
 }
 
