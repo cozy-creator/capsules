@@ -63,6 +63,7 @@ module attach::data {
         values: vector<T>,
         _auth: &TxAuthority
     ) {
+        assert!(tx_authority::is_signed_by_(namespace, _auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         // assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         // assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
