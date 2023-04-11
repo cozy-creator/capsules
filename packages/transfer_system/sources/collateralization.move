@@ -31,7 +31,6 @@ module transfer_system::collateralization {
     // `CData`, short for `CollateralData` or `CollateralizationData`
     struct CData has store, drop {
         request_id: ID,
-        collateral_id: ID,
         owner: vector<address>
     }
 
@@ -141,8 +140,7 @@ module transfer_system::collateralization {
         // Attach the collateralization data to the asset
         let c_data = CData {
             request_id: object::id(request),
-            owner: option::destroy_some(owner),
-            collateral_id: object::uid_to_inner(collateral),
+            owner: option::destroy_some(owner)
         };
         dynamic_field::add<Key, CData>(asset, Key { }, c_data);
 
@@ -194,7 +192,6 @@ module transfer_system::collateralization {
             let c_data = dynamic_field::remove<Key, CData>(asset, Key { });
 
             assert!(c_data.request_id == object::id(request), EREQUEST_ID_MISMATCH);
-            assert!(c_data.collateral_id == request.collateral_id, ECOLLATERAL_ID_MISMATCH);
 
             // Transfer the collateralized asset back to the original owner (lender)
             let auth = tx_authority::begin_with_type(&Witness {});
