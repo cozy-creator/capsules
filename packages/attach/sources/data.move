@@ -25,6 +25,8 @@ module attach::data {
     use sui::dynamic_field;
     use sui::object::UID;
 
+    use sui_utils::dynamic_field2;
+
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
@@ -59,10 +61,10 @@ module attach::data {
         namespace: Option<address>,
         keys: vector<String>,
         values: vector<T>,
-        auth: &TxAuthority
+        _auth: &TxAuthority
     ) {
-        assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
-        assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
+        // assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        // assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();

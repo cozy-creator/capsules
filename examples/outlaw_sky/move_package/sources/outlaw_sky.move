@@ -107,7 +107,7 @@ module outlaw_sky::outlaw_sky {
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
             
-        vec_map2::remove_maybe(attributes, key);
+        vec_map2::remove_maybe(attributes, &key);
     }
 
     public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {
@@ -120,41 +120,41 @@ module outlaw_sky::outlaw_sky {
     }
     
     // This is using a delegation from Foreign -> Witness
-    public entry fun edit_other_namespace(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore) {
-        let auth = tx_authority::begin_from_type(&Witness {});
-        auth = tx_authority::add_from_delegation_store(store, &auth);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
-        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
-    }
+    // public entry fun edit_other_namespace(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore) {
+    //     let auth = tx_authority::begin_with_type(&Witness {});
+    //     auth = tx_authority::add_from_delegation_store(store, &auth);
+    //     let namespace_addr = tx_authority::type_into_address<Namespace>();
+    //     data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    // }
 
     // This is using a delegation from Foreign -> address
-    public entry fun edit_other_namespace2(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore, ctx: &mut TxContext) {
-        let auth = tx_authority::begin(ctx);
-        auth = tx_authority::add_from_delegation_store(store, &auth);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
-        data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
-    }
+    // public entry fun edit_other_namespace2(outlaw: &mut Outlaw, new_name: String, store: &DelegationStore, ctx: &mut TxContext) {
+    //     let auth = tx_authority::begin(ctx);
+    //     auth = tx_authority::add_from_delegation_store(store, &auth);
+    //     let namespace_addr = tx_authority::type_into_address<Namespace>();
+    //     data::set_(&mut outlaw.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    // }
 
-    public entry fun edit_as_someone_else(warship: &mut Warship, new_name: String, store: &DelegationStore) {
-        // Get a different namespace
-        let auth = tx_authority::begin_from_type(&Witness {});
-        auth = tx_authority::add_from_delegation_store(store, &auth);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+    // public entry fun edit_as_someone_else(warship: &mut Warship, new_name: String, store: &DelegationStore) {
+    //     // Get a different namespace
+    //     let auth = tx_authority::begin_from_type(&Witness {});
+    //     auth = tx_authority::add_from_delegation_store(store, &auth);
+    //     let namespace_addr = tx_authority::type_into_address<Namespace>();
 
-        // We have a permission added to this warship; warship.owner has granted our ctx-address permission to edit
-        // Delegation { for: our-ctx }
-        let uid = warship::uid_mut(warship, &auth);
-        data::set_(&mut warship.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
+    //     // We have a permission added to this warship; warship.owner has granted our ctx-address permission to edit
+    //     // Delegation { for: our-ctx }
+    //     let uid = warship::uid_mut(warship, &auth);
+    //     data::set_(&mut warship.id, option::some(namespace_addr), vector[utf8(b"name")], vector[new_name], &auth);
 
-        // warship.owner has granted Witness permission to edit
-        // Delegation { for: Witness }
+    //     // warship.owner has granted Witness permission to edit
+    //     // Delegation { for: Witness }
 
-        // Warship module has granted our ctx-address permission to edit
-        // DelegationStore { for: our-ctx }
+    //     // Warship module has granted our ctx-address permission to edit
+    //     // DelegationStore { for: our-ctx }
 
-        // Warship module has granted Witness permission to edit
-        // DelegationStore { for: Witness }
-    }
+    //     // Warship module has granted Witness permission to edit
+    //     // DelegationStore { for: Witness }
+    // }
 
     // ==== General Functions ====
 
