@@ -203,18 +203,18 @@ module ownership::ownership {
         option::some(addr)
     }
 
-    public fun get_owner(uid: &UID): Option<vector<address>> {
-        if (!is_initialized(uid)) { return option::none() };
+    public fun get_owner(uid: &UID): vector<address> {
+        if (!is_initialized(uid)) { return vector::empty() };
 
-        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-        option::some(ownership.owner)
+        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { })
+        ownership.owner
     }
 
-    public fun get_transfer_authority(uid: &UID): Option<vector<address>> {
-        if (!is_initialized(uid)) { return option::none() };
+    public fun get_transfer_authority(uid: &UID): vector<address> {
+        if (!is_initialized(uid)) { return vector::empty() };
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-        option::some(ownership.transfer_auth)
+        ownership.transfer_auth
     }
 
     public fun get_type(uid: &UID): Option<StructTag> {
