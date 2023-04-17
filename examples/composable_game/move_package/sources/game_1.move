@@ -127,6 +127,7 @@ module composable_game::aircraft_carrier {
 
     public fun carrier_uid_mut(carrier: &mut Carrier, auth: &TxAuthority): &mut UID {
         assert!(ownership::is_authorized_by_owner_data(&carrier.id, auth), ENOT_OWNER);
+        assert!(delegation::has_permission<Carrier>(&carrier.id, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE); // EXPERIMENTAL
 
         &mut carrier.id
     }

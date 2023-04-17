@@ -18,9 +18,11 @@ module ownership::tx_authority {
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
+    // agents: [ addresses that have given full authority to this transaction ]
+    // delegations: (principle, functions allowed to be called on behalf of principal)
     struct TxAuthority has drop {
-        addresses: vector<address>,
-        delegations: VecMap<address, u16>
+        agents: vector<address>,
+        delegations: VecMap<address, vector<Permission>>
     }
 
     // ========= Begin =========
@@ -58,6 +60,39 @@ module ownership::tx_authority {
         add_internal(type_into_address<T>(), &mut new_auth);
 
         new_auth
+    }
+
+    // ========= Delegation System =========
+
+    friend ownership::delegation;
+
+    // Can be stored, but not copied. Used as a template to produce Permission structs
+    struct StoredPermission has store, drop {
+        package: address,
+        module_name: String,
+        functions: u16
+    }
+
+    // Does not have store, and hence must be dropped at the end of tx-execution
+    struct Permission has copy, drop {
+        package: address,
+        module_name: String,
+        functions: u16
+    }
+
+    // This can only be used by the `ownership::delegation`
+    public(friend) fun add_permission(
+        principal: address,
+        stored: &StoredPermission,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = TxAuthority { agents: auth.agents, delegations: auth.delegations };
+        let permission = Permission { 
+            package: stored.package,
+            module_name: stored.module_name,
+            functions: stored.functions
+        };
+        vec_map2::merge(&mut new_auth.delegations, principal, permission);
     }
 
     // ========= Validity Checkers =========
@@ -107,6 +142,40 @@ module ownership::tx_authority {
         total
     }
 
+    // Unlike the above validator checkers, this also checks against delegations
+    public fun is_allowed<T>(principal: address, function: u8, auth: &TxAuthority): bool {
+        if (is_signed_by(principal, auth)) { return true };
+
+        let permissions_maybe = vec_map2::get_maybe(&auth.delegations, principal);
+        if (option::is_none(&permissions_maybe)) { return false };
+        let permissions = option::destroy_some(permissions_maybe);
+
+        // TO DO: improve efficiency here
+        let (package, module_name, _, _) = encode::type_name_decomposed<T>();
+        let i = 0;
+        while (i < vector::length(&permissions)) {
+            let perm = vector::borrow(&permissions, i);
+            if (package == perm.package &&
+                module_name == perm.module_name && 
+                acl::has_role(&perm.functions, function)
+            ) { return true; }
+
+            i = i + 1;
+        };
+
+        false
+    }
+
+    // ========= Getter Functions =========
+
+    public fun agents(auth: &TxAuthority): vector<address> {
+        auth.agents
+    }
+
+    public fun delegations(auth: &TxAuthority): VecMap<address, Permission> {
+        auth.delegations
+    }
+
     // ========= Convert Types to Addresses =========
 
     public fun type_into_address<T>(): address {
@@ -151,37 +220,6 @@ module ownership::tx_authority {
     public fun witness_string_(type: String): String {
         let module_addr = encode::package_id_and_module_name_(type);
         encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
-    }
-
-    // ========= Delegation System =========
-
-    struct Delegations<Witness: drop> has key {
-        inner: VecMap<address, u16>
-    }
-
-    // Convenience function
-    public fun begin_with_delegation(stored: &Delegations<Witness>, ctx: &TxContext): TxAuthority {
-        let auth = begin(ctx);
-        claim_delegation(stored, &auth)
-    }
-
-    public fun claim_delegation<Witness: drop>(
-        stored: &Delegations<Witness>,
-        auth: &TxAuthority
-    ): TxAuthority {
-        let new_auth = TxAuthority { 
-            addresses: auth.addresses,
-            delegations: auth.delegations
-        };
-
-        let i = 0;
-        while (i < vector::length(&new_auth.addresses)) {
-            let addr = *vector::borrow(&new_auth.addresses, i);
-            acl::or_merge(&mut new_auth.delegations, vec_map::get(stored, for));
-            i = i + 1;
-        };
-
-        new_auth
     }
 
     // ========= Internal Functions =========
