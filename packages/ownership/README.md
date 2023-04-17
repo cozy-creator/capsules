@@ -1,3 +1,27 @@
+### Instructions
+
+The most common use of this library in your module will be to check authority. These are the best most common ones to use:
+
+```
+    tx_authority::is_signed_by(addr: address, auth: &TxAuthority): bool
+```
+
+This checks to see if the specified address is an agent inside of the current transaction authority. Delegations do not count.
+
+```
+    tx_authority::is_allowed<T, Principal>(function: u8, auth: &TxAuthority): bool
+```
+
+This checks to see if the principal is either an agent inside of the current transaction authority, or if there is a delegation that has been added that allows for the calling the specified function on behalf of the principal.
+`T` is merely used to specify a type from the module of the function that we're calling; there is no easy way to specify functions individually. Similarly `function` is a u8 specified by the module (0 - 15) that is a subset of functions in that module.
+
+```
+    delegation::is_allowed_by_owner<T>(uid: &UID, function: u8, auth: &TxAuthority): bool
+```
+
+This checks to see if the owner is an agent in this transaction, or if the owner has added a delegation to the current authority, or if there is a stored delegation waiting for one of our agents inside of the UID. These delegations will be imported into the `TxAuthority` for this function-call only. Essentially, the UID's owner acts as the principal.
+The function-arguments are the same as above, with the addition of UID, which is where the owner and extra delegations are fetched from.
+
 **Future:** once Sui adds the ability for multiple signers per transaction, this will have to be refactored.
 
 **Future:** we might be able to add addresses directly using signatures? I.e., submit some bytes + signature

@@ -107,12 +107,6 @@ module account::account {
         dynamic_field::exists_with_type<ID, T>(&account.objects, id)
     }
 
-        // ======== Delegation System ========
-
-    public fun claim_delegation(account: &GameAccount, ctx: &TxContext): TxAuthority {
-
-    }
-
     // ======== Extend Pattern ========
 
     public fun uid(account: &GameAccount): &UID {
@@ -126,4 +120,21 @@ module account::account {
     }
 
     // View function ??? 
+}
+
+// These are convenience functions to make everything easier
+module account::script_tx {
+    use ownership::delegation;
+
+    use account::account;
+
+    public fun claim_delegation<T>(account: &GameAccount, ctx: &TxContext): TxAuthority {
+        let uid = account::uid(account);
+        delegation::claim<T>(uid, ctx)
+    }
+
+    public fun claim_delegation_(account: &GameAccount, principal: address, ctx: &TxContext): TxAuthority {
+        let uid = account::uid(account);
+        delegation::claim_(uid, principal, ctx)
+    }
 }
