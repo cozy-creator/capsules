@@ -142,8 +142,13 @@ module ownership::tx_authority {
         total
     }
 
-    // Unlike the above validator checkers, this also checks against delegations
-    public fun is_allowed<T>(principal: address, function: u8, auth: &TxAuthority): bool {
+    public fun is_allowed<T, Principal>(function: u8, auth: &TxAuthority): bool {
+        let principal = type_into_address<Principal>();
+        is_allowed_<T>(principal, function, auth)
+    }
+
+    // Unlike the above validity-checkers, this also checks against delegations
+    public fun is_allowed_<T>(principal: address, function: u8, auth: &TxAuthority): bool {
         if (is_signed_by(principal, auth)) { return true };
 
         let permissions_maybe = vec_map2::get_maybe(&auth.delegations, principal);
@@ -164,6 +169,13 @@ module ownership::tx_authority {
         };
 
         false
+    }
+
+    // Same as above except the principal is optional and defaults to true if it's none
+    public fun is_allowed__<T>(principal_maybe: Option<address>, function: u8, auth: &TxAuthority): bool {
+        if (option::is_none(&principal_maybe)) { return true };
+        let principal = option::destroy_some(principal_maybe);
+        is_allowed_<T>(principal, function, auth)
     }
 
     // ========= Getter Functions =========

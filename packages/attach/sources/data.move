@@ -38,6 +38,9 @@ module attach::data {
     const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 2;
     const EUNRECOGNIZED_TYPE: u64 = 3;
 
+    // Permission enums
+    const SET: u8 = 0;
+
     // Key used to store data on an object for a given namespace + key
     struct Key has store, copy, drop { namespace: Option<address>, key: String }
 
@@ -63,13 +66,16 @@ module attach::data {
         values: vector<T>,
         _auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, _auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
-        assert!(delegation::namespace_exists(uid, namespace), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(tx_authority::is_allowed__<Key>(namespace, SET, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+
+        // assert!(tx_authority::is_signed_by_(namespace, _auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        // assert!(delegation::namespace_exists(uid, namespace), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         // assert!(tx_authority::has_namespace_role(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         // assert!(tx_authority::has_data_edit_role(uid, auth), ENO_AUTHORITY_TO_EDIT_DATA);
-        assert!(delegation::has_permission<Key>(uid, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE); // EXPERIMENTAL
+        // assert!(delegation::has_permission<Key>(uid, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE); // EXPERIMENTAL
 
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        // assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
