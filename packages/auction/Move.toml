@@ -1,0 +1,12 @@
+[package]
+name = "auction"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+Ownership = { local = "../ownership" }
+SuiUtils = { local = "../sui_utils" }
+
+[addresses]
+auction =  "0x0"
+
