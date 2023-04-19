@@ -33,6 +33,7 @@ module auction::auction {
 
     struct Witness has drop {}
 
+    const ENO_OWNER_AUTH: u64 = 1;
     const EITEM_TYPE_MISMATCH: u64 = 2;
     const EINVALID_TIME_DIFFERENCE: u64 = 3;
     const EINSUFFICIENT_BID: u64 = 4;
@@ -48,6 +49,9 @@ module auction::auction {
         ends_at: u64,
         ctx: &mut TxContext
     ) {
+        // Ensures that the auction creator is the rightful owner of the item being auctioned
+        assert!(ownership::is_authorized_by_owner(item, &tx_authority::begin(ctx)), ENO_OWNER_AUTH);
+
         let current_time = clock::timestamp_ms(clock);
 
         assert!(current_time <= starts_at, EINVALID_TIME_DIFFERENCE);
