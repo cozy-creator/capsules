@@ -43,6 +43,7 @@ module auction::auction {
     const EAUCTION_ALREADY_ENDED: u64 = 6;
     const EALREADY_HIGHEST_BIDDER: u64 = 7;
     const EAUCTION_ALREADY_CANCELED: u64 = 8;
+    const EAUCTION_NOT_ENDED: u64 = 9;
 
     public fun create_auction<T: key, C>(
         item: &mut UID,
@@ -121,12 +122,12 @@ module auction::auction {
         option::fill(&mut self.highest_bidder, current_bidder)
     }
 
-    public fun cancel_auction<T, C>(self: &mut Auction<T, C>, ctx: &mut TxContext) {
+    public fun cancel_auction<T, C>(self: &mut Auction<T, C>, clock: &Clock, ctx: &mut TxContext) {
         // Ensures that the auction creator is the rightful owner of the item being auctioned
         assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), ENO_OWNER_AUTH);
 
         // Ensures that the aution has not ended
-        assert!(current_time <= self.ends_at, EAUCTION_ALREADY_ENDED);
+        assert!(clock::timestamp_ms(clock) <= self.ends_at, EAUCTION_ALREADY_ENDED);
 
         //Ensures that the auction has not been canceled
         assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
@@ -139,5 +140,25 @@ module auction::auction {
         };
 
         self.is_canceled = true
+    }
+
+    public fun finish_auction<T, C>(self: &mut Auction<T, C>, clock: &Clock, ctx: &mut TxContext) {
+        //Ensures that the auction has not been canceled
+        assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
+
+        // Ensures that the aution has ended
+        assert!(clock::timestamp_ms(clock) > self.ends_at, EAUCTION_NOT_ENDED);
+
+        if(option::is_some(&self.highest_bidder)) {
+            // TODO: Transfer the item to the highest bidder.
+            let _highest_bidder = option::extract(&mut self.highest_bidder);
+
+
+            // Transfer the highest bid to the auction creator
+            let coin = coin::from_balance(balance::withdraw_all(&mut self.highest_bid), ctx);
+            let owner = option::destroy_some(ownership::get_owner(&self.id));
+
+            transfer::public_transfer(coin, vector::pop_back(&mut owner))
+        };
     }
 }
