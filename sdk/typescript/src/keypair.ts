@@ -1,11 +1,4 @@
-import {
-  Ed25519Keypair,
-  normalizeSuiAddress,
-  RawSigner,
-  JsonRpcProvider,
-  fromB64,
-  Connection,
-} from "@mysten/sui.js";
+import { Ed25519Keypair, normalizeSuiAddress, RawSigner, JsonRpcProvider, fromB64, Connection } from "@mysten/sui.js";
 import fs from "fs";
 import util from "util";
 
@@ -14,8 +7,8 @@ const PRIVATE_KEY_ENV_VAR = "PRIVATE_KEY";
 // Build a class to connect to Sui RPC servers
 const provider = new JsonRpcProvider(
   new Connection({
-    fullnode: 'https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd',
-    faucet: 'https://faucet.devnet.sui.io:443/gas'
+    fullnode: "https://node.shinami.com/api/v1/ba7e504a06dad374a07ce82a7773f9bd",
+    faucet: "https://faucet.devnet.sui.io:443/gas",
   })
 );
 
@@ -28,14 +21,8 @@ async function loadEnv(env_path: string): Promise<string> {
   });
 }
 
-async function storeInEnv(
-  env_path: string,
-  privateKey: string,
-  existingEnv?: string
-): Promise<void> {
-  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n${
-    existingEnv ? existingEnv : ""
-  }`;
+async function storeInEnv(env_path: string, privateKey: string, existingEnv?: string): Promise<void> {
+  const data = `${PRIVATE_KEY_ENV_VAR}=${privateKey}\n${existingEnv ? existingEnv : ""}`;
 
   return new Promise((resolve, reject) => {
     fs.writeFile(env_path, data, { encoding: "utf8" }, (err) => {
@@ -90,12 +77,9 @@ async function loadKeypair(env_path: string) {
   }
 }
 
-async function fetchSuiCoinsForAddress(address: string) {
+async function fetchGasObjectsForAddress(address: string) {
   console.log(`fetching coins for ${address}`);
-  const coins = await provider.getCoins({
-    owner: address,
-    coinType: "0x2::sui::SUI",
-  });
+  const coins = await provider.getCoins({ owner: address, coinType: "0x2::sui::SUI" });
   return coins.data;
 }
 
@@ -107,9 +91,7 @@ async function requestFromFaucet(address: string) {
   } catch (error: any) {
     console.log("Request to faucet failed");
     // @ts-ignore
-    console.log(
-      util.inspect(error.message, { showHidden: false, depth: 2, colors: true })
-    );
+    console.log(util.inspect(error.message, { showHidden: false, depth: 2, colors: true }));
 
     return [];
   }
@@ -132,7 +114,7 @@ async function getSigner(env_path: string): Promise<RawSigner> {
   console.log("========== Keypair loaded ==========");
   console.log("Address", normalizeSuiAddress(address));
 
-  const coins = await fetchSuiCoinsForAddress(address);
+  const coins = await fetchGasObjectsForAddress(address);
 
   if (coins.length < 1) {
     console.log("========== Sui Airdrop Requested ==========");
