@@ -1,11 +1,17 @@
 module composable_game::exe2 {
     use attach::data::{Self, SET};
 
+    use game2::game2::Foreign
+
     // error enums
     const ENO_PERMISSION: u64 = 0;
 
     // permission enums
     const ALL: u8 = 0;
+    const CREATE: u8 = 1;
+
+    // This project's namespace type
+    struct EXE has drop {}
 
     struct Skin has key, store {
         id: UID
@@ -20,7 +26,40 @@ module composable_game::exe2 {
         balance: u64
     }
 
+    // Our module authority
     struct Witness has drop {}
+
+    // Permission types
+    struct Create {}
+
+    // In this instance, we create an entry function by accepting the `Namespace` and `TxContext` directly
+    public entry fun create_character_1(owner: address, namespace: &Namespace, ctx: &mut TxContext) {
+        let _auth = namespace::assert_login<Create>(namespace, ctx);
+
+        let character = Character { id: object::new(ctx) };
+
+        transfer::share_object(character);
+    }
+
+    // In this instance, the character can only be created if you have (1) this module's namespace authority, or
+    // (2) the `Create` permission from this module's namespace
+    public fun create_character_2(owner: address, auth: &TxAuthority, ctx: &mut TxContext) {
+        assert!(namespace::has_native_permission<Create>(&auth), ENO_NAMESPACE_PERMISSION);
+
+        let character = Character { id: object::new(ctx) };
+
+        transfer::share_object(character);
+    }
+
+    // In this instance, the character can only be created if you have (1) the foreign type's namespace authority, or
+    // (2) the `Create` permission from the foreign module's namespace
+    public fun create_character_3(owner: address, auth: &TxAuthority, ctx: &mut TxContext) {
+        assert!(namespace::has_permission<Foreign, Create>(&auth), ENO_NAMESPACE_PERMISSION);
+
+        let character = Character { id: object::new(ctx) };
+
+        transfer::share_object(character);
+    }
 
     // Our `Witness` must be the owner of this Account, or have INSERT permission from the owner for this to work
     // This works identically for foreign and native owned accounts
@@ -87,6 +126,19 @@ module composable_game::script_transactions {
         let object = account::borrow_mut_<Skin>(account, id, &auth);
         let uid = exe2::skin_uid_mut(object);
         data::deserialize_and_set<EXE2>(uid, data, fields, &auth);
+    }
+
+    use foreign_game::foreign;
+
+    public entry fun edit_foreign_game_data(
+        foreign_game: &mut GameAccount,
+        account: &mut GameAccount,
+        id: ID,
+        data: vector<vector<u8>>,
+        fields: vector<vector<String>>,
+        ctx: &mut TxContext
+    ) {
+        let auth = account::claim_delegation<foreign::Witness>(foreign_game, ctx);
     }
 
     // 

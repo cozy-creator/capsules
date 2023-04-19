@@ -56,6 +56,18 @@ module sui_utils::vec_map2 {
         vec_map::borrow_mut(self, key)
     }
 
+    public fun get_with_default<K: copy + drop, V: copy + drop>(self: &VecMap<K, V>, key: K, default: V): V {
+        let index_maybe = vec_map::get_idx_opt(self, &key);
+
+        if (option::is_some(&index_maybe)) {
+            let index = option::destroy_some(index_maybe);
+            let (_, value) = vec_map::get_entry_by_idx(self, index);
+            *value
+        } else {
+            default
+        }
+    }
+
     // More efficient than doing 'vec_map::contains' followed by 'vec_map::get', because that iterates through the
     // map twice, whereas this only iterates through it once
     public fun get_maybe<K: copy + drop, V: copy>(self: &VecMap<K, V>, key: K): Option<V> {
@@ -82,16 +94,10 @@ module sui_utils::vec_map2 {
         }
     }
 
-    public fun get_with_default<K: copy + drop, V: copy + drop>(self: &VecMap<K, V>, key: K, default: V): V {
-        let index_maybe = vec_map::get_idx_opt(self, &key);
-
-        if (option::is_some(&index_maybe)) {
-            let index = option::destroy_some(index_maybe);
-            let (_, value) = vec_map::get_entry_by_idx(self, index);
-            *value
-        } else {
-            default
-        }
+    public fun insert_maybe<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, V>, key: K, value: V) {
+        if (!vec_map::contains(self, &key)) { 
+            vec_map::insert(self, key, value); 
+        };
     }
     
     public fun merge<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, vector<V>>, key: K, value: V) {
