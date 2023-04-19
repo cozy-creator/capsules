@@ -79,15 +79,15 @@ async function loadKeypair(env_path: string) {
 
 async function fetchGasObjectsForAddress(address: string) {
   console.log(`fetching coins for ${address}`);
-  const coins = await provider.getGasObjectsOwnedByAddress(address);
-  return coins;
+  const coins = await provider.getCoins({ owner: address, coinType: "0x2::sui::SUI" });
+  return coins.data;
 }
 
 async function requestFromFaucet(address: string) {
   try {
     const response = await provider.requestSuiFromFaucet(address);
     console.log("========== Sui Airdrop Received ==========");
-    return response.transferred_gas_objects;
+    return response.transferredGasObjects;
   } catch (error: any) {
     console.log("Request to faucet failed");
     // @ts-ignore
