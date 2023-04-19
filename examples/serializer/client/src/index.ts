@@ -15,7 +15,7 @@ async function getUndefinedField(objectId: string) {
   const txb = new TransactionBlock();
 
   const uid = txb.pure(bcs.ser("UID", objectId).toBytes());
-  const key = txb.pure(bcs.ser("vector<u8>", Buffer.from("name")).toBytes());
+  const key = txb.pure(bcs.ser("vector<u8>", Buffer.from("somerandomfield")).toBytes());
   const type = txb.pure(bcs.ser("String", { bytes: Buffer.from("String") }).toBytes());
 
   txb.moveCall({
