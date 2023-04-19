@@ -53,4 +53,4 @@ async function tryUnrecognizedType(objectId: string) {
 
 const objectId = "0x03c5a4b2717f1f205857059661f8e9a2a1ef91e838fa630cf5b68d14a29bdbae";
 getUndefinedField(objectId);
-tryUnrecognizedType(objectId);
+// tryUnrecognizedType(objectId);
