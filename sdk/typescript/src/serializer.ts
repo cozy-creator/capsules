@@ -1,4 +1,4 @@
-import { BCS, BcsConfig, EnumTypeDefinition, BcsWriter, BcsReader } from "@mysten/bcs";
+import { BCS, BcsConfig, EnumTypeDefinition, BcsReader } from "@mysten/bcs";
 import { DevInspectResults } from "@mysten/sui.js";
 import { is, object, integer, bigint, string, boolean, record, array, union, any, Struct, define } from "superstruct";
 
