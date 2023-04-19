@@ -28,7 +28,9 @@ module auction::auction {
         // The starting date of the auction
         starts_at: u64,
         // The ending date of the auction.
-        ends_at: u64
+        ends_at: u64,
+        // Indicates whether the auction has been canceled or not
+        is_canceled: bool
     }
 
     struct Witness has drop {}
@@ -40,6 +42,7 @@ module auction::auction {
     const EAUCTION_NOT_STARTED: u64 = 5;
     const EAUCTION_ALREADY_ENDED: u64 = 6;
     const EALREADY_HIGHEST_BIDDER: u64 = 7;
+    const EAUCTION_ALREADY_CANCELED: u64 = 8;
 
     public fun create_auction<T: key, C>(
         item: &mut UID,
@@ -65,9 +68,10 @@ module auction::auction {
             item_id: object::uid_to_inner(item),
             highest_bidder: option::none(),
             highest_bid: balance::zero(),
+            is_canceled: false,
             minimum_bid,
             starts_at,
-            ends_at
+            ends_at,
         };
 
         let tid = typed_id::new(&auction);
@@ -82,6 +86,9 @@ module auction::auction {
     public fun place_bid<T, C>(self: &mut Auction<T, C>, clock: &Clock, bid: Coin<C>, ctx: &mut TxContext) {
         let current_time = clock::timestamp_ms(clock);
         let current_bidder = tx_context::sender(ctx);
+
+        //Ensures that the auction has not been canceled
+        assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
 
         // Ensures that the auction has started
         assert!(current_time > self.starts_at, EAUCTION_NOT_STARTED);
@@ -111,6 +118,26 @@ module auction::auction {
         balance::join(&mut self.highest_bid, coin::into_balance(bid));
 
         // Update the highest bidder with the current bidder
-        option::fill(&mut self.highest_bidder, current_bidder);
+        option::fill(&mut self.highest_bidder, current_bidder)
+    }
+
+    public fun cancel_auction<T, C>(self: &mut Auction<T, C>, ctx: &mut TxContext) {
+        // Ensures that the auction creator is the rightful owner of the item being auctioned
+        assert!(ownership::is_authorized_by_owner(&self.id, &tx_authority::begin(ctx)), ENO_OWNER_AUTH);
+
+        // Ensures that the aution has not ended
+        assert!(current_time <= self.ends_at, EAUCTION_ALREADY_ENDED);
+
+        //Ensures that the auction has not been canceled
+        assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
+
+        if(option::is_some(&self.highest_bidder)) {
+            let balance = balance::withdraw_all(&mut self.highest_bid);
+            let coin = coin::from_balance(balance, ctx);
+
+            transfer::public_transfer(coin, option::extract(&mut self.highest_bidder));
+        };
+
+        self.is_canceled = true
     }
 }
