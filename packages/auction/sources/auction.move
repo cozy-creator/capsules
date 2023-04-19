@@ -35,15 +35,15 @@ module auction::auction {
 
     struct Witness has drop {}
 
-    const ENO_OWNER_AUTH: u64 = 1;
-    const EITEM_TYPE_MISMATCH: u64 = 2;
-    const EINVALID_TIME_DIFFERENCE: u64 = 3;
-    const EINSUFFICIENT_BID: u64 = 4;
-    const EAUCTION_NOT_STARTED: u64 = 5;
-    const EAUCTION_ALREADY_ENDED: u64 = 6;
-    const EALREADY_HIGHEST_BIDDER: u64 = 7;
-    const EAUCTION_ALREADY_CANCELED: u64 = 8;
-    const EAUCTION_NOT_ENDED: u64 = 9;
+    const ENO_OWNER_AUTH: u64 = 0;
+    const EITEM_TYPE_MISMATCH: u64 = 1;
+    const EINVALID_TIME_DIFFERENCE: u64 = 2;
+    const EINSUFFICIENT_BID: u64 = 3;
+    const EAUCTION_NOT_STARTED: u64 = 4;
+    const EAUCTION_ALREADY_ENDED: u64 = 5;
+    const EALREADY_HIGHEST_BIDDER: u64 = 6;
+    const EAUCTION_ALREADY_CANCELED: u64 = 7;
+    const EAUCTION_NOT_ENDED: u64 = 8;
 
     public fun create_auction<T: key, C>(
         item: &mut UID,
