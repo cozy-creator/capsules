@@ -339,7 +339,7 @@ module ownership::ownership_tests {
         {
             let object = test_scenario::take_shared<TestObject>(&scenario);
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type<Witness>(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
             let new_owner = vector[ADDR2];
             
@@ -424,7 +424,7 @@ module ownership::ownership_tests {
 
             {
                 let new_owner = vector[ADDR2];
-                let auth = tx_authority::add_type_capability(&Witness {}, &auth);
+                let auth = tx_authority::add_type(&Witness {}, &auth);
                 ownership::migrate_transfer_auth(uid, new_owner, &auth);
             };
 
@@ -447,7 +447,7 @@ module ownership::ownership_tests {
         {
             let object = test_scenario::take_shared<TestObject>(&scenario);
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type<Witness>(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
             
             ownership::make_owner_immutable(uid, &auth);
@@ -471,7 +471,7 @@ module ownership::ownership_tests {
         {
             let object = test_scenario::take_shared<TestObject>(&scenario);
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability<Witness>(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type<Witness>(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
             let new_owner = vector[ADDR2];
             

@@ -649,7 +649,7 @@ module metadata::metadata_tests {
             let ctx = test_scenario::ctx(scenario);
 
             let object = TestObject { id: object::new(ctx) };
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
 
             let proof = ownership::setup(&object);
             ownership::initialize(&mut object.id, proof, &auth);

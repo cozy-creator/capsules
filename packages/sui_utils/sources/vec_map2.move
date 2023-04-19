@@ -1,9 +1,10 @@
 module sui_utils::vec_map2 {
     use std::option::{Self, Option};
-    use std::string::{String, utf8};
     use std::vector;
 
     use sui::vec_map::{Self, VecMap};
+
+    use sui_utils::vector2;
 
     // Error enums
     const EVEC_LENGTH_MISMATCH: u64 = 0;
@@ -43,7 +44,7 @@ module sui_utils::vec_map2 {
         old_value_maybe
     }
 
-    public fun borrow_mut_fill<K: copy + drop, V: store + drop>(
+    public fun borrow_mut_fill<K: copy + drop, V: drop>(
         self: &mut VecMap<K, V>,
         key: K,
         default_value: V
@@ -53,7 +54,7 @@ module sui_utils::vec_map2 {
             vec_map::insert(self, key, default_value);
         };
 
-        vec_map::borrow_mut(self, key)
+        vec_map::get_mut(self, &key)
     }
 
     public fun get_with_default<K: copy + drop, V: copy + drop>(self: &VecMap<K, V>, key: K, default: V): V {
@@ -99,7 +100,9 @@ module sui_utils::vec_map2 {
             vec_map::insert(self, key, value); 
         };
     }
-    
+
+    // This only works if the values are vectors; the new value is merged into this vector (duplicates
+    // are not added).
     public fun merge<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, vector<V>>, key: K, value: V) {
         let vec = borrow_mut_fill(self, key, vector[]);
         vector2::merge(vec, vector[value]);

@@ -46,7 +46,7 @@ module composable_game::aircraft {
 
     // The sender of this tx must own the aircraft (sui-level) and the carrier (shared-level)
     public entry fun store_aircraft(aircraft: Aircraft, carrier: &mut Carrier, ctx: &mut TxContext) {
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
         let uid = aircraft_carrier::carrier_uid_mut(carrier, &auth);
 
         let capacity = data::borrow_mut_fill<Witness, u64>(uid, utf8(b"capacity"), 45, &auth);
@@ -63,7 +63,7 @@ module composable_game::aircraft {
     // The sender of this tx must own the carrier (shared-level)
     // Aborts if there is not at least one aircraft in the carrier
     public fun remove_aircraft(carrier: &mut Carrier, ctx: &TxContext): Aircraft {
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
         let uid = aircraft_carrier::carrier_uid_mut(carrier, &auth);
 
         inventory::remove<Witness, Aircraft>(uid, &auth)
@@ -75,7 +75,7 @@ module composable_game::aircraft {
         let server = tx_context::sender(ctx);
         assert!(ownership::is_authorized_to_edit(&server, &config.id), ENO_SERVER_AUTH);
 
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
         let uid = aircraft_carrier::carrier_uid_mut(carrier, &auth);
 
         *data::borrow_or_fill<Witness, u64>(uid, utf8(b"capacity"), 0, &auth) = new_capacity;
