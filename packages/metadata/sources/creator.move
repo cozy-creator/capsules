@@ -48,7 +48,7 @@ module metadata::creator {
 
         // Initialize owner and metadata
         let typed_id = typed_id::new(&creator);
-        let auth = tx_authority::add_type_capability(
+        let auth = tx_authority::add_type(
             &Witness { }, &tx_authority::begin(ctx));
 
         ownership::initialize_without_module_authority(&mut creator.id, typed_id, &auth);

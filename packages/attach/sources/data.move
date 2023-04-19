@@ -509,7 +509,7 @@ module attach::data_tests {
         };
 
         let typed_id = typed_id::new(&object);
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
         let owner = vector[tx_context::sender(ctx)];
 
         ownership::as_shared_object_(&mut object.id, typed_id, owner, owner, &auth);
@@ -601,7 +601,7 @@ module attach::data_tests {
             let object = test_scenario::take_shared<TestObject>(&scenario);
 
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
 
             data::set<Witness, vector<u8>>(uid, string_keys, string_values, &auth);
@@ -634,7 +634,7 @@ module attach::data_tests {
             let object = test_scenario::take_shared<TestObject>(&scenario);
 
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
 
             data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
@@ -659,7 +659,7 @@ module attach::data_tests {
 
             let field_name = utf8(b"rating");
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
 
             data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
@@ -688,7 +688,7 @@ module attach::data_tests {
             let object = test_scenario::take_shared<TestObject>(&scenario);
             
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
             let uid = uid_mut(&mut object, &auth);
             
             data::deserialize_and_set<Witness>(Witness {}, uid, values, fields);
@@ -722,7 +722,7 @@ module attach::data_tests {
             let source_object = test_scenario::take_shared<TestObject>(&scenario);
             
             let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+            let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
             let source_uid = uid_mut(&mut source_object, &auth);
 
             data::deserialize_and_set<Witness>(Witness {}, source_uid, values, fields);

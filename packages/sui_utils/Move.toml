@@ -1,6 +1,6 @@
 [package]
 name = "SuiUtils"
-version = "0.12.2"
+version = "0.12.4"
 published-at = "0x117ec9685f39e39507f4d82956446f9593578dcef3510d5a3de3bb5bc350558e" # Testnet
 
 [dependencies]

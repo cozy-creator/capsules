@@ -1,18 +1,21 @@
-// Delegates permissions from a principal (the owner of the UID) to an agent (the address of the recipient).
-// Permissions are scoped using idiosyncratic numbers from 0 - 15.
-// It is up to the module assigning and checking these permissions to assign meaning to the numbers
-// If the principle is left undefined, the owner of the UID (if one exists) will be used as the principal.
-// That is Key { principal: none, agent: <addr> } is shorthand for Key { principal: ownership::owner(uid), agent: <addr> }
+// Sui's Role Based Access Control (RBAC) system
+
+// This allows a principal (address) to delegate a set of permissions to an agent (address).
+// Roles provide a layer of abstraction; instead of granting each agent a set of permissions individually,
+// you assign each agent a set of roles, and then define the permissions for each of those roles.
 
 // A delegation is:
-// A specification of a function which can be called
+// The specification of a permission (type), enabling access to a set of function calls
 // By an agent
 // On behalf of the principle
 
-module ownership::delegation {
+module ownership::rbac {
     use std::string::String;
 
     use ownership::tx_authority::{Self, StoredPermission};
+
+    // Error enums
+    const ENO_PRINCIPAL_AUTHORITY: u64 = 0;
 
     struct RBAC has store, drop {
         principal: address, // permission granted on behalf of
@@ -28,7 +31,7 @@ module ownership::delegation {
     // proof of ownership), we do an ownership-check on every modification. This is a safety measure to prevent
     // mistakes on the part of developers who might allow unauthorized access by mistake.
 
-    public fun create_rbac(principal: address, auth: &TxAuthority): RBAC {
+    public fun create(principal: address, auth: &TxAuthority): RBAC {
         assert!(tx_authority::is_signed_by(principal, auth), ENO_PRINCIPAL_AUTHORITY);
 
         RBAC {
@@ -39,21 +42,31 @@ module ownership::delegation {
     }
 
     // Note that if another rbac is stored in this UID for the same principal, it will be overwritten
-    public fun store_rbac(uid: &mut UID, rbac: RBAC) {
+    public fun rbac(uid: &mut UID, rbac: RBAC) {
         dynamic_field2::set(uid, Key { principal: rbac.principal }, rbac);
     }
 
     // Convenience function
-    public fun create_and_store_rbac(uid: &mut UID, principal: address, auth: &TxAuthority) {
+    public fun create_and_store(uid: &mut UID, principal: address, auth: &TxAuthority) {
         let rbac = create_rbac(principal, auth);
         store_rbac(uid, rbac);
     }
 
-    public fun add_roles_for_agent() {
+    public fun grant_roles_for_agent() {
 
     }
 
-    public fun remove_roles_for_agent() {
+    public fun revoke_roles_for_agent() {
+
+    }
+
+    // Gives unlimited scope to the agent; individual permissions do not need to be specified
+    public fun grant_all_roles_for_agent() {
+
+    }
+
+    // The agent is now identical to the principal. Granting admin power is dangerous; use with caution
+    public fun grant_admin_role_for_agent() {
 
     }
 
@@ -61,11 +74,11 @@ module ownership::delegation {
 
     }
 
-    public fun add_permissions_for_role() {
+    public fun grant_permissions_for_role() {
 
     }
 
-    public fun remove_permissions_for_role() {
+    public fun revoke_permissions_for_role() {
 
     }
 
@@ -122,15 +135,21 @@ module ownership::delegation {
 
     // ======= Getter Functions =======
 
-    public fun rbac_principal(rbac: &RBAC): address {
+    public fun to_fields(
+        rbac: &RBAC
+    ): (address, &VecMap<address, vector<String>>, &VecMap<String, vector<StoredPermission>>) {
+        (rbac.principal, &rbac.agent_roles, &rbac.role_permissions)
+    }
+
+    public fun principal(rbac: &RBAC): address {
         rbac.principal
     }
 
-    public fun rbac_agent_roles(rbac: &RBAC): &VecMap<String, vector<String>> {
+    public fun agent_roles(rbac: &RBAC): &VecMap<String, vector<String>> {
         &rbac.agent_roles
     }
 
-    public fun rbac_role_permissions(rbac: &RBAC): &VecMap<String, StoredPermission> {
+    public fun role_permissions(rbac: &RBAC): &VecMap<String, StoredPermission> {
         &rbac.role_permissions
     }
 }

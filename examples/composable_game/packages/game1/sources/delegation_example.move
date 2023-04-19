@@ -1,7 +1,7 @@
-module composable_game::delegation_example {
+module composable_game::rbac_example {
     use sui::object::{Self, UID};
 
-    use ownership::delegation;
+    use ownership::rbac;
     use ownership::ownership;
 
     use attach::data;
@@ -24,19 +24,19 @@ module composable_game::delegation_example {
     // In that case, any transaction that can get a ref to object-id can access our data-namespace
     public fun delegate_to_our_agent(agent: address, ctx: &mut TxContext) {
         // Change this to publish-receipt instead
-        let store = delegation::create(Witness {}, tx_context::sender(ctx), ctx);
+        let store = rbac::create(Witness {}, tx_context::sender(ctx), ctx);
         let auth = tx_authority::begin(ctx);
-        delegation::add_store<data::Key>(&mut store, agent, &auth);
-        delegation::return_and_share(store);
+        rbac::add_store<data::Key>(&mut store, agent, &auth);
+        rbac::return_and_share(store);
     }
 
     // Now this other address (whatever it is; keypair, type, or object-id) can borrow_mut our object's UID
     public fun delegate_to_other_owner(uid: &mut UID, agent: address) {
-        delegation::add_uid<ownership::Key>(uid, agent, &auth);
+        rbac::add_uid<ownership::Key>(uid, agent, &auth);
     }
 
     public fun uid_mut(object: &mut MyObject, auth: &TxAuthority): &mut UID {
-        assert!(delegation::has_permission_from_owner<ownership::Key>(uid, auth), ENO_OWNER_PERMISSION);
+        assert!(rbac::has_permission_from_owner<ownership::Key>(uid, auth), ENO_OWNER_PERMISSION);
 
         &mut object.id
     }

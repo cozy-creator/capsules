@@ -108,6 +108,6 @@ module display::package {
     }
 
     // ======== ???? =====
-    // Some sort of pakage endorsement system would make sense as well... this would require package to be a
+    // Some sort of package endorsement system would make sense as well... this would require package to be a
     // shared object however
 }

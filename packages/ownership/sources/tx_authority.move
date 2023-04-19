@@ -19,11 +19,11 @@ module ownership::tx_authority {
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
     // agents: [ addresses that have given full authority to this transaction ]
-    // delegations: (principle, types corresponding to functions allowed to be called on behalf of principal)
+    // permissions: (principle, types corresponding to functions allowed to be called on behalf of principal)
     // namespaces: (package ID, principal for that package; the ID (as an address) of its namespace object)
     struct TxAuthority has drop {
         agents: vector<address>,
-        delegations: VecMap<address, vector<Permission>>,
+        permissions: VecMap<address, vector<Permission>>,
         namespaces: VecMap<ID, address>
     }
 
@@ -31,59 +31,63 @@ module ownership::tx_authority {
 
     // Begins with a transaction-context object
     public fun begin(ctx: &TxContext): TxAuthority {
-        TxAuthority { addresses: vector[tx_context::sender(ctx)] }
+        TxAuthority { agents: vector[tx_context::sender(ctx)] }
     }
 
     // Begins with a capability-id
     public fun begin_with_id<T: key>(cap: &T): TxAuthority {
-        TxAuthority { addresses: vector[object::id_address(cap)] }
+        TxAuthority { agents: vector[object::id_address(cap)] }
     }
 
     public fun begin_with_uid(uid: &UID): TxAuthority {
-        TxAuthority { addresses: vector[object::uid_to_address(uid)] }
+        TxAuthority { agents: vector[object::uid_to_address(uid)] }
     }
 
     // Begins with a capability-type
     public fun begin_with_type<T>(_cap: &T): TxAuthority {
-        TxAuthority { addresses: vector[type_into_address<T>()] }
+        TxAuthority { agents: vector[type_into_address<T>()] }
     }
 
     public fun empty(): TxAuthority {
-        TxAuthority { addresses: vector::empty<address>() }
+        TxAuthority { agents: vector::empty<address>() }
     }
 
-    // ========= Add Authorities =========
+    // ========= Add Agents =========
 
-    public fun add_id_capability<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { addresses: *&auth.addresses };
+    public fun add_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { agents: *&auth.agents };
         add_internal(object::id_address(cap), &mut new_auth);
 
         new_auth
     }
 
     public fun add_uid(uid: &UID, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { addresses: *&auth.addresses };
+        let new_auth = TxAuthority { agents: *&auth.agents };
         add_internal(object::uid_to_address(uid), &mut new_auth);
 
         new_auth
     }
 
-    public fun add_type_capability<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { addresses: *&auth.addresses };
+    public fun add_type<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { agents: *&auth.agents };
         add_internal(type_into_address<T>(), &mut new_auth);
 
         new_auth
     }
 
-    // ========= Delegation System =========
+    // ========= Permission System =========
 
-    friend ownership::delegation;
+    friend ownership::rbac;
     friend ownership::namespace;
 
-    // This is a reserverd role name; if a principal gives an agent this role, then they can act as that agent
-    // for every permission; there is no scope / limitation. Note that this sitll doesn't make the agent identical to the
-    // princpal. Doing that would be dangerous, as the agent could then give other agents unlimited permissions as well,
-    // ad infinitum.
+    // These are reserved role names. If the principal gives an agent the ALL role, then they can act as that
+    // agent for all permission-types (there is no scope). HOWEVER, you still don't get to act as the principal
+    // directly.
+    // For the ADMIN role, you can act fully as the principal.
+    // Note that granting the ADMIN role is potentially dangerous, as the agent can then grant _other_ agents
+    // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
+    // to revoke the rights of the agent and make the principal secure again.
+    const ADMIN: vector<u8> = b"ADMIN";
     const ALL: vector<u8> = b"ALL";
 
     // Can be stored, but not copied. Used as a template to produce Permission structs
@@ -96,33 +100,33 @@ module ownership::tx_authority {
         inner: String
     }
 
-    // This can only be used by the `ownership::delegation`
-    public(friend) fun add_permissions(
+    // This can only be used by the `ownership::rbac`
+    public(friend) fun add_permissions_internal(
         principal: address,
         roles: vector<String>,
         role_permissions: VecMap<String, vector<StoredPermission>>,
         auth: &TxAuthority
     ): TxAuthority {
-        let new_auth = TxAuthority { agents: auth.agents, delegations: auth.delegations, namespaces: auth.namespaces };
+        let new_auth = TxAuthority { agents: auth.agents, permissions: auth.permissions, namespaces: auth.namespaces };
 
         let i = 0;
         while (i < vector::length(roles)) {
             let role = *vector::borrow(roles, i);
             if (role == utf8(ALL)) {
-                // We don't need any other delegations
-                vec_map2::set(&mut new_auth.delegations, principal, vector[Permission { inner: utf8(ALL) }]);
+                // We don't need any other permissions
+                vec_map2::set(&mut new_auth.permissions, principal, vector[Permission { inner: utf8(ALL) }]);
                 break;
             }
             let stored = vec_map::get(role_permissions, role);
             let permissions = copy_permissions(stored);
-            vec_map2::merge(&mut new_auth.delegations, principal, permissions);
+            vec_map2::merge(&mut new_auth.permissions, principal, permissions);
             i = i + 1;
         };
 
         new_auth
     }
     
-    // Internal function so that only this module can turn StoredPermission into Permission objects
+    // Internal function so that only this module can turn is_signed_by_StoredPermission into Permission objects
     fun copy_permissions(stored: &vector<StoredPermission>): vector<Permission> {
         let i = 0;
         let permissions = vector::empty<Permission>();
@@ -134,12 +138,12 @@ module ownership::tx_authority {
     }
 
     // Only callable by ownership::namespace
-    public(friend) fun add_namespace(
+    public(friend) fun add_namespace_internal(
         packages: vector<ID>,
         principal: address,
         auth: &TxAuthority
     ): TxAuthority {
-        let new_auth = TxAuthority { agents: auth.agents, delegations: auth.delegations, namespaces: auth.namespaces };
+        let new_auth = TxAuthority { agents: auth.agents, permissions: auth.permissions, namespaces: auth.namespaces };
         while (!vector::is_empty(&packages)) {
             let package = vector::pop_back(&mut packages);
             vec_map2::insert_maybe(&mut new_auth.namespaces, package, principal);
@@ -151,7 +155,7 @@ module ownership::tx_authority {
     // ========= Validity Checkers =========
 
     public fun is_signed_by(addr: address, auth: &TxAuthority): bool {
-        vector::contains(&auth.addresses, &addr)
+        vector::contains(&auth.agents, &addr)
     }
 
     // Defaults to `true` if the signing address is option::none
@@ -195,11 +199,11 @@ module ownership::tx_authority {
         total
     }
 
-    // Unlike the above functions, this checks against delegations + agents, and not just agents
+    // Unlike the above functions, this checks against permissions + agents, and not just agents
     public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
         if (is_signed_by(principal, auth)) { return true };
 
-        let permissions_maybe = vec_map2::get_maybe(&auth.delegations, principal);
+        let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
         if (option::is_none(&permissions_maybe)) { return false };
         let permissions = option::destroy_some(permissions_maybe);
 
@@ -216,7 +220,7 @@ module ownership::tx_authority {
         false
     }
 
-    // Same as above except the principal is optional and defaults to true if it's none
+    // Same as above, except the principal is optional and defaults to true if it's option::none
     public fun has_permission_<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&principal_maybe)) { return true };
         let principal = option::destroy_some(principal_maybe);
@@ -230,12 +234,16 @@ module ownership::tx_authority {
         auth.agents
     }
 
-    public fun delegations(auth: &TxAuthority): VecMap<address, Permission> {
-        auth.delegations
+    public fun permissions(auth: &TxAuthority): VecMap<address, Permission> {
+        auth.permissions
+    }
+
+    public fun namespaces(auth: &TxAuthority): VecMap<ID, address> {
+        auth.namespaces
     }
 
     // May return option::none if the namespace hasn't been added to this TxAuthority object
-    public fun get_principal<P>(auth: &TxAuthority): Option<address> {
+    public fun lookup_namespace_for_package<P>(auth: &TxAuthority): Option<address> {
         vec_map::get_maybe(&auth.namespaces, encode::package_id<P>());
     }
 
@@ -288,19 +296,19 @@ module ownership::tx_authority {
     // ========= Internal Functions =========
 
     fun add_internal(addr: address, auth: &mut TxAuthority) {
-        if (!vector::contains(&auth.addresses, &addr)) {
-            vector::push_back(&mut auth.addresses, addr);
+        if (!vector::contains(&auth.agents, &addr)) {
+            vector::push_back(&mut auth.agents, addr);
         };
     }
 
     #[test_only]
     public fun begin_for_testing(addr: address): TxAuthority {
-        TxAuthority { addresses: vector[addr] }
+        TxAuthority { agents: vector[addr] }
     }
 
     #[test_only]
     public fun add_for_testing(addr: address, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { addresses: auth.addresses };
+        let new_auth = TxAuthority { agents: auth.agents };
         add_internal(addr, &mut new_auth);
 
         new_auth

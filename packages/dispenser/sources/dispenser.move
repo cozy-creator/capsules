@@ -111,7 +111,7 @@ module dispenser::dispenser {
         };
 
         let typed_id = typed_id::new(&dispenser);
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
         ownership::as_shared_object_(&mut dispenser.id, typed_id, vector[owner], vector::empty(), &auth);
 
         if(is_serialized) {
