@@ -133,6 +133,7 @@ module ownership::tx_authority {
         };
     }
 
+    // Only callable by ownership::namespace
     public(friend) fun add_namespace(
         packages: vector<ID>,
         principal: address,
@@ -194,6 +195,7 @@ module ownership::tx_authority {
         total
     }
 
+    // Unlike the above functions, this checks against delegations + agents, and not just agents
     public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
         if (is_signed_by(principal, auth)) { return true };
 
@@ -214,49 +216,12 @@ module ownership::tx_authority {
         false
     }
 
-    public fun is_allowed<T, Principal>(function: u8, auth: &TxAuthority): bool {
-        let principal = type_into_address<Principal>();
-        is_allowed_<T>(principal, function, auth)
-    }
-
-    // Unlike the above validity-checkers, this also checks against delegations
-    public fun is_allowed_<T>(principal: address, function: u8, auth: &TxAuthority): bool {
-        if (is_signed_by(principal, auth)) { return true };
-
-        let permissions_maybe = vec_map2::get_maybe(&auth.delegations, principal);
-        if (option::is_none(&permissions_maybe)) { return false };
-        let permissions = option::destroy_some(permissions_maybe);
-
-        // TO DO: improve efficiency here
-        let (package, module_name, _, _) = encode::type_name_decomposed<T>();
-        let i = 0;
-        while (i < vector::length(&permissions)) {
-            let perm = vector::borrow(&permissions, i);
-            if (package == perm.package &&
-                module_name == perm.module_name && 
-                acl::has_role(&perm.functions, function)
-            ) { return true; }
-
-            i = i + 1;
-        };
-
-        false
-    }
-
     // Same as above except the principal is optional and defaults to true if it's none
-    public fun is_allowed__<T>(principal_maybe: Option<address>, function: u8, auth: &TxAuthority): bool {
+    public fun has_permission_<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&principal_maybe)) { return true };
         let principal = option::destroy_some(principal_maybe);
-        is_allowed_<T>(principal, function, auth)
-    }
 
-    public fun is_signed_by_namespace<AnyStructFromNamespace, T>(function: u8, auth: &TxAuthority): bool {
-        let package = encode::package_id<AnyStructFromNamespace>();
-        let namespace_maybe = vec_map2::get_maybe(&auth.namespaces, package);
-        if (option::is_none(&namespace_maybe)) { return false };
-        let namespace = option::destroy_some(namespace_maybe);
-
-        is_allowed<T>(namespace, function, auth)
+        has_permission<Permission>(principal, auth)
     }
 
     // ========= Getter Functions =========
@@ -318,37 +283,6 @@ module ownership::tx_authority {
     public fun witness_string_(type: String): String {
         let module_addr = encode::package_id_and_module_name_(type);
         encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
-    }
-
-    // ========= Delegation System =========
-
-    struct Delegations<Witness: drop> has key {
-        inner: VecMap<address, u16>
-    }
-
-    // Convenience function
-    public fun begin_with_delegation(stored: &Delegations<Witness>, ctx: &TxContext): TxAuthority {
-        let auth = begin(ctx);
-        claim_delegation(stored, &auth)
-    }
-
-    public fun claim_delegation<Witness: drop>(
-        stored: &Delegations<Witness>,
-        auth: &TxAuthority
-    ): TxAuthority {
-        let new_auth = TxAuthority { 
-            addresses: auth.addresses,
-            delegations: auth.delegations
-        };
-
-        let i = 0;
-        while (i < vector::length(&new_auth.addresses)) {
-            let addr = *vector::borrow(&new_auth.addresses, i);
-            acl::or_merge(&mut new_auth.delegations, vec_map::get(stored, for));
-            i = i + 1;
-        };
-
-        new_auth
     }
 
     // ========= Internal Functions =========
