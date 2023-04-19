@@ -16,8 +16,8 @@ module ownership::delegation {
 
     struct RBAC has store, drop {
         principal: address, // permission granted on behalf of
-        role_members: VecMap<address, vector<String>>, // agent -> roles
-        role_permissions: VecMap<String, StoredPermission> // role -> permission
+        agent_roles: VecMap<address, vector<String>>, // agent -> roles
+        role_permissions: VecMap<String, vector<StoredPermission>> // role -> permissions
     }
 
     struct Key has store, copy, drop { principal: address }
@@ -33,7 +33,7 @@ module ownership::delegation {
 
         RBAC {
             principal,
-            role_members: vec_map::empty(),
+            agent_roles: vec_map::empty(),
             role_permissions: vec_map::empty()
         }
     }
@@ -83,11 +83,12 @@ module ownership::delegation {
         claim_(uid, principal, tx_context::sender(ctx), auth)
     }
 
+    // Auth is passed in here to be added onto, not because it's used as a proof of ownership
     public fun claim_(uid: &UID, principal: address, agent: address, auth: &TxAuthority): TxAuthority {
         if (!dynamic_field::exists_(uid, Key { principal })) { return auth };
 
         let rbac = dynamic_field::borrow<Key, RBAC>(uid, Key { principal });
-        let roles = vec_map2::get_with_default(&rbac.role_members, agent, vector::empty());
+        let roles = vec_map2::get_with_default(&rbac.agent_roles, agent, vector::empty());
         let i = 0;
         while (i < vector::length(roles)) {
             let permission = vec_map::get(&rbac.role_permissions, *vector::borrow(roles, i));
@@ -98,7 +99,7 @@ module ownership::delegation {
         auth
     }
 
-    // Honestly, this is just too complicated
+    // This is rather complicated for a validity checker honestly
     public fun is_allowed_by_owner<T>(uid: &UID, function: u8, auth: &TxAuthority): bool {
         let owner_maybe = ownership::get_owner(uid);
         if (option::is_none(owner_maybe)) { 
@@ -117,5 +118,19 @@ module ownership::delegation {
 
         // The owner is a signer, or a delegation from the owner for this function already exists within `auth`
         tx_authority::is_allowed<T>(owner, function, auth)
+    }
+
+    // ======= Getter Functions =======
+
+    public fun rbac_principal(rbac: &RBAC): address {
+        rbac.principal
+    }
+
+    public fun rbac_agent_roles(rbac: &RBAC): &VecMap<String, vector<String>> {
+        &rbac.agent_roles
+    }
+
+    public fun rbac_role_permissions(rbac: &RBAC): &VecMap<String, StoredPermission> {
+        &rbac.role_permissions
     }
 }
