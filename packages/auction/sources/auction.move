@@ -91,10 +91,10 @@ module auction::auction {
         assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
 
         // Ensures that the auction has started
-        assert!(current_time > self.starts_at, EAUCTION_NOT_STARTED);
+        assert!(current_time >= self.starts_at, EAUCTION_NOT_STARTED);
 
         // Ensures that the aution has not ended
-        assert!(current_time < self.ends_at, EAUCTION_ALREADY_ENDED);
+        assert!(current_time <= self.ends_at, EAUCTION_ALREADY_ENDED);
 
         // Ensures that the bid is greater than or equal to the minimum bid allowed
         assert!(coin::value(&bid) >= self.minimum_bid, EINSUFFICIENT_BID);
