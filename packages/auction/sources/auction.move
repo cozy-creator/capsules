@@ -109,9 +109,7 @@ module auction::auction {
             assert!(&current_bidder != option::borrow(&self.highest_bidder), EALREADY_HIGHEST_BIDDER);
 
             // Additionally, we transfer the previous highest bid back to its original bidder.
-            let balance = balance::withdraw_all(&mut self.highest_bid);
-            let coin = coin::from_balance(balance, ctx);
-
+            let coin = coin::from_balance(balance::withdraw_all(&mut self.highest_bid), ctx);
             transfer::public_transfer(coin, option::extract(&mut self.highest_bidder));
         };
 
@@ -133,9 +131,7 @@ module auction::auction {
         assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
 
         if(option::is_some(&self.highest_bidder)) {
-            let balance = balance::withdraw_all(&mut self.highest_bid);
-            let coin = coin::from_balance(balance, ctx);
-
+            let coin = coin::from_balance(balance::withdraw_all(&mut self.highest_bid), ctx);
             transfer::public_transfer(coin, option::extract(&mut self.highest_bidder));
         };
 
