@@ -133,20 +133,20 @@ async function main() {
   const fields = Object.keys(schema).map((key) => bcs.ser("String", key).toBytes());
 
   // set fields
-  console.log("===== Setting fields... ====== \n");
+  console.log("===== Setting fields... ======");
   await setFields({ objectId, fields, values });
 
   // retrieve and deserialize fields
-  console.log("===== Reading fields... ====== \n");
+  console.log("\n ===== Reading fields... ======");
   const deserialized1 = await deserializeFields({ objectId, schema });
   console.log(deserialized1);
 
   // delete field
-  console.log("===== Removing field... ====== \n");
+  console.log("\n ===== Removing field... ======");
   await removeField({ objectId, field: fields[0] });
 
   // retrieve and deserialize fields (excluding deleted field)
-  console.log("===== Reading fields... ======v\n");
+  console.log("\n ===== Reading fields... ======");
   const deserialized2 = await deserializeFields({ objectId, schema: { about: "String" } });
   console.log(deserialized2);
 }
