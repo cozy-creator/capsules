@@ -18,10 +18,9 @@ module transfer_system::royalty_market {
     use sui_utils::encode;
     use sui_utils::struct_tag;
 
+    use transfer_system::transfer_witness;
     use transfer_system::market_account::{Self, MarketAccount};
 
-
-    struct Witness has drop {}
 
     struct Royalty<phantom T> has key, store {
         id: UID,
@@ -276,7 +275,8 @@ module transfer_system::royalty_market {
     }
 
     fun transfer_item(uid: &mut UID, new_owner: vector<address>, ctx: &mut TxContext) {
-        let auth = tx_authority::add_type_capability(&Witness {}, &tx_authority::begin(ctx));
+        let witness = transfer_witness::new();
+        let auth = tx_authority::add_type_capability(&witness, &tx_authority::begin(ctx));
         ownership::transfer(uid, new_owner, &auth);
     }
 
