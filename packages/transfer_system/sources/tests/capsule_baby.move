@@ -11,7 +11,7 @@ module transfer_system::capsule_baby {
     use ownership::ownership;
     use ownership::tx_authority;
 
-    use transfer_system::royalty_market::Witness as RoyaltyMarket;
+    use transfer_system::transfer_witness::TransferWitness;
 
     struct Witness has drop {}
 
@@ -27,7 +27,7 @@ module transfer_system::capsule_baby {
         let typed_id = typed_id::new(&capsule_baby);
         let auth = tx_authority::begin_with_type(&Witness {});
 
-        ownership::as_shared_object<CapsuleBaby, RoyaltyMarket>(&mut capsule_baby.id, typed_id, vector[tx_context::sender(ctx)], &auth);
+        ownership::as_shared_object<CapsuleBaby, TransferWitness>(&mut capsule_baby.id, typed_id, vector[tx_context::sender(ctx)], &auth);
 
         transfer::share_object(capsule_baby)
     }
