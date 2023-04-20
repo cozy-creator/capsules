@@ -2,7 +2,7 @@ import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, TransactionBloc
 import { serializeByField, bcs, deserializeByField, parseViewResultsFromStruct } from "@capsulecraft/serializer";
 
 const pkg = "0x770f088a0fcc7da37a631aaf9af59c0ffa935064171bd0e8dccfdab8f0c77150";
-const mnemonics = "invest half dress clay green task scare hood quiz good glory angry";
+const mnemonics = "...";
 
 // Setup connection
 const connection = new Connection({ fullnode: "http://127.0.0.1:9000" });
@@ -126,7 +126,7 @@ async function deserializeFields(opts: DeserializeFieldsOpts) {
 
 async function main() {
   const schema = { name: "String", about: "String" };
-  const data = { name: "Abdul", about: "Trying to be a better person" };
+  const data = { name: "Rahman", about: "Trying to be a better person" };
   const objectId = "0x3011aec6a7e199df723f7139dc37932a07ffe88e09502e4bc70babd103c1d9c2";
 
   const values = serializeByField(bcs, data, schema);
