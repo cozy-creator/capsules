@@ -91,6 +91,7 @@ module ownership::tx_authority {
     const ALL: vector<u8> = b"ALL";
 
     // Can be stored, but not copied. Used as a template to produce Permission structs
+    // Anyone who can obtain a reference to this can use it; store it somewhere private
     struct StoredPermission has store, drop {
         inner: String
     }
@@ -98,6 +99,12 @@ module ownership::tx_authority {
     // Does not have store, and hence must be dropped at the end of tx-execution
     struct Permission has copy, drop {
         inner: String
+    }
+
+    // Owned, storable or root-level object. It's destroyed immediately upon use
+    struct SingleUsePermission has key, store {
+        id: UID,
+        permission: StoredPermission
     }
 
     // This can only be used by the `ownership::rbac`
@@ -152,7 +159,8 @@ module ownership::tx_authority {
         new_auth
     }
 
-    // ========= Validity Checkers =========
+    // ========= Agent Validity Checkers =========
+    // Only checks against agents (the primary signers) and ignores permissions
 
     public fun is_signed_by(addr: address, auth: &TxAuthority): bool {
         vector::contains(&auth.agents, &addr)
@@ -199,8 +207,26 @@ module ownership::tx_authority {
         total
     }
 
-    // Unlike the above functions, this checks against permissions + agents, and not just agents
-    public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
+    // ========= Permission Validity Checkers =========
+    // Checks against permissions + agents, and not just agents (as above)
+
+    // Must have permission from the namespace corresponding to the Permission type ("native")
+    // Example: if our Permission is '<package>::my_module::MyPermission', then the namespace must own
+    // '<package>'
+    public fun has_native_permission<Permission>(auth: &TxAuthority): bool {
+        has_permission<Permission, Permission>(auth)
+    }
+
+    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace
+    public fun has_permission<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        let principal_maybe = lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+
+       has_permission_<Permission>(principal, auth)
+    }
+
+    public fun has_permission_<Permission>(principal: address, auth: &TxAuthority): bool {
         if (is_signed_by(principal, auth)) { return true };
 
         let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
@@ -220,12 +246,12 @@ module ownership::tx_authority {
         false
     }
 
-    // Same as above, except the principal is optional and defaults to true if it's option::none
-    public fun has_permission_<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
+    // The [rincipal is optional and defaults to true if `option::none`
+    public fun has_permission_opt<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&principal_maybe)) { return true };
         let principal = option::destroy_some(principal_maybe);
 
-        has_permission<Permission>(principal, auth)
+        has_permission_<Permission>(principal, auth)
     }
 
     // ========= Getter Functions =========

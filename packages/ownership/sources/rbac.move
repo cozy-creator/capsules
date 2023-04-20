@@ -9,14 +9,27 @@
 // By an agent
 // On behalf of the principle
 
+// An RBAC can be used to delegate control of an account, or control of an object.
+// To control an account, a namespace must be created, and the RBAC is stored safely inside.
+// To control an object, rbac::Key is used to add it to any UID.
+
+// Example for accounts: a game-master runs a number of servers, and gives their keypairs permissions
+// to edit its game objects.
+// Example for objects: I have an account object, and I want to allow other people to deposit or
+// withdraw assets from it.
+
 module ownership::rbac {
     use std::string::String;
 
     use ownership::tx_authority::{Self, StoredPermission};
 
+    friend ownership::namespace;
+
     // Error enums
     const ENO_PRINCIPAL_AUTHORITY: u64 = 0;
 
+    // After creation the principal cannot be changed
+    // This can be modified with mere referential authority; store this somewhere private
     struct RBAC has store, drop {
         principal: address, // permission granted on behalf of
         agent_roles: VecMap<address, vector<String>>, // agent -> roles
@@ -27,13 +40,17 @@ module ownership::rbac {
 
     // ======= Principal API =======
     // Used by the principal to create roles and delegate permissions to agents
-    // Note: rather than giving RBAC referential authority (i.e., a mutable reference alone is sufficient
-    // proof of ownership), we do an ownership-check on every modification. This is a safety measure to prevent
-    // mistakes on the part of developers who might allow unauthorized access by mistake.
 
     public fun create(principal: address, auth: &TxAuthority): RBAC {
         assert!(tx_authority::is_signed_by(principal, auth), ENO_PRINCIPAL_AUTHORITY);
 
+        create_internal(principal)
+    }
+
+    // This is used by namespace::claim because namespaces use package-ids as their principal, and you can
+    // never obtain a package-id as an agent outside of using a namespace, so it's impossible to satisfy
+    // the auth constraint
+    public(friend) fun create_internal(principal: address): RBAC {
         RBAC {
             principal,
             agent_roles: vec_map::empty(),
@@ -42,14 +59,23 @@ module ownership::rbac {
     }
 
     // Note that if another rbac is stored in this UID for the same principal, it will be overwritten
-    public fun rbac(uid: &mut UID, rbac: RBAC) {
+    public fun store(uid: &mut UID, rbac: RBAC) {
         dynamic_field2::set(uid, Key { principal: rbac.principal }, rbac);
     }
 
     // Convenience function
     public fun create_and_store(uid: &mut UID, principal: address, auth: &TxAuthority) {
-        let rbac = create_rbac(principal, auth);
-        store_rbac(uid, rbac);
+        let rbac = create(principal, auth);
+        store(uid, rbac);
+    }
+
+    public fun borrow(): &RBAC {
+    }
+
+    public fun borrow_mut(): &mut RBAC {
+    }
+
+    public fun remove(): RBAC {
     }
 
     public fun grant_roles_for_agent() {
@@ -61,21 +87,27 @@ module ownership::rbac {
     }
 
     // Gives unlimited scope to the agent; individual permissions do not need to be specified
+    // tx_authority::has_permission<Principal, Any>(auth) will always resolve
+    // This does not, however, add the principal to tx_authority.agents. This means
+    // tx_authority::is_signed_by(principal, auth) will still fail.
     public fun grant_all_roles_for_agent() {
 
     }
 
     // The agent is now identical to the principal. Granting admin power is dangerous; use with caution
-    public fun grant_admin_role_for_agent() {
-
-    }
+    // public fun grant_admin_role_for_agent() {
+    // }
 
     public fun delete_agent() {
 
     }
 
-    public fun grant_permissions_for_role() {
+    public fun grant_permission_for_role<Permission>(rbac: &mut RBAC, role: String, auth: &TxAuthority) {
+        assert!(tx_authority::is_signed_by(rbac.principal, auth), ENO_PRINCIPAL_AUTHORITY);
 
+        let permission = encode::type_name<Permission>();
+        let permissions = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
+        vector2::merge(permissions, vector[permission]);
     }
 
     public fun revoke_permissions_for_role() {
