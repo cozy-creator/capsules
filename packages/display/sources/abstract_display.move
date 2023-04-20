@@ -37,7 +37,7 @@ module display::abstract_display {
     use attach::data;
     use attach::schema;
 
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
+    use transfer_system::transfer_witness::TransferWitness;
 
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
@@ -119,7 +119,7 @@ module display::abstract_display {
     public fun return_and_share(abstract_type: AbstractDisplay, owner: address) {
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
-        ownership::as_shared_object<AbstractDisplay, SimpleTransfer>(
+        ownership::as_shared_object<AbstractDisplay, TransferWitness>(
             &mut abstract_type.id,
             typed_id,
             vector[owner],
