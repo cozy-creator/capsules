@@ -2,7 +2,7 @@ import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, TransactionBloc
 import { serializeByField, bcs, deserializeByField } from "@capsulecraft/serializer";
 
 const pkg = "0x770f088a0fcc7da37a631aaf9af59c0ffa935064171bd0e8dccfdab8f0c77150";
-const mnemonics = "...";
+const mnemonics = "invest half dress clay green task scare hood quiz good glory angry";
 
 // Setup connection
 const connection = new Connection({ fullnode: "http://127.0.0.1:9000" });
@@ -133,16 +133,20 @@ async function main() {
   const fields = Object.keys(schema).map((key) => bcs.ser("String", key).toBytes());
 
   // set fields
+  console.log("===== Setting fields... ====== \n");
   await setFields({ objectId, fields, values });
 
   // retrieve and deserialize fields
+  console.log("===== Reading fields... ====== \n");
   const deserialized1 = await deserializeFields({ objectId, schema });
   console.log(deserialized1);
 
   // delete field
+  console.log("===== Removing field... ====== \n");
   await removeField({ objectId, field: fields[0] });
 
   // retrieve and deserialize fields (excluding deleted field)
+  console.log("===== Reading fields... ======v\n");
   const deserialized2 = await deserializeFields({ objectId, schema: { about: "String" } });
   console.log(deserialized2);
 }
