@@ -1,6 +1,8 @@
 module transfer_system::transfer_witness {
     struct TransferWitness has drop {}
 
+    friend transfer_system::simple_transfer;
+
     public(friend) fun new(): TransferWitness {
         TransferWitness {}
     }
