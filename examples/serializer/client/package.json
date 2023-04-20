@@ -4,9 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "devDependencies": {
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
   },
   "dependencies": {
-    "@mysten/sui.js": "^0.32.1"
+    "@capsulecraft/serializer": "^0.1.13",
+    "@mysten/sui.js": "^0.0.0-experimental-20230420012702"
   }
 }
