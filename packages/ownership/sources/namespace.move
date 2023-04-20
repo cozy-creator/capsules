@@ -68,26 +68,19 @@ module ownership::namespace {
     }
 
     // Claim a namespace object from a publish receipt.
-    // The principal (address) will be this object's ID, rather than the package-ID. This is because
-    // we may combine several packags under the same namespace.
+    // The principal (address) will be the first package-ID used. We can combine several packags under the
+    // same namespace.
     public fun claim_package_(
         receipt: &mut PublishReceipt,
         owner: address,
         ctx: &mut TxContext
     ): Namespace {
-        // This namespace can only ever be claimed once
-        let receipt_uid = publish_receipt::uid_mut(receipt);
-        assert!(!dynamic_field::exists_(receipt_uid, Key { }), EPACKAGE_ALREADY_CLAIMED);
-        dynamic_field::add(receipt_uid, Key { }, true);
-
-        let id = object::new(ctx);
-        let auth = tx_authority::begin_with_uid(&id);
         let package_id = publish_receipt::into_package_id(receipt);
-        let rbac = rbac::create(package_id, &auth);
+        let rbac = rbac::create_internal(package_id);
 
         let namespace = Namespace { 
-            id,
-            packages: vector[package_id], 
+            id: object::new(ctx),
+            packages: vector::empty(), 
             rbac 
         };
 
@@ -95,6 +88,8 @@ module ownership::namespace {
         let typed_id = typed_id::new(&namespace);
         let auth = tx_authority::begin_with_type(&Witness { });
         ownership::as_shared_object<Namespace, SimpleTransfer>(&mut namespace.id, typed_id, owner, &auth);
+
+        add_package_internal(receipt, &mut namespace);
 
         namespace
     }
@@ -137,15 +132,30 @@ module ownership::namespace {
     // You must be the owner of a namespace to edit it. If you want to change owners, call into SimpleTransfer.
     // Ownership of namespaces created with anything other than a publish_receipt are non-transferable.
 
+    // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
+        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
+        add_package_internal(receipt, namespace);
     }
 
-    // Sui does not currently support multi-party transactions, so this is harder than it should be.
-    // We need both the sender and the recipient to sign for this.
-    // 
+    fun add_package_internal(receipt: &mut PublishReceipt, namespace: &mut Namespace) {
+        // This namespace can only ever be claimed once
+        let receipt_uid = publish_receipt::uid_mut(receipt);
+        assert!(!dynamic_field::exists_(receipt_uid, Key { }), EPACKAGE_ALREADY_CLAIMED);
+        dynamic_field::add(receipt_uid, Key { }, true);
+
+        let package_id = publish_receipt::into_package_id(receipt);
+        vector::push_back(&mut namespace.packages, package_id);
+    }
+
+    // Sui does not currently support multi-party transactions, so we cannot do this atomically in a single
+    // transaction; we need both the sender and the recipient to sign for this.
+    // TO DO: use a single-use permission for this
     public fun transfer_package(from: &mut Namespace, to: &mut Namespace, package_id: ID, auth: &TxAuthority) {
         assert!(namespace::has_permission<RECEIVE>(to, &auth), ENO_NAMESPACE_PERMISSION);
+
+        // TO DO
     }
 
     public fun uid(namespace: &Namespace): &UID {
@@ -206,40 +216,18 @@ module ownership::namespace {
     // ======== Validity Checkers ========
     // Used by modules to assert the correct permissions are present
 
+    // Convenience function
     public fun assert_login<Permission>(namespace: &Namespace, ctx: TxContext): TxAuthority {
-        let auth = claim_authority(namespace, ctx);
-        let principal = object::id_to_address(&namespace.id);
-        assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
-
-        auth
+        let auth = tx_authority::begin(ctx);
+        assert_login_<Permission>(namespace, &auth)
     }
 
     public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
         let auth = claim_authority_(namespace, auth);
-        let principal = object::id_to_address(&namespace.id);
+        let principal = rbac::principal(&namespace.rbac);
         assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
 
         auth
-    }
-
-    // Must have permission from the namespace corresponding to the Permission type
-    // Example: if Permission is '<package>::my_module::MyPermission', then the namespace must own
-    // '<package>'
-    public fun has_native_permission<Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<Permission>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-        tx_authority::has_permission<Permission>(principal, auth)
-    }
-
-    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace
-    public fun has_permission<NamespaceType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-        tx_authority::has_permission<Permission>(principal, auth)
     }
 }
 
