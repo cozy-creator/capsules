@@ -1,5 +1,5 @@
 import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, TransactionBlock } from "@mysten/sui.js";
-import { serializeByField, bcs, deserializeByField, parseViewResultsFromStruct } from "@capsulecraft/serializer";
+import { serializeByField, bcs, deserializeByField } from "@capsulecraft/serializer";
 
 const pkg = "0x770f088a0fcc7da37a631aaf9af59c0ffa935064171bd0e8dccfdab8f0c77150";
 const mnemonics = "...";
