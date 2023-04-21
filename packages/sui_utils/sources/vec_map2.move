@@ -10,6 +10,12 @@ module sui_utils::vec_map2 {
     const EVEC_LENGTH_MISMATCH: u64 = 0;
     const EVEC_NOT_EMPTY: u64 = 1;
 
+    public fun new<K: copy, V>(key: K, value: V): VecMap<K, V> {
+        let vec = vec_map::empty();
+        vec_map::insert(&mut vec, key, value);
+        vec
+    }
+
     public fun create<K: copy, V>(keys: vector<K>, values: vector<V>): VecMap<K, V> {
         assert!(vector::length(&keys) == vector::length(&values), EVEC_LENGTH_MISMATCH);
 
@@ -106,5 +112,18 @@ module sui_utils::vec_map2 {
     public fun merge<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, vector<V>>, key: K, value: V) {
         let vec = borrow_mut_fill(self, key, vector[]);
         vector2::merge(vec, vector[value]);
+    }
+
+    public fun flatten<K: copy + drop, V: copy>(self: &VecMap<K, V>, keys: vector<K>): vector<V> {
+        let result = vector::empty();
+        let mut i = 0;
+        while (i < vector::length(&keys)) {
+            let key = vector::borrow(&keys, i);
+            let value = *vec_map::get(self, &key);
+            vector::push_back(&mut result, value);
+            i += 1;
+        };
+
+        result
     }
 }

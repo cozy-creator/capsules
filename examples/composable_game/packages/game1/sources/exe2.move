@@ -11,7 +11,9 @@ module composable_game::exe2 {
     }
 
     struct Character has key, store {
-        id: UID
+        id: UID,
+        name: String, // client-endpoint
+        power_level: u64, // server-endpoint
     }
 
     struct Currency has key, store {
@@ -22,13 +24,14 @@ module composable_game::exe2 {
     // Our module authority
     struct Witness has drop {}
 
-    // Used as a generic reference to this package
-    struct EXE2 {}
+    // One time witness
+    struct EXE2 has drop {}
 
     // Permission types
     struct CREATE {}
 
     // This can be an entry function by accepting the `Namespace` and `TxContext` directly
+    // Because it doesn't accept an auth, it cannot be used via permission
     public entry fun create_character_0(owner: address, namespace: &Namespace, ctx: &mut TxContext) {
         let _auth = namespace::assert_login<CREATE>(namespace, ctx);
 
@@ -52,7 +55,7 @@ module composable_game::exe2 {
     // In the second case, you will have: auth.permissions contain Permission { `<thispackage>::exe2::CREATE` },
     // which will be in a VecMap with the key being this module's namespace
     public fun create_character_2(owner: address, auth: &TxAuthority, ctx: &mut TxContext) {
-        assert!(namespace::has_native_permission<CREATE>(&auth), ENO_NAMESPACE_PERMISSION);
+        assert!(namespace::has_permission<CREATE>(&auth), ENO_NAMESPACE_PERMISSION);
 
         let character = Character { id: object::new(ctx) };
 
@@ -64,11 +67,36 @@ module composable_game::exe2 {
     // Essentially, this means that this game cannot produce its own characters! Only the foreign game can
     // do that.
     public fun create_character_3(owner: address, auth: &TxAuthority, ctx: &mut TxContext) {
-        assert!(namespace::has_permission<Foreign, CREATE>(&auth), ENO_NAMESPACE_PERMISSION);
+        assert!(namespace::has_permission_<Foreign, CREATE>(&auth), ENO_NAMESPACE_PERMISSION);
 
         let character = Character { id: object::new(ctx) };
 
         transfer::share_object(character);
+    }
+
+    // ===== Examples =====
+    fun init(otw: EXE2, ctx: &mut TxContext) {
+        let owner = tx_context::sender(ctx);
+        let receipt = publish_receipt::claim(&otw, ctx);
+        let namespace = namespace::claim_(receipt, owner, ctx);
+
+        namespace::return_and_share(namespace);
+    }
+
+    public entry fun claim_namespace_example(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
+        namespace::claim_package(receipt, ctx);
+    }
+
+    public entry fun add_full(namespace: &mut Namespace, ctx: &mut TxContext) {
+        let auth = tx_authority::begin_with_type(&Witness {});
+
+        namespace::add_full(namespace, auth, ctx);
+    }
+
+    public fun uid_mut(character: &mut Character, auth: &TxAuthority): &mut UID {
+        assert!(ownership::has_permission(&character.id, &auth), ENO_NAMESPACE_PERMISSION);
+
+        &mut character.id
     }
 
 
@@ -76,8 +104,8 @@ module composable_game::exe2 {
     // I could add all of their agents to roles inside of my own Namespace, but that's too direct.
     // Instead what we want to do is have a PROXY for ForeignNamespace; i.e., anyone with
     // Permission: (ForeignNamespace, <thispackage>::exe2::CREATE) can call create_character_1 or 2.
-    // So the pattern would be: (1) ForeignNamespace adds a record, saying 0x123 (the agent) has permission
-    // to <thispackage)>::exe2::CREATE (or ALL, or ADMIN), and (2) Namespace adds a record saying that
+    // So the pattern would be: (1) ForeignNamespace adds a record, saying 0x123 (their agent) has permission
+    // to <thispackage)>::exe2::CREATE (or ALL / ADMIN), and (2) Namespace adds a record saying that
     // ForeignNamespace has permission to <thispackage>::exe2::CREATE
     // We could do an inbox-permission; i.e., add our permission to the ForeignNamespace's object,
     // but that wouldn't work for create_character_1, because we are only bringing our Namespace object
@@ -95,6 +123,9 @@ module composable_game::exe2 {
     // but you granted permission to 0x456 to use your cartridge.
     // We could create a devInspect function that does this, but that makes it more complicated for the
     // client; it has to know what to call. And it might be hard to find the delegation record.
+    //
+    // The simplest pattern would be to have a rental transfer module that allows you to change the
+    // owner while retaining a receipt-object that lets you take it back.
 }
 
 // =========== Old Code ===========

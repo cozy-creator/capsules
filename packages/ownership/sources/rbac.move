@@ -41,16 +41,16 @@ module ownership::rbac {
     // ======= Principal API =======
     // Used by the principal to create roles and delegate permissions to agents
 
-    public fun create(principal: address, auth: &TxAuthority): RBAC {
-        assert!(tx_authority::is_signed_by(principal, auth), ENO_PRINCIPAL_AUTHORITY);
+    // public fun create(principal: address, auth: &TxAuthority): RBAC {
+    //     assert!(tx_authority::is_signed_by(principal, auth), ENO_PRINCIPAL_AUTHORITY);
 
-        create_internal(principal)
-    }
+    //     create_internal(principal)
+    // }
 
     // This is used by namespace::claim because namespaces use package-ids as their principal, and you can
     // never obtain a package-id as an agent outside of using a namespace, so it's impossible to satisfy
     // the auth constraint
-    public(friend) fun create_internal(principal: address): RBAC {
+    public(friend) fun create(principal: address): RBAC {
         RBAC {
             principal,
             agent_roles: vec_map::empty(),
@@ -169,7 +169,7 @@ module ownership::rbac {
 
     public fun to_fields(
         rbac: &RBAC
-    ): (address, &VecMap<address, vector<String>>, &VecMap<String, vector<StoredPermission>>) {
+    ): (address, &VecMap<address, vector<String>>, &VecMap<String, vector<Permission>>) {
         (rbac.principal, &rbac.agent_roles, &rbac.role_permissions)
     }
 
@@ -181,7 +181,7 @@ module ownership::rbac {
         &rbac.agent_roles
     }
 
-    public fun role_permissions(rbac: &RBAC): &VecMap<String, StoredPermission> {
+    public fun role_permissions(rbac: &RBAC): &VecMap<String, Permission> {
         &rbac.role_permissions
     }
 }

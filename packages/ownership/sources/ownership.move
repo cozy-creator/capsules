@@ -159,6 +159,52 @@ module ownership::ownership {
         dynamic_field::exists_(uid, Key { })
     }
 
+    public fun has_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+            if (vector::is_empty(&ownership.owner)) true
+            else {
+                if (tx_authority::has_permission<Permission>(&ownership.owner, auth)) true
+                else {
+                    has_stored_permission<Permission>(uid, auth)
+                }
+            }
+        }
+    }
+
+    public fun has_stored_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        let permissions = dynamic_field::borrow<Key, VecMap<address, vector<Permissions>>(uid, Key { });
+        let i = 0;
+        while (i < vector::length(&auth.permissions)) {
+            let permission = vector::borrow(&auth.permissions, i);
+            let principal = tx_authority::type_into_address<Permission>();
+            if (vector::contains(&permissions, &principal)) true
+            else {
+                i = i + 1;
+            }
+        };
+        
+        let key = Key { permission, principal };
+        let permission = tx_authority::type_into_address<Permission>();
+        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+        vector::contains(&ownership.transfer_auth, &permission)
+    }
+
+            assert!(ownership::has_permission(&character.id, &auth), ENO_NAMESPACE_PERMISSION);
+
+    /// Defaults to `true` if owner is not set.
+    public fun is_authorized_by_owner(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+            if (vector::is_empty(&ownership.owner)) true
+            else {
+                tx_authority::has_admin_permission(&ownership.owner, auth)
+            }
+        }
+    }
+
     // If this is initialized, module authority exists and is always the native module (the module
     // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
     public fun is_authorized_by_module(uid: &UID, auth: &TxAuthority): bool {
@@ -169,17 +215,7 @@ module ownership::ownership {
         }
     }
 
-    /// Defaults to `true` if owner is not set.
-    public fun is_authorized_by_owner(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (vector::is_empty(&ownership.owner)) true
-            else {
-                tx_authority::has_k_of_n_signatures(&ownership.owner, 1, auth)
-            }
-        }
-    }
+
 
     /// Defaults to `false` if transfer authority is not set.
     public fun is_authorized_by_transfer(uid: &UID, auth: &TxAuthority): bool {

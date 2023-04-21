@@ -136,6 +136,19 @@ module sui_utils::encode {
         module_addr
     }
 
+    // ========== Convert Types into Addresses ==========
+
+    public fun type_into_address<T>(): address {
+        let typename = encode::type_name<T>();
+        type_string_into_address(typename)
+    }
+
+    public fun type_string_into_address(type: String): address {
+        let typename_bytes = string::bytes(&type);
+        let hashed_typename = hash::blake2b256(typename_bytes);
+        bcs::peel_address(&mut bcs::new(hashed_typename))
+    }
+
     // ========== Parser Functions ==========
 
     // Takes something like `Option<u64>` and returns `u64`. Returns an empty-string if the string supplied 
