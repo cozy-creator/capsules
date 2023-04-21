@@ -98,49 +98,19 @@ module ownership::namespace {
         transfer::share_object(namespace);
     }
 
-    // Convenience entry function
-    public entry fun create(ctx: &mut TxContext) {
-        create_(tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
-    }
-
-    // Create a namespace object for an address; packages will be empty but can be added later
-    // Instead of returning the Namespace here, we force you to use a second transaction
-    // to edit it; this is a safety measure. If a user were tricked into creating this, the
-    // malicious actor will need to trick the user into signing a second transaction after this,
-    // adding permissions to the Namespace object created here.
-    public fun create_(principal: address, auth: &TxAuthority, ctx: &mut TxContext) {
-        // This will abort if the principal is not an agent in the TxAuthority
-        let rbac = rbac::create(principal, &auth);
-
-        let namespace = Namespace { 
-            id: object::new(ctx),
-            packages: vector::empty(), 
-            rbac 
-        };
-
-        // Initialize ownership
-        let typed_id = typed_id::new(&namespace);
-        let auth = tx_authority::begin_with_type(&Witness { });
-        // Owner == principal, and ownership of this object can never be changed since we do not
-        // assign any transfer function here
-        ownership::as_shared_object_(&mut namespace.id, typed_id, principal, vector::empty(), &auth);
-
-        transfer::share_object(namespace);
-    }
-
     // ======== Edit Namespaces =====
     // You must be the owner of a namespace to edit it. If you want to change owners, call into SimpleTransfer.
     // Ownership of namespaces created with anything other than a publish_receipt are non-transferable.
 
     // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
-        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         add_package_internal(receipt, namespace);
     }
 
+    // Ensures that a publish-receipt (package) can only ever be claimed once
     fun add_package_internal(receipt: &mut PublishReceipt, namespace: &mut Namespace) {
-        // This namespace can only ever be claimed once
         let receipt_uid = publish_receipt::uid_mut(receipt);
         assert!(!dynamic_field::exists_(receipt_uid, Key { }), EPACKAGE_ALREADY_CLAIMED);
         dynamic_field::add(receipt_uid, Key { }, true);
@@ -158,35 +128,26 @@ module ownership::namespace {
         // TO DO
     }
 
-    public fun uid(namespace: &Namespace): &UID {
-        &namespace.id
-    }
-
-    public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-
-        &mut namespace.id
-    }
-
-    public fun rbac_borrow_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut RBAC {
-        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-
-        &mut namespace.rbac
-    }
-
     // Note that this is currently not callable, because Sui does not yet support destroying shared
     // objects. To destroy a namespace, you must first remove any packages from it; this is to
     // prevent packages from being permanently orphaned without a namespace.
     public fun destroy(namespace: Namespace) {
-        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&namespace.packages), EPACKAGES_MUST_BE_EMPTY);
 
-        let Namespace { id, package: _, rbac: _ } = namespace;
+        let Namespace { id, packages: _, rbac: _ } = namespace;
         object::delete(id);
     }
 
+    // ======== RBAC Editor ========
+    // This is just authority-checking + pass-through to the private RBAC editor API.
+
+
+
     // ======== For Agents ========
-    // Looks through the specified namespace and retrieves relevant permissions stored there
+    // Agents should call into this to retrieve any permissions assigned to them and stored within the
+    // namespace. These permissions are brought into the current transaction-exeuction to pass validity-
+    // checks later.
 
     public fun claim_authority(namespace: &Namespace, ctx: &TxContext): TxAuthority {
         let agent = tx_context::sender(ctx);
@@ -205,12 +166,19 @@ module ownership::namespace {
         auth
     }
 
+    // I don't think this really needs to be internal?
     fun claim_authority_internal(namespace: &Namespace, agent: address, auth: &TxAuthority): TxAuthority {
         let (principal, agent_roles, role_permissions) = rbac::to_fields(&namespace.rbac);
         let roles = vec_map2::get_with_default(agent_roles, agent, vector::empty());
 
-        tx_authority::add_namespace_internal(namespace.packages, principal);
-        tx_authority::add_permissions_internal(principal, roles, role_permissions, &auth)
+        auth = tx_authority::add_permissions_internal(principal, roles, role_permissions, auth);
+        auth = claim_foreign(namespace, principal, auth);
+        tx_authority::add_namespace_internal(namespace.packages, principal, auth)
+    }
+
+    fun claim_foreign(namespace: &Namespace, principal: address, auth: &TxAthority): TxAuthority {
+        let permission = dynamic_field2::get_with_default(&namespace.id, Key { principal }, vector[]);
+        auth = tx_authority::add_permissions_internal(principal, permission, auth);
     }
 
     // ======== Validity Checkers ========
@@ -222,12 +190,42 @@ module ownership::namespace {
         assert_login_<Permission>(namespace, &auth)
     }
 
+    // Log the agent into the namespace, and assert that they have the specified permission
     public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
         let auth = claim_authority_(namespace, auth);
         let principal = rbac::principal(&namespace.rbac);
         assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
 
         auth
+    }
+
+    // Convenience function. Permission and Namespace are the same module.
+    public fun has_permission<Permission>(auth: &TxAuthority): bool {
+        has_permission_<Permission, Permission>(auth)
+    }
+
+    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace;
+    // we merely use this type to figure out the package-id, so that we can lookup the Namespace that
+    // owns that type (assuming it has been added to TxAuthority already).
+    // In this case, Namespace is the principal.
+    public fun has_permission_<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+
+       tx_authority::has_permission<Permission>(principal, auth)
+    }
+
+    // ======== Extend Pattern ========
+
+    public fun uid(namespace: &Namespace): &UID {
+        &namespace.id
+    }
+
+    public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
+        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        &mut namespace.id
     }
 }
 
@@ -241,3 +239,38 @@ module ownership::namespace_rbac() {
     // TO DO
 
 }
+
+
+    // UPDATE: I think it's simply too dangerous to allow regular users to create Namespaces.
+    // We restrict namespaces to only projects who are deploying packages, since they can be
+    // assumed to have tighter security and greater security knowledge.
+
+    // Convenience entry function
+    // public entry fun create(ctx: &mut TxContext) {
+    //     create_(tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
+    // }
+
+    // Create a namespace object for an address; packages will be empty but can be added later
+    // Instead of returning the Namespace here, we force you to use a second transaction
+    // to edit it; this is a safety measure. If a user were tricked into creating this, the
+    // malicious actor will need to trick the user into signing a second transaction after this,
+    // adding permissions to the Namespace object created here.
+    // public fun create_(principal: address, auth: &TxAuthority, ctx: &mut TxContext) {
+    //     assert!(tx_authority::has_admin_permission(principal, auth), ENO_ADMIN_AUTHORITY);
+
+    //     let rbac = rbac::create(principal, &auth);
+    //     let namespace = Namespace { 
+    //         id: object::new(ctx),
+    //         packages: vector::empty(), 
+    //         rbac 
+    //     };
+
+    //     // Initialize ownership
+    //     let typed_id = typed_id::new(&namespace);
+    //     let auth = tx_authority::begin_with_type(&Witness { });
+    //     // Owner == principal, and ownership of this object can never be changed since we do not
+    //     // assign any transfer function here
+    //     ownership::as_shared_object_(&mut namespace.id, typed_id, principal, vector::empty(), &auth);
+
+    //     transfer::share_object(namespace);
+    // }

@@ -19,234 +19,156 @@ module ownership::tx_authority {
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
     // agents: [ addresses that have given full authority to this transaction ]
-    // permissions: (principle, types corresponding to functions allowed to be called on behalf of principal)
-    // namespaces: (package ID, principal for that package; the ID (as an address) of its namespace object)
+    // permissions: (principle => Permission" functions that are allowed to be called on behalf of the principal)
+    // namespaces: (package ID => principal for that package, i.e., the ID (address) found in its namespace object)
     struct TxAuthority has drop {
-        agents: vector<address>,
         permissions: VecMap<address, vector<Permission>>,
         namespaces: VecMap<ID, address>
+    }
+
+    struct SingleUsePermission has key, store {
+        id: UID,
+        principal: address,
+        permission: Permission
     }
 
     // ========= Begin =========
 
     // Begins with a transaction-context object
     public fun begin(ctx: &TxContext): TxAuthority {
-        TxAuthority { agents: vector[tx_context::sender(ctx)] }
+        TxAuthority {
+            permissions: vec_map2::new(tx_context::sender(ctx), permissions::admin()), 
+            namespaces: vec_map::empty() 
+        }
     }
 
     // Begins with a capability-id
     public fun begin_with_id<T: key>(cap: &T): TxAuthority {
-        TxAuthority { agents: vector[object::id_address(cap)] }
-    }
-
-    public fun begin_with_uid(uid: &UID): TxAuthority {
-        TxAuthority { agents: vector[object::uid_to_address(uid)] }
+        TxAuthority {
+            permissions: vec_map2::new(object::id_address(cap), permissions::admin()), 
+            namespaces: vec_map::empty() 
+        }
     }
 
     // Begins with a capability-type
     public fun begin_with_type<T>(_cap: &T): TxAuthority {
-        TxAuthority { agents: vector[type_into_address<T>()] }
+        TxAuthority {
+            permissions: vec_map2::new(encode::type_into_address<T>(), permissions::admin()), 
+            namespaces: vec_map::empty() 
+        }
+    }
+
+    public fun begin_with_single_use(single_use: SingleUsePermission): TxAuthority {
+        let SingleUsePermission = { id, principal, permission } = single_use;
+        object::delete(id);
+
+        TxAuthority {
+            permissions: vec_map2::new(principal, vector[permission]), 
+            namespaces: vec_map::empty() 
+        }
     }
 
     public fun empty(): TxAuthority {
-        TxAuthority { agents: vector::empty<address>() }
+        TxAuthority { permissions: vec_map2::empty(), namespaces: vec_map::empty() }
     }
 
     // ========= Add Agents =========
 
     public fun add_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { agents: *&auth.agents };
-        add_internal(object::id_address(cap), &mut new_auth);
-
-        new_auth
-    }
-
-    public fun add_uid(uid: &UID, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { agents: *&auth.agents };
-        add_internal(object::uid_to_address(uid), &mut new_auth);
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        vec_map2::set(&mut new_auth.permissions, object::id_address(cap), permissions::admin());
 
         new_auth
     }
 
     public fun add_type<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { agents: *&auth.agents };
-        add_internal(type_into_address<T>(), &mut new_auth);
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        vec_map2::set(&mut new_auth.permissions, encode::type_into_address<T>(), permissions::admin());
 
         new_auth
     }
 
-    // ========= Permission System =========
+    public fun add_single_use(single_use: SingleUsePermission, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
 
-    friend ownership::rbac;
-    friend ownership::namespace;
-
-    // These are reserved role names. If the principal gives an agent the ALL role, then they can act as that
-    // agent for all permission-types (there is no scope). HOWEVER, you still don't get to act as the principal
-    // directly.
-    // For the ADMIN role, you can act fully as the principal.
-    // Note that granting the ADMIN role is potentially dangerous, as the agent can then grant _other_ agents
-    // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
-    // to revoke the rights of the agent and make the principal secure again.
-    const ADMIN: vector<u8> = b"ADMIN";
-    const ALL: vector<u8> = b"ALL";
-
-    // Can be stored, but not copied. Used as a template to produce Permission structs
-    // Anyone who can obtain a reference to this can use it; store it somewhere private
-    struct StoredPermission has store, drop {
-        inner: String
-    }
-
-    // Does not have store, and hence must be dropped at the end of tx-execution
-    struct Permission has copy, drop {
-        inner: String
-    }
-
-    // Owned, storable or root-level object. It's destroyed immediately upon use
-    struct SingleUsePermission has key, store {
-        id: UID,
-        permission: StoredPermission
-    }
-
-    // This can only be used by the `ownership::rbac`
-    public(friend) fun add_permissions_internal(
-        principal: address,
-        roles: vector<String>,
-        role_permissions: VecMap<String, vector<StoredPermission>>,
-        auth: &TxAuthority
-    ): TxAuthority {
-        let new_auth = TxAuthority { agents: auth.agents, permissions: auth.permissions, namespaces: auth.namespaces };
-
-        let i = 0;
-        while (i < vector::length(roles)) {
-            let role = *vector::borrow(roles, i);
-            if (role == utf8(ALL)) {
-                // We don't need any other permissions
-                vec_map2::set(&mut new_auth.permissions, principal, vector[Permission { inner: utf8(ALL) }]);
-                break;
-            }
-            let stored = vec_map::get(role_permissions, role);
-            let permissions = copy_permissions(stored);
-            vec_map2::merge(&mut new_auth.permissions, principal, permissions);
-            i = i + 1;
-        };
-
-        new_auth
-    }
-    
-    // Internal function so that only this module can turn is_signed_by_StoredPermission into Permission objects
-    fun copy_permissions(stored: &vector<StoredPermission>): vector<Permission> {
-        let i = 0;
-        let permissions = vector::empty<Permission>();
-        while (i < vector::length(&stored)) {
-            let inner = vector::borrow(&stored, i).inner;
-            vector::push_back(&mut permissions, Permission { inner });
-            i = i + 1;
-        };
-    }
-
-    // Only callable by ownership::namespace
-    public(friend) fun add_namespace_internal(
-        packages: vector<ID>,
-        principal: address,
-        auth: &TxAuthority
-    ): TxAuthority {
-        let new_auth = TxAuthority { agents: auth.agents, permissions: auth.permissions, namespaces: auth.namespaces };
-        while (!vector::is_empty(&packages)) {
-            let package = vector::pop_back(&mut packages);
-            vec_map2::insert_maybe(&mut new_auth.namespaces, package, principal);
-        };
+        let SingleUsePermission = { id, principal, permission } = single_use;
+        object::delete(id);
+        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
+        permissions::add(existing, vector[permission]);
 
         new_auth
     }
 
-    // ========= Agent Validity Checkers =========
-    // Only checks against agents (the primary signers) and ignores permissions
+    // ========= Admin Validity Checkers =========
+    // Admin is the highest level of permission an agent can have
+    // Use these checkers when doing sensitive operations, like granting permissions to other agents
 
-    public fun is_signed_by(addr: address, auth: &TxAuthority): bool {
-        vector::contains(&auth.agents, &addr)
+    public fun has_admin_permission(principal: address, auth: &TxAuthority): bool {
+        let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
+        if (option::is_none(&permissions_maybe)) { return false };
+        let permissions = option::destroy_some(permissions_maybe);
+
+        permissions::has_admin_permission(permissions)
     }
 
-    // Defaults to `true` if the signing address is option::none
-    public fun is_signed_by_(addr: Option<address>, auth: &TxAuthority): bool {
-        if (option::is_none(&addr)) return true;
-        is_signed_by(option::destroy_some(addr), auth)
+    // Defaults to `true` if the principal does not exist (option::none)
+    public fun has_admin_permission_(principal_maybe: Option<address>, auth: &TxAuthority): bool {
+        if (option::is_none(&principal_maybe)) return true;
+        has_admin_permission(option::destroy_some(principal_maybe), auth)
     }
 
-    public fun is_signed_by_module<T>(auth: &TxAuthority): bool {
-        is_signed_by(witness_addr<T>(), auth)
+    // True if and only if TxAuthority had the Witness of T's module added
+    public fun has_module_permission<T>(auth: &TxAuthority): bool {
+        has_admin_permission(witness_addr<T>(), auth)
     }
 
     // type can be any type belonging to the module, such as 0x599::my_module::StructName
-    public fun is_signed_by_module_(type: String, auth: &TxAuthority): bool {
-        is_signed_by(witness_addr_(type), auth)
+    public fun has_module_permission_(type: String, auth: &TxAuthority): bool {
+        has_admin_permission(witness_addr_(type), auth)
     }
 
-    public fun is_signed_by_object<T: key>(id: ID, auth: &TxAuthority): bool {
-        is_signed_by(object::id_to_address(&id), auth)
+    public fun has_object_permission<T: key>(id: ID, auth: &TxAuthority): bool {
+        has_admin_permission(object::id_to_address(&id), auth)
     }
 
-    public fun is_signed_by_type<T>(auth: &TxAuthority): bool {
-        is_signed_by(type_into_address<T>(), auth)
+    public fun has_type_permission<T>(auth: &TxAuthority): bool {
+        has_admin_permission(encode::type_into_address<T>(), auth)
     }
 
-    public fun has_k_of_n_signatures(addrs: &vector<address>, threshold: u64, auth: &TxAuthority): bool {
-        let k = number_of_signers(addrs, auth);
+    public fun has_k_of_n_admins(addrs: &vector<address>, threshold: u64, auth: &TxAuthority): bool {
+        let k = number_of_admins(addrs, auth);
         if (k >= threshold) true
         else false
     }
 
-    // If you're doing a 'k of n' signature schema, pass your vector of the n signatures, and if this
+    // If you're doing a 'k of n' signature schema, pass your vector of the n agent addresses, and if this
     // returns >= k pass the check, otherwise fail the check
-    public fun number_of_signers(addrs: &vector<address>, auth: &TxAuthority): u64 {
+    public fun number_of_admins(addrs: &vector<address>, auth: &TxAuthority): u64 {
         let (total, i) = (0, 0);
         while (i < vector::length(addrs)) {
             let addr = *vector::borrow(addrs, i);
-            if (is_signed_by(addr, auth)) { total = total + 1; };
+            if (has_admin_permission(addr, auth)) { total = total + 1; };
             i = i + 1;
         };
         total
     }
 
     // ========= Permission Validity Checkers =========
-    // Checks against permissions + agents, and not just agents (as above)
+    // Checks against permissions + admins, and not just admin-status (as above)
+    // Permission checks are more permissive than admin-checks, because there is a wider number of ways
+    // to satisfy the check
 
-    // Must have permission from the namespace corresponding to the Permission type ("native")
-    // Example: if our Permission is '<package>::my_module::MyPermission', then the namespace must own
-    // '<package>'
-    public fun has_native_permission<Permission>(auth: &TxAuthority): bool {
-        has_permission<Permission, Permission>(auth)
-    }
-
-    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace
-    public fun has_permission<NamespaceType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-       has_permission_<Permission>(principal, auth)
-    }
-
-    public fun has_permission_<Permission>(principal: address, auth: &TxAuthority): bool {
-        if (is_signed_by(principal, auth)) { return true };
+    public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
+        if (has_admin_permission(principal, auth)) { return true };
 
         let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
         if (option::is_none(&permissions_maybe)) { return false };
         let permissions = option::destroy_some(permissions_maybe);
 
-        let type_name = encode::type_name<Permission>();
-        let i = 0;
-        while (i < vector::length(&permissions)) {
-            let permission = vector::borrow(&permissions, i);
-            if (permission.inner == utf8(ALL) || permission.inner == type_name ) { 
-                return true
-            };
-            i = i + 1;
-        };
-
-        false
+        permissions::has_permission<Permission>(&permissions);
     }
 
-    // The [rincipal is optional and defaults to true if `option::none`
+    // The principal is optional and defaults to true if `option::none`
     public fun has_permission_opt<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&principal_maybe)) { return true };
         let principal = option::destroy_some(principal_maybe);
@@ -255,10 +177,6 @@ module ownership::tx_authority {
     }
 
     // ========= Getter Functions =========
-
-    public fun agents(auth: &TxAuthority): vector<address> {
-        auth.agents
-    }
 
     public fun permissions(auth: &TxAuthority): VecMap<address, Permission> {
         auth.permissions
@@ -270,33 +188,19 @@ module ownership::tx_authority {
 
     // May return option::none if the namespace hasn't been added to this TxAuthority object
     public fun lookup_namespace_for_package<P>(auth: &TxAuthority): Option<address> {
-        vec_map::get_maybe(&auth.namespaces, encode::package_id<P>());
-    }
-
-    // ========= Convert Types to Addresses =========
-
-    public fun type_into_address<T>(): address {
-        let typename = encode::type_name<T>();
-        type_string_into_address(typename)
-    }
-
-    public fun type_string_into_address(type: String): address {
-        let typename_bytes = string::bytes(&type);
-        let hashed_typename = hash::blake2b256(typename_bytes);
-        // let truncated = vector2::slice(&hashed_typename, 0, address::length());
-        bcs::peel_address(&mut bcs::new(hashed_typename))
+        vec_map::get_maybe(&auth.namespaces, encode::package_id<P>())
     }
 
     // ========= Module-Signing Witness =========
 
     public fun witness_addr<T>(): address {
         let witness_type = witness_string<T>();
-        type_string_into_address(witness_type)
+        encode::type_string_into_address(witness_type)
     }
 
     public fun witness_addr_(type: String): address {
         let witness_type = witness_string_(type);
-        type_string_into_address(witness_type)
+        encode::type_string_into_address(witness_type)
     }
 
     public fun witness_addr_from_struct_tag(tag: &StructTag): address {
@@ -307,7 +211,7 @@ module ownership::tx_authority {
         string::append(&mut witness_type, utf8(b"::"));
         string::append(&mut witness_type, utf8(WITNESS_STRUCT));
 
-        type_string_into_address(witness_type)
+        encode::type_string_into_address(witness_type)
     }
 
     public fun witness_string<T>(): String {
@@ -321,10 +225,35 @@ module ownership::tx_authority {
 
     // ========= Internal Functions =========
 
-    fun add_internal(addr: address, auth: &mut TxAuthority) {
-        if (!vector::contains(&auth.agents, &addr)) {
-            vector::push_back(&mut auth.agents, addr);
+    friend ownership::rbac;
+    friend ownership::namespace;
+
+    // Only callable by ownership::namespace
+    public(friend) fun add_namespace_internal(
+        packages: vector<ID>,
+        principal: address,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        while (!vector::is_empty(&packages)) {
+            let package = vector::pop_back(&mut packages);
+            vec_map2::insert_maybe(&mut new_auth.namespaces, package, principal);
         };
+
+        new_auth
+    }
+
+    // This can only be used by the `ownership::rbac`
+    public(friend) fun add_permissions_internal(
+        principal: address,
+        new_permissions: vector<Permission>,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
+        permissions::add(existing, new_permissions);
+
+        new_auth
     }
 
     #[test_only]
@@ -335,7 +264,7 @@ module ownership::tx_authority {
     #[test_only]
     public fun add_for_testing(addr: address, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { agents: auth.agents };
-        add_internal(addr, &mut new_auth);
+        vec_map2::set(&mut new_auth.permissions, addr, permissions::admin());
 
         new_auth
     }
@@ -360,8 +289,8 @@ module ownership::tx_authority_test {
         let ctx = test_scenario::ctx(&mut scenario);
         {
             let auth = tx_authority::begin(ctx);
-            assert!(tx_authority::is_signed_by(SENDER1, &auth), 0);
-            assert!(!tx_authority::is_signed_by(SENDER2, &auth), 0);
+            assert!(tx_authority::has_admin_permission(SENDER1, &auth), 0);
+            assert!(!tx_authority::has_admin_permission(SENDER2, &auth), 0);
         };
         test_scenario::end(scenario);
     }
