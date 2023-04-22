@@ -71,4 +71,27 @@ module sui_utils::vector2 {
             };
         };
     }
+
+    public fun remove_maybe<T>(vec: &mut vector<T>, item: &T): Option<T> {
+        let (exists, i) = vector::index_of(vec, item);
+        if (exists) {
+            option::some(vector::swap_remove(vec, i))
+        } else {
+            option::none()
+        }
+    }
+
+    public fun and_filter<T>(vec: &vector<T>, filter: &vector<T>): vector<T> {
+        let filtered = vector::empty<T>();
+        let i = 0;
+        while (i < vector::length(vec)) {
+            let item = vector::borrow(vec, i);
+            if (vector::contains(filter, item)) {
+                vector::push_back(&mut filtered, *item);
+            };
+            i = i + 1;
+        };
+        
+        filtered
+    }
 }
