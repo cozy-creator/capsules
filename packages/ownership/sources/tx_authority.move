@@ -26,12 +26,6 @@ module ownership::tx_authority {
         namespaces: VecMap<ID, address>
     }
 
-    struct SingleUsePermission has key, store {
-        id: UID,
-        principal: address,
-        permission: Permission
-    }
-
     // ========= Begin =========
 
     // Begins with a transaction-context object
@@ -159,8 +153,6 @@ module ownership::tx_authority {
     // to satisfy the check
 
     public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
-        if (has_admin_permission(principal, auth)) { return true };
-
         let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
         if (option::is_none(&permissions_maybe)) { return false };
         let permissions = option::destroy_some(permissions_maybe);
@@ -177,6 +169,10 @@ module ownership::tx_authority {
     }
 
     // ========= Getter Functions =========
+
+    public fun agents(auth: &TxAuthority): vector<address> {
+        vec_map2::keys(&auth.permissions)
+    }
 
     public fun permissions(auth: &TxAuthority): VecMap<address, Permission> {
         auth.permissions
@@ -224,11 +220,10 @@ module ownership::tx_authority {
     }
 
     // ========= Internal Functions =========
+    // Only callable within the `ownership::namespace` module
 
-    friend ownership::rbac;
     friend ownership::namespace;
 
-    // Only callable by ownership::namespace
     public(friend) fun add_namespace_internal(
         packages: vector<ID>,
         principal: address,
@@ -243,15 +238,18 @@ module ownership::tx_authority {
         new_auth
     }
 
-    // This can only be used by the `ownership::rbac`
     public(friend) fun add_permissions_internal(
         principal: address,
+        agent: address,
         new_permissions: vector<Permission>,
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.permissions, agent, vector[]);
         let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
-        permissions::add(existing, new_permissions);
+
+        let permissions = vector2::filter(&new_permissions, agent_permissions);
+        permissions::add(existing, permissions);
 
         new_auth
     }

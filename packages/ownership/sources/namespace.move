@@ -63,7 +63,7 @@ module ownership::namespace {
 
     // Convenience entry function
     public entry fun claim_package(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
-        let namespace = claim_package_(receipt, tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
+        let namespace = claim_package_(receipt, tx_context::sender(ctx), ctx);
         return_and_share(namespace);
     }
 
@@ -140,49 +140,120 @@ module ownership::namespace {
     }
 
     // ======== RBAC Editor ========
-    // This is just authority-checking + pass-through to the private RBAC editor API.
+    // This is just a pass-through layer into RBAC itself + authority-checking + pass-through
+    // The RBAC editor is private, and can only be accessed via this namespace module
 
+    public entry fun set_role_for_agent(namespace: &mut Namespace, agent: address, role: String) {
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
+        rbac::set_role_for_agent(&mut namespace.rbac, agent, role);
+    }
+
+    public entry fun grant_admin_role_for_agent(namespace: &mut Namespace, agent: address) {
+        vec_map2::set(&mut rbac.agent_roles, agent, utf8(ADMIN));
+    }
+
+    public entry fun grant_manager_role_for_agent(namespace: &mut Namespace, agent: address) {
+        vec_map2::set(&mut rbac.agent_roles, agent, utf8(MANAGER));
+    }
+
+    public entry fun delete_agent(namespace: &mut Namespace, agent: address) {
+        vec_map2::remove_maybe(&mut rbac.agent_roles, agent);
+    }
+
+    public entry fun grant_permission_to_role<Permission>(namespace: &mut Namespace, role: String) {
+        let permission = permissions::new<Permission>();
+        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
+        vector2::merge(existing, vector[permission]);
+    }
+
+    public entry fun revoke_permission_from_role<Permission>(namespace: &mut Namespace, role: String) {
+        let permission = permissions::new<Permission>();
+        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
+        vector2::remove_maybe(existing, permission);
+    }
+
+    public entry fun delete_role(namespace: &mut Namespace, role: String) {
+        vec_map2::remove_entries_with_value(&mut rbac.agent_roles, role);
+        vec_map2::remove_maybe(&mut rbac.role_permissions, role);
+    }
 
     // ======== For Agents ========
     // Agents should call into this to retrieve any permissions assigned to them and stored within the
     // namespace. These permissions are brought into the current transaction-exeuction to pass validity-
     // checks later.
 
-    public fun claim_authority(namespace: &Namespace, ctx: &TxContext): TxAuthority {
+    public fun claim_permissions(namespace: &Namespace, ctx: &TxContext): TxAuthority {
         let agent = tx_context::sender(ctx);
         let auth = tx_authority::begin(ctx);
-        claim_authority_internal(namespace, agent, &auth)
+        auth = claim_permissions_for_agent(namespace, agent, &auth);
+        tx_authority::add_namespace_internal(namespace.packages, principal(namespace), &auth)
     }
 
-    public fun claim_authority_(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
+    public fun claim_permissions_(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
         let i = 0;
         let agents = tx_authority::agents(auth);
         while (i < vector::length(&agents)) {
-            auth = claim_authority_internal(namespace, vector::borrow(&agents, i), auth);
+            let agent = *vector::borrow(&agents, i);
+            auth = claim_permissions_for_agent(namespace, agent, auth);
             i = i + 1;
         };
         
-        auth
+        tx_authority::add_namespace_internal(namespace.packages, principal(namespace), &auth)
     }
 
-    // I don't think this really needs to be internal?
-    fun claim_authority_internal(namespace: &Namespace, agent: address, auth: &TxAuthority): TxAuthority {
-        let (principal, agent_roles, role_permissions) = rbac::to_fields(&namespace.rbac);
-        let roles = vec_map2::get_with_default(agent_roles, agent, vector::empty());
-
-        auth = tx_authority::add_permissions_internal(principal, roles, role_permissions, auth);
-        auth = claim_foreign(namespace, principal, auth);
-        tx_authority::add_namespace_internal(namespace.packages, principal, auth)
+    // This function could safely be public, believe it or not
+    fun claim_permissions_for_agent(namespace: &Namespace, agent: address, auth: &TxAuthority): TxAuthority {
+        let permissions = rbac::get_agent_permissions(&namespace.rbac, agent);
+        let principal = principal(namespace);
+        tx_authority::add_permissions_internal(principal, agent, permissions, auth)
     }
 
-    fun claim_foreign(namespace: &Namespace, principal: address, auth: &TxAthority): TxAuthority {
-        let permission = dynamic_field2::get_with_default(&namespace.id, Key { principal }, vector[]);
-        auth = tx_authority::add_permissions_internal(principal, permission, auth);
+    // ======== Namespace Provisioning ========
+    // If we want a namespace to have access to a non-native object, the owner must explicitly
+    // call into ownership::provision() and provision the namespace. From there the namespace
+    // can access the object's UID and write data to its own namespace.
+    // Namespaces can only be explicitly deleted by the namespace itself, even if the object-owner
+    // changes.
+
+    // Used to check which namespaces have access to this object
+    struct Key has store, copy drop { namespace: address } 
+
+    // permission type
+    struct PROVISION {} // allows provisioning and de-provisioning of namespaces
+    struct UID_MUT {} // allows access to the UID
+
+    public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
+        assert!(ownership::has_permission<PROVISION>(uid, auth), ENO_OWNER_AUTHORITY);
+
+        dynamic_field2::set(uid, Key { namespace }, true);
+    }
+
+    public fun deprovision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
+        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+
+        dynamic_field2::drop(uid, Key { namespace })
+    }
+
+    public fun is_provisioned(uid: &UID, namespace: address): bool {
+        dynamic_field::exists_(uid, Key { namespace })
+    }
+
+    // TO DO: we might want to auto-provision a namespace upon access to inventory or data::attach,
+    // so that access cannot be lost in the future.
+    // We might remove the type-checks in the future for PROVISION and make UID have referential-authority
+
+    // ======== Single Use Permissions ========
+
+    public fun create_single_use_permission(namespace: &Namespace, ctx: &TxContext): SingleUsePermission {
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        let principal = principal(namespace);
+        permissions::create_single_use_internal<Permission>(principal, ctx)
     }
 
     // ======== Validity Checkers ========
-    // Used by modules to assert the correct permissions are present
+    // This should be used by modules to assert the correct permissions are present
 
     // Convenience function
     public fun assert_login<Permission>(namespace: &Namespace, ctx: TxContext): TxAuthority {
@@ -192,7 +263,7 @@ module ownership::namespace {
 
     // Log the agent into the namespace, and assert that they have the specified permission
     public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
-        let auth = claim_authority_(namespace, auth);
+        let auth = claim_permissions_(namespace, auth);
         let principal = rbac::principal(&namespace.rbac);
         assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
 
@@ -216,6 +287,30 @@ module ownership::namespace {
        tx_authority::has_permission<Permission>(principal, auth)
     }
 
+    public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+        if (ownership::has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
+        if (ownership::has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
+        if (ownership::has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+
+        let agents = tx_authority::agents(auth);
+        while (!vector::is_empty(&agents)) {
+            let agent = vector::pop_back(&mut agents);
+            if (is_provisioned(uid, agent)) { return true }; // Namespace was previously granted access
+        };
+
+        false
+    }
+
+    // ======== Getter Functions ========
+
+    public fun principal(namespace: &Namespace): address {
+        rbac::principal(&namespace.rbac)
+    }
+
+    public fun packages(namespace: &Namespace): vector<ID> {
+        namespace.packages
+    }
+
     // ======== Extend Pattern ========
 
     public fun uid(namespace: &Namespace): &UID {
@@ -223,10 +318,13 @@ module ownership::namespace {
     }
 
     public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
+        // assert!(ownership::has_permission<UID_MUT>(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        // assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut namespace.id
     }
+
 }
 
 // ======== Edit RBAC =====

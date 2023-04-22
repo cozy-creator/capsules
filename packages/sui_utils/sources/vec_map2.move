@@ -126,4 +126,18 @@ module sui_utils::vec_map2 {
 
         result
     }
+
+    // This does not alter the order of elements, but we could potentially make it more efficient
+    // by using vector::swap_remove instead of vector::remove inside of vec_map::remove_entry_by_idx
+    public fun remove_entries_with_value<K: copy + drop, V: drop>(self: &mut VecMap<K, V>, value: V) {
+        let i = 0;
+        while (i < vec_map::size(self)) {
+            let (_, val) = vec_map::get_entry_by_idx(self, i);
+            if (val == value) { 
+                vec_map::remove_entry_by_idx(self, i); 
+            } else {
+                i = i + 1;
+            };
+        };
+    }
 }
