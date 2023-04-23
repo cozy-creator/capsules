@@ -41,7 +41,7 @@ module ownership::permissions {
     }
 
     public(friend) fun new<P>(): Permission {
-        Permission { inner: encode::type_name<P> }
+        Permission { inner: encode::type_name<P>() }
     }
     
     // Delegations only extend an agent's power to equal or lower levels, never up.
@@ -52,6 +52,10 @@ module ownership::permissions {
         if (has_manager_permission(filter)) {
             if (has_admin_permission(permissions)) { return vector[manager()] }; // Downgrade to manager
             return *permissions
+        };
+
+        if (has_admin_permission(permissions) || has_manager_permissions(permissions)) { 
+            return *filter
         };
 
         vector::filter(permissions, filter)
@@ -112,37 +116,58 @@ module ownership::permissions {
         false
     }
 
+    public fun has_permission_excluding_manager<Permission>(permissions: &vector<Permission>): bool {
+        if (has_manager_permission(permissions)) { return false };
+        has_permission<Permission>(permissions)
+    }
+
     // =========== Single-use permissions ===========
     // Created by ownership::namespace, destroyed by ownership::tx_authority to be added to TxAuthority
+    // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
+    // half of the transaction into a single-use permission, and then have the second party complete it
 
     public(friend) fun create_single_use<Permission>(
         principal: address,
         ctx: &mut TxContext
     ): SingleUsePermission {
-
+        SingleUsePermission {
+            id: object::new(ctx),
+            principal,
+            permission: new<Permission>()
+        }
     }
 
     public(friend) fun create_single_use_manager(
         principal: address,
         ctx: &mut TxContext
     ): SingleUsePermission {
-        
+        SingleUsePermission {
+            id: object::new(ctx),
+            principal,
+            permission: manager()
+        }
     }
 
     public(friend) fun create_single_use_admin(
         principal: address,
         ctx: &mut TxContext
     ): SingleUsePermission {
-        
+        SingleUsePermission {
+            id: object::new(ctx),
+            principal,
+            permission: admin<()
+        }
     }
 
-    public(friend) fun consume_single_use(
-        permission: SingleUsePermission,
-        ctx: &mut TxContext
-    ): (principal, Permission) {
-        let SingleUsePermission (id, principal, permission) = permission;
+    public(friend) fun consume_single_use(permission: SingleUsePermission): (principal, Permission) {
+        let SingleUsePermission { id, principal, permission } = permission;
         object::delete(id);
         (principal, permission)
+    }
+
+    public fun destroy_single_use(permission: SingleUsePermission) {
+        let SingleUsePermission { id, principal: _, permission: _ } = permission;
+        object::delete(id);
     }
 }
 

@@ -15,6 +15,7 @@ module coposable_game::ordinals {
     struct ADD {} // Permission type for adding art to ordinals
     struct ORDINALS has drop {} // one-time witness
     struct Witness has drop {} // module authority
+    struct EDIT_THE_FIELD {} // Permission type for editing the field
 
     public fun create(store: &mut Ordinals, prompts: String, model: String, image_url: Url, auth: &TxAuthority) {
         assert!(namespace::has_permission<ADD>(auth), ENO_EDIT_PERMISSION);

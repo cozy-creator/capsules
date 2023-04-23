@@ -57,7 +57,7 @@ module ownership::ownership {
         assert_valid_initialization(uid, typed_id, auth);
 
         let ownership = Ownership {
-            owner: vector::empty(),
+            owner: option::none(),
             transfer_auth: vector::empty(),
             type: struct_tag::get<T>()
         };
@@ -94,59 +94,6 @@ module ownership::ownership {
         dynamic_field::add(uid, Key { }, ownership);
     }
 
-    // ======= Transfer Authority =======
-
-    // Requires module, owner, and transfer authorities all to sign off on this migration
-    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
-        assert!(is_authorized_by_module(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(is_authorized_by_transfer(uid, auth), ENO_TRANSFER_AUTHORITY);
-
-        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.transfer_auth = new_transfer_auths;
-    }
-
-    // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
-    // changed again.
-    public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
-        migrate_transfer_auth(uid, vector::empty(), auth);
-    }
-
-    // Requires transfer authority. Does NOT require ownership or module authority.
-    // This means the specified transfer authority can change ownership unilaterally, without the current
-    // owner being the sender of the transaction.
-    // This is useful for marketplaces, reclaimers, and collateral-repossession.
-    public fun transfer(uid: &mut UID, new_owner: vector<address>, auth: &TxAuthority) {
-        assert!(is_authorized_by_transfer(uid, auth), ENO_TRANSFER_AUTHORITY);
-
-        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.owner = new_owner;
-    }
-
-    // ======= Delegation System =======
-    // Coming... eventually!
-
-    // ownership::add_owner_delegation<Witness>(&mut display.id, &auth);
-
-    // public fun add_owner_delegation<T>(uid: &mut UID, auth: &TxAuthority) {
-    //     assert!(tx_authority::is_authorized_by_type<T>(auth), ENO_MODULE_AUTHORITY);
-
-    //     let from = tx_authority::type_into_address<T>();
-
-    //     dynamic_field2::set(uid, DelegationKey { from }, Delegation { 
-    //         from,
-    //         to: get_owner(uid)
-    //     });
-    // }
-
-    // public fun add_delegation() {
-
-    // }
-
-    // public fun remove_delegation() {
-
-    // }
-
     // ======= Authority Checkers =======
 
     public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
@@ -157,78 +104,6 @@ module ownership::ownership {
 
     public fun is_initialized(uid: &UID): bool {
         dynamic_field::exists_(uid, Key { })
-    }
-
-    // Defaults to `true` if the owner does not exist
-    public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (option::is_none(&ownership.owner)) true
-            else {
-                let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_permission<Permission>(owner, auth)
-            }
-        }
-    }
-
-    // Defaults to `true` if owner is not set.
-    public fun has_owner_admin_permission(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (option::is_none(&ownership.owner)) true
-            else {
-                let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_admin_permission(owner, auth)
-            }
-        }
-    }
-
-    // public fun has_stored_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-    //     let permissions = dynamic_field::borrow<Key, VecMap<address, vector<Permissions>>(uid, Key { });
-    //     let i = 0;
-    //     while (i < vector::length(&auth.permissions)) {
-    //         let permission = vector::borrow(&auth.permissions, i);
-    //         let principal = tx_authority::type_into_address<Permission>();
-    //         if (vector::contains(&permissions, &principal)) true
-    //         else {
-    //             i = i + 1;
-    //         }
-    //     };
-        
-    //     let key = Key { permission, principal };
-    //     let permission = tx_authority::type_into_address<Permission>();
-    //     let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-    //     vector::contains(&ownership.transfer_auth, &permission)
-    // }
-
-            assert!(ownership::has_permission(&character.id, &auth), ENO_NAMESPACE_PERMISSION);
-
-
-
-    // If this is initialized, module authority exists and is always the native module (the module
-    // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun is_authorized_by_module(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let module_authority = option::destroy_some(get_module_authority(uid));
-            tx_authority::is_signed_by(module_authority, auth)
-        }
-    }
-
-
-
-    /// Defaults to `false` if transfer authority is not set.
-    public fun is_authorized_by_transfer(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (vector::is_empty(&ownership.transfer_auth)) false
-            else {
-                tx_authority::has_k_of_n_signatures(&ownership.transfer_auth, 1, auth)
-            }
-        }
     }
 
     // ========== Getter Functions =========
@@ -521,3 +396,27 @@ module ownership::ownership_tests {
         test_scenario::end(scenario);
     }
 }
+
+    // ======= Delegation System =======
+    // Coming... eventually!
+
+    // ownership::add_owner_delegation<Witness>(&mut display.id, &auth);
+
+    // public fun add_owner_delegation<T>(uid: &mut UID, auth: &TxAuthority) {
+    //     assert!(tx_authority::is_authorized_by_type<T>(auth), ENO_MODULE_AUTHORITY);
+
+    //     let from = tx_authority::type_into_address<T>();
+
+    //     dynamic_field2::set(uid, DelegationKey { from }, Delegation { 
+    //         from,
+    //         to: get_owner(uid)
+    //     });
+    // }
+
+    // public fun add_delegation() {
+
+    // }
+
+    // public fun remove_delegation() {
+
+    // }
