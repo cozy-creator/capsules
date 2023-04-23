@@ -15,6 +15,9 @@ module auction::auction {
     use ownership::ownership;
     use ownership::tx_authority;
 
+    use transfer_system::simple_transfer::{Self, Witness as SimpleTransfer};
+    use transfer_system::royalty_market::{Witness as RoyaltyMarket, Royalty};
+
     struct Auction<phantom T, phantom C> has key {
         id: UID,
         // The auctioned item
@@ -30,7 +33,9 @@ module auction::auction {
         // The ending date of the auction.
         ends_at: u64,
         // Indicates whether the auction has been canceled or not
-        is_canceled: bool
+        is_canceled: bool,
+        // Identifies the market module address
+        market_address: address
     }
 
     struct Witness has drop {}
@@ -44,6 +49,9 @@ module auction::auction {
     const EALREADY_HIGHEST_BIDDER: u64 = 6;
     const EAUCTION_ALREADY_CANCELED: u64 = 7;
     const EAUCTION_NOT_ENDED: u64 = 8;
+    const EUNRECOGNIZED_MARKET: u64 = 9;
+    const EMARKET_MISMATCH: u64 = 10;
+    const EITEM_MISMATCH: u64 = 11;
 
     public fun create_auction<T: key, C>(
         item: &mut UID,
@@ -64,8 +72,10 @@ module auction::auction {
         let item_type = ownership::get_type(item);
         assert!(struct_tag::get<T>() == option::destroy_some(item_type), EITEM_TYPE_MISMATCH);
 
+
         let auction = Auction<T, C> {
             id: object::new(ctx),
+            market_address: get_market_address(item),
             item_id: object::uid_to_inner(item),
             highest_bidder: option::none(),
             highest_bid: balance::zero(),
@@ -138,7 +148,38 @@ module auction::auction {
         self.is_canceled = true
     }
 
-    public fun finish_auction<T, C>(self: &mut Auction<T, C>, clock: &Clock, ctx: &mut TxContext) {
+    public fun simple_finish_auction<T, C>(self: &mut Auction<T, C>, item: &mut UID, clock: &Clock, ctx: &mut TxContext) {
+        // Ensures that the item uses the correct market
+        assert!(self.market_address == tx_authority::type_into_address<SimpleTransfer>(), EMARKET_MISMATCH);
+
+        // Ensures that the item to transfer is the same as the auctioned item
+        assert!(object::uid_to_inner(item) == self.item_id, EITEM_MISMATCH);
+
+        //Ensures that the auction has not been canceled
+        assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
+
+        // Ensures that the aution has ended
+        assert!(clock::timestamp_ms(clock) > self.ends_at, EAUCTION_NOT_ENDED);
+
+        if(option::is_some(&self.highest_bidder)) {
+            // TODO: Transfer the item to the highest bidder.
+            let highest_bidder = option::extract(&mut self.highest_bidder);
+            let new_owner = vector::singleton(highest_bidder);
+            simple_transfer::transfer(item, new_owner, ctx);
+
+
+            // Transfer the highest bid to the auction creator
+            let coin = coin::from_balance(balance::withdraw_all(&mut self.highest_bid), ctx);
+            let owner = option::destroy_some(ownership::get_owner(&self.id));
+
+            transfer::public_transfer(coin, vector::pop_back(&mut owner))
+        };
+    }
+
+    public fun royalty_finish_auction<T, C>(self: &mut Auction<T, C>, _royalty: &Royalty<T>, clock: &Clock, ctx: &mut TxContext) {
+        // Ensure that the item uses the correct market
+        assert!(self.market_address == tx_authority::type_into_address<RoyaltyMarket>(), EMARKET_MISMATCH);
+
         //Ensures that the auction has not been canceled
         assert!(!self.is_canceled, EAUCTION_ALREADY_CANCELED);
 
@@ -149,7 +190,6 @@ module auction::auction {
             // TODO: Transfer the item to the highest bidder.
             let _highest_bidder = option::extract(&mut self.highest_bidder);
 
-
             // Transfer the highest bid to the auction creator
             let coin = coin::from_balance(balance::withdraw_all(&mut self.highest_bid), ctx);
             let owner = option::destroy_some(ownership::get_owner(&self.id));
@@ -157,4 +197,23 @@ module auction::auction {
             transfer::public_transfer(coin, vector::pop_back(&mut owner))
         };
     }
+
+    fun get_market_address(uid: &UID): address {
+        let transfer_auth = option::borrow(&ownership::get_transfer_authority(uid));
+        let simple_transfer = tx_authority::type_into_address<SimpleTransfer>();
+        let royalty_market = tx_authority::type_into_address<RoyaltyMarket>();
+
+        if(vector::contains(transfer_auth, &simple_transfer)) {
+            simple_transfer
+        } else if(vector::contains(transfer_auth, &royalty_market)) {
+            royalty_market
+        } else {
+            abort EUNRECOGNIZED_MARKET
+        }
+    }
+}
+
+#[test_only]
+module auction::auction {
+
 }
