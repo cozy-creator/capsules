@@ -168,6 +168,20 @@ module ownership::tx_authority {
         has_permission_<Permission>(principal, auth)
     }
 
+    // Special-case function where we want to assign sensitive permissions to agents, but not grant them to
+    // managers automatically (they are still granted to admins automatically)
+    public fun has_permission_excluding_manager<Permission>(principal: address, auth: &TxAuthority): bool {
+        let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
+        if (option::is_none(&permissions_maybe)) { return false };
+        let permissions = option::destroy_some(permissions_maybe);
+
+        permissions::has_permission_exclude_manager<Permission>(&permissions);
+    }
+
+    public fun is_module_authority<Witness: drop, T>(): bool {
+        encode::type_name<Witness>() == witness_string<T>()
+    }
+
     // ========= Getter Functions =========
 
     public fun agents(auth: &TxAuthority): vector<address> {
@@ -184,10 +198,10 @@ module ownership::tx_authority {
 
     // May return option::none if the namespace hasn't been added to this TxAuthority object
     public fun lookup_namespace_for_package<P>(auth: &TxAuthority): Option<address> {
-        vec_map::get_maybe(&auth.namespaces, encode::package_id<P>())
+        vec_map2::get_maybe(&auth.namespaces, encode::package_id<P>())
     }
 
-    // ========= Module-Signing Witness =========
+    // ========= Witness for Module Authority =========
 
     public fun witness_addr<T>(): address {
         let witness_type = witness_string<T>();

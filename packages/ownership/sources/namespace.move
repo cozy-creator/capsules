@@ -54,7 +54,8 @@ module ownership::namespace {
     struct Key has store, copy, drop {}
 
     // Permission type; used to receive packages from another namespace
-    struct RECEIVE_PACKAGE {}
+    struct REMOVE_PACKAGE {}
+    struct ADD_PACKAGE {}
 
     // Authority object
     struct Witness has drop {}
@@ -102,6 +103,17 @@ module ownership::namespace {
     // You must be the owner of a namespace to edit it. If you want to change owners, call into SimpleTransfer.
     // Ownership of namespaces created with anything other than a publish_receipt are non-transferable.
 
+    // This is a special strut that acts as an intermediary to transfer packages between namespaces.
+    // This is necessary because Sui does not support multi-signer-transactions, so we cannot do this
+    // exchange atomically in a single transaction. Rather, the sender must first remove the package from its
+    // namespace and send it to the intended recipient. The recipient must then merge it into their namespace.
+    struct StoredPackage has key, store {
+        id: UID,
+        package: ID
+    }
+
+    // TO DO
+
     // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
         assert!(ownership::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
@@ -117,15 +129,6 @@ module ownership::namespace {
 
         let package_id = publish_receipt::into_package_id(receipt);
         vector::push_back(&mut namespace.packages, package_id);
-    }
-
-    // Sui does not currently support multi-party transactions, so we cannot do this atomically in a single
-    // transaction; we need both the sender and the recipient to sign for this.
-    // TO DO: use a single-use permission for this
-    public fun transfer_package(from: &mut Namespace, to: &mut Namespace, package_id: ID, auth: &TxAuthority) {
-        assert!(namespace::has_permission<RECEIVE>(to, &auth), ENO_NAMESPACE_PERMISSION);
-
-        // TO DO
     }
 
     // Note that this is currently not callable, because Sui does not yet support destroying shared
@@ -245,60 +248,32 @@ module ownership::namespace {
 
     // ======== Single Use Permissions ========
 
-    public fun create_single_use_permission(namespace: &Namespace, ctx: &TxContext): SingleUsePermission {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    struct SINGLE_USE {} // Permission to issue single-use permissions
 
-        let principal = principal(namespace);
+    // In order to issue a single-use permission, the agent calling into this must:
+    // (1) have (namespace, Permission); the agent already has this permission (or higher), and
+    // (2) have (namespace, SINGLE_USE); the agent was granted the authority to issue single-use permissions 
+    // (or is an admin; the manager role is not sufficient)
+    public fun create_single_use_permission<Permission>(
+        auth: &TxContext,
+        ctx: &mut TxContext
+    ): SingleUsePermission {
+        assert!(has_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
+        assert!(has_permission<Permission>(auth), ENO_OWNER_AUTHORITY);
+
+        let principal = option::destroy_some(tx_authority::lookup_namespace_for_package<Permission>(auth));
         permissions::create_single_use_internal<Permission>(principal, ctx)
     }
 
-    // ======== Validity Checkers ========
-    // This should be used by modules to assert the correct permissions are present
+    // This is a module-witness pattern; this is equivalent to a storable Witness
+    public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
+        _witness: Witness,
+        ctx: &mut TxContext
+    ): SingleUsePermission {
+        // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
+        assert!(ownership::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
 
-    // Convenience function
-    public fun assert_login<Permission>(namespace: &Namespace, ctx: TxContext): TxAuthority {
-        let auth = tx_authority::begin(ctx);
-        assert_login_<Permission>(namespace, &auth)
-    }
-
-    // Log the agent into the namespace, and assert that they have the specified permission
-    public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
-        let auth = claim_permissions_(namespace, auth);
-        let principal = rbac::principal(&namespace.rbac);
-        assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
-
-        auth
-    }
-
-    // Convenience function. Permission and Namespace are the same module.
-    public fun has_permission<Permission>(auth: &TxAuthority): bool {
-        has_permission_<Permission, Permission>(auth)
-    }
-
-    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace;
-    // we merely use this type to figure out the package-id, so that we can lookup the Namespace that
-    // owns that type (assuming it has been added to TxAuthority already).
-    // In this case, Namespace is the principal.
-    public fun has_permission_<NamespaceType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-       tx_authority::has_permission<Permission>(principal, auth)
-    }
-
-    public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
-        if (ownership::has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
-        if (ownership::has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (ownership::has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
-
-        let agents = tx_authority::agents(auth);
-        while (!vector::is_empty(&agents)) {
-            let agent = vector::pop_back(&mut agents);
-            if (is_provisioned(uid, agent)) { return true }; // Namespace was previously granted access
-        };
-
-        false
+        permissions::create_single_use_internal<Permission>(encode::type_into_address<Witness>(), ctx)
     }
 
     // ======== Getter Functions ========
