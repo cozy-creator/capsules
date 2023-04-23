@@ -43,6 +43,9 @@ module ownership::ownership {
     // Dynamic field key for storing the Ownership struct
     struct Key has store, copy, drop { }
 
+    // Permission type allowing access to the UID
+    struct UID_MUT {}
+
     // ======= Initialize Ownership =======
     // The caller needs to supply a 'typed-id' here because `as_owned_object(&mut object.id, &object)`
     // gives the error `Invalid borrow of variable, it is still being mutably borrowed by another reference`.
@@ -108,19 +111,19 @@ module ownership::ownership {
 
     // ========== Getter Functions =========
 
+    public fun get_owner(uid: &UID): Option<address> {
+        if (!is_initialized(uid)) { return vector::empty() };
+
+        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { })
+        ownership.owner
+    }
+
     public fun get_module_authority(uid: &UID): Option<address> {
         if (!is_initialized(uid)) { return option::none() };
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
         let addr = tx_authority::witness_addr_from_struct_tag(&ownership.type);
         option::some(addr)
-    }
-
-    public fun get_owner(uid: &UID): vector<address> {
-        if (!is_initialized(uid)) { return vector::empty() };
-
-        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { })
-        ownership.owner
     }
 
     public fun get_transfer_authority(uid: &UID): vector<address> {
@@ -136,6 +139,21 @@ module ownership::ownership {
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
         option::some(ownership.type)
     }
+
+    // ======== Internal Functions ========
+
+    friend ownership::transfer;
+
+    public(friend) fun set_owner_internal(uid: &mut UID, new_owner: vector<address>) {
+        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        ownership.owner = new_owner;
+    }
+
+    public(friend) fun set_transfer_auth_internal(uid: &mut UID, new_transfer_auth: vector<address>) {
+        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        ownership.transfer_auth = new_transfer_auth;
+    }
+
 }
 
 #[test_only]

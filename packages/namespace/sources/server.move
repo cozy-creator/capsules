@@ -3,9 +3,14 @@
 // a sophisticated RBAC system that allows for fine-grained control of server permissions by an
 // administrator.
 
+// This validity-checks should be used by modules to assert the correct permissions are present.
+
 module ownership::server {
-    // ======== Validity Checkers ========
-    // This should be used by modules to assert the correct permissions are present
+
+    use ownership::tx_authority::{Self, TxAuthority};
+
+    use namespace::rbac;
+    use namespace::namespace::{Self, Namespace};
 
     // Convenience function
     public fun assert_login<Permission>(namespace: &Namespace, ctx: TxContext): TxAuthority {
@@ -22,7 +27,16 @@ module ownership::server {
         auth
     }
 
-    // Convenience function. Permission and Namespace are the same module.
+    public fun has_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
+        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+
+       tx_authority::has_admin_permission(principal, auth)
+    }
+
+    // Convenience function. Permission and Namespace are the same module, so this is checking if
+    // the same module authorized this operation as the module that declared this permission type.
     public fun has_permission<Permission>(auth: &TxAuthority): bool {
         has_permission_<Permission, Permission>(auth)
     }
@@ -39,6 +53,9 @@ module ownership::server {
        tx_authority::has_permission<Permission>(principal, auth)
     }
 
+    // This is best used for sensitive operations, where you want the agent to either explicitly have
+    // the permission, or be an admin. We do not want to automatically grant this permission by default
+    // for being ba manager.
     public fun has_permission_excluding_manager<NamespaceType, Permission>(auth: &TxAuthority): bool {
         let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
         if (option::is_none(&principal_maybe)) { return false };

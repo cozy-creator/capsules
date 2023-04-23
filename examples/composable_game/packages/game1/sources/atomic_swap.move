@@ -1,4 +1,23 @@
-module composable_game::multi_signer_transactions {
+// How can we make an atomic swap like this happen?
+// We need to build this because Sui does not support multi-signer transactions.
+
+module composable_game::atomic_swap {
+    const ENO_ERMISSION: u64 = 0;
+
+    struct Object has key {
+        id: UID,
+        owner: address
+    }
+
+    public fun atomic_swap(obj1: &mut Object, obj2: &mut Object, auth: &TxAuthority) {
+        assert!(client::has_owner_admin_permission(obj1.owner, auth), ENO_PERMISSION);
+        assert!(client::has_owner_admin_permission(obj2.owner, auth), ENO_ERMISSION);
+
+        let owner1 = obj1.owner;
+        obj1.owner = obj2.owner;
+        obj2.owner = owner1;
+    }
+
     // Sui does not currently support multi-party transactions, so we cannot do this atomically in a single
     // atomic transaction; we can use single-use permissions to get around this limitation however.
     // Step-1: ToNamespace must add a role with SINGLE_USE + ADD_PACKAGE as permissions; assign this role to one of its agents.
