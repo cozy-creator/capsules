@@ -19,8 +19,11 @@
 // package somehow, otherwise the security of namespaces will be compromised. In that case we'll
 // use an alternative address as the principal address (perhaps a hash of something or just a random
 // 32 byte value?).
+//
+// If you want to rotate the master-key for a namespace, you can simply send the namespace to a new
+// address using SimpleTransfer.
 
-module ownership::namespace {
+module namespace::namespace {
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
@@ -31,7 +34,8 @@ module ownership::namespace {
     use ownership::ownership;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::rbac::{Self, RBAC};
+    
+    use namespace::rbac::{Self, RBAC};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -116,7 +120,7 @@ module ownership::namespace {
 
     // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
-        assert!(ownership::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         add_package_internal(receipt, namespace);
     }
@@ -135,11 +139,43 @@ module ownership::namespace {
     // objects. To destroy a namespace, you must first remove any packages from it; this is to
     // prevent packages from being permanently orphaned without a namespace.
     public fun destroy(namespace: Namespace) {
-        assert!(ownership::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&namespace.packages), EPACKAGES_MUST_BE_EMPTY);
 
         let Namespace { id, packages: _, rbac: _ } = namespace;
         object::delete(id);
+    }
+
+    // Convenience function. Must be called by the namespace-owner address. Transfer the package
+    // to this owner address.
+    public entry fun remove_package(namespace: &mut Namespace, package_id: ID, ctx: &mut TxContext) {
+        let auth = tx_authority::begin(ctx);
+        let stored_package = remove_package(namespace, package_id, &auth, ctx);
+        transfer::transfer(stored_package, tx_context::sender(ctx));
+    }
+
+    public fun remove_package_(
+        namespace: &mut Namespace,
+        package_id: ID,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ): StoredPackage {
+        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        let package = vector::remove(&mut namespace.packages, package_id);
+        StoredPackage {
+            id: object::new(ctx),
+            package
+        }
+    }
+
+    public fun add_package_from_stored(namespace: &mut Namespace, stored_package: StoredPackage, auth: &TxAuthority) {
+        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        let StoredPackage = { id, package } = stored_package;
+        object::delete(id);
+
+        vector::push_back(&mut namespace.packages, package);
     }
 
     // ======== RBAC Editor ========
@@ -147,7 +183,7 @@ module ownership::namespace {
     // The RBAC editor is private, and can only be accessed via this namespace module
 
     public entry fun set_role_for_agent(namespace: &mut Namespace, agent: address, role: String) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::set_role_for_agent(&mut namespace.rbac, agent, role);
     }
@@ -224,10 +260,9 @@ module ownership::namespace {
 
     // permission type
     struct PROVISION {} // allows provisioning and de-provisioning of namespaces
-    struct UID_MUT {} // allows access to the UID
 
     public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-        assert!(ownership::has_permission<PROVISION>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_OWNER_AUTHORITY);
 
         dynamic_field2::set(uid, Key { namespace }, true);
     }
@@ -293,9 +328,7 @@ module ownership::namespace {
     }
 
     public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
-        assert!(validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
-        // assert!(ownership::has_permission<UID_MUT>(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-        // assert!(ownership::is_signed_by_owner(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
 
         &mut namespace.id
     }

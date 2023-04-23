@@ -27,7 +27,7 @@
 
 // For safety, this module is only callable by ownership::namespace
 
-module ownership::rbac {
+module namespace::rbac {
     use std::string::{Self, String, utf8};
 
     use ownership::permissions::{Self, ADMIN, MANAGER};

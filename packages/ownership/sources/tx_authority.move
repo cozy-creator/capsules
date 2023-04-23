@@ -106,44 +106,80 @@ module ownership::tx_authority {
     }
 
     // Defaults to `true` if the principal does not exist (option::none)
-    public fun has_admin_permission_(principal_maybe: Option<address>, auth: &TxAuthority): bool {
+    public fun has_admin_permission_opt(principal_maybe: Option<address>, auth: &TxAuthority): bool {
         if (option::is_none(&principal_maybe)) return true;
         has_admin_permission(option::destroy_some(principal_maybe), auth)
     }
 
     // True if and only if TxAuthority had the Witness of T's module added
-    public fun has_module_permission<T>(auth: &TxAuthority): bool {
+    public fun has_module_admin_permission<T>(auth: &TxAuthority): bool {
         has_admin_permission(witness_addr<T>(), auth)
     }
 
     // type can be any type belonging to the module, such as 0x599::my_module::StructName
-    public fun has_module_permission_(type: String, auth: &TxAuthority): bool {
+    public fun has_module_admin_permission_(type: String, auth: &TxAuthority): bool {
         has_admin_permission(witness_addr_(type), auth)
     }
 
-    public fun has_object_permission<T: key>(id: ID, auth: &TxAuthority): bool {
+    public fun has_object_admin_permission<T: key>(id: ID, auth: &TxAuthority): bool {
         has_admin_permission(object::id_to_address(&id), auth)
     }
 
-    public fun has_type_permission<T>(auth: &TxAuthority): bool {
+    public fun has_type_admin_permission<T>(auth: &TxAuthority): bool {
         has_admin_permission(encode::type_into_address<T>(), auth)
     }
 
-    public fun has_k_of_n_admins(addrs: &vector<address>, threshold: u64, auth: &TxAuthority): bool {
-        let k = number_of_admins(addrs, auth);
-        if (k >= threshold) true
-        else false
+    // ========= Check Against Lists of Agents =========
+
+    public fun has_k_or_more_agents_with_permission<Permission>(
+        principals: vector<address>,
+        k: u64,
+        auth: &TxAuthority
+    ): bool {
+        if (k == 0) return true;
+        let total = 0;
+        while (!vector::is_empty(&principals)) {
+            let principal = vector::pop_back(&mut principals);
+            if (has_permission<Permission>(principal, auth)) { total = total + 1; };
+            if (total >= k) return true;
+        };
+
+        false
     }
 
-    // If you're doing a 'k of n' signature schema, pass your vector of the n agent addresses, and if this
-    // returns >= k pass the check, otherwise fail the check
-    public fun number_of_admins(addrs: &vector<address>, auth: &TxAuthority): u64 {
-        let (total, i) = (0, 0);
-        while (i < vector::length(addrs)) {
-            let addr = *vector::borrow(addrs, i);
-            if (has_admin_permission(addr, auth)) { total = total + 1; };
-            i = i + 1;
+    public fun tally_agents_with_permission<Permission>(principals: vector<address>, auth: &TxAuthority): u64 {
+        let total = 0;
+        while (!vector::is_empty(&principals)) {
+            let principal = vector::pop_back(&mut principals);
+            if (has_permission<Permission>(principal, auth)) { total = total + 1; };
         };
+
+        total
+    }
+
+    public fun has_k_or_more_admin_agents(
+        principals: vector<address>,
+        k: u64,
+        auth: &TxAuthority
+    ): bool {
+        if (k == 0) return true;
+        let total = 0;
+        while (!vector::is_empty(&principals)) {
+            let principal = vector::pop_back(&mut principals);
+            if (has_admin_permission(principal, auth)) { total = total + 1; };
+            if (total >= k) return true;
+        };
+
+        false
+    }
+
+    public fun tally_admin_agents(principals: vector<address>, auth: &TxAuthority): u64 {
+        let total = 0;
+        while (!vector::is_empty(&principals)) {
+            let principal = vector::pop_back(&mut principals);
+            if (has_admin_permission(principal, auth)) { total = total + 1; };
+        };
+
         total
     }
 
@@ -168,6 +204,24 @@ module ownership::tx_authority {
         has_permission_<Permission>(principal, auth)
     }
 
+    // True if and only if TxAuthority had the Witness of T's module added
+    public fun has_module_permission<T, Permission>(auth: &TxAuthority): bool {
+        has_permission<Permission>(witness_addr<T>(), auth)
+    }
+
+    // type can be any type belonging to the module, such as 0x599::my_module::StructName
+    public fun has_module_permission_<Permission>(type: String, auth: &TxAuthority): bool {
+        has_permission<Permission>(witness_addr_(type), auth)
+    }
+
+    public fun has_object_permission<T: key, Permission>(id: ID, auth: &TxAuthority): bool {
+        has_permission<Permission>(object::id_to_address(&id), auth)
+    }
+
+    public fun has_type_permission<T, Permission>(auth: &TxAuthority): bool {
+        has_permission<Permission>(encode::type_into_address<T>(), auth)
+    }
+
     // Special-case function where we want to assign sensitive permissions to agents, but not grant them to
     // managers automatically (they are still granted to admins automatically)
     public fun has_permission_excluding_manager<Permission>(principal: address, auth: &TxAuthority): bool {
@@ -176,10 +230,6 @@ module ownership::tx_authority {
         let permissions = option::destroy_some(permissions_maybe);
 
         permissions::has_permission_exclude_manager<Permission>(&permissions);
-    }
-
-    public fun is_module_authority<Witness: drop, T>(): bool {
-        encode::type_name<Witness>() == witness_string<T>()
     }
 
     // ========= Getter Functions =========
@@ -199,6 +249,10 @@ module ownership::tx_authority {
     // May return option::none if the namespace hasn't been added to this TxAuthority object
     public fun lookup_namespace_for_package<P>(auth: &TxAuthority): Option<address> {
         vec_map2::get_maybe(&auth.namespaces, encode::package_id<P>())
+    }
+
+    public fun is_module_authority<Witness: drop, T>(): bool {
+        encode::type_name<Witness>() == witness_string<T>()
     }
 
     // ========= Witness for Module Authority =========
