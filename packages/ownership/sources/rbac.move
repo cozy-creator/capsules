@@ -27,10 +27,15 @@
 
 // For safety, this module is only callable by ownership::namespace
 
-module namespace::rbac {
+module ownership::rbac {
     use std::string::{Self, String, utf8};
+    use std::vector;
 
-    use ownership::permissions::{Self, ADMIN, MANAGER};
+    use sui::vec_map::{Self, VecMap};
+
+    use sui_utils::vec_map2;
+
+    use ownership::permissions::{Self, Permission, ADMIN, MANAGER};
     use ownership::tx_authority::{Self, StoredPermission};
 
     friend ownership::namespace;
@@ -107,25 +112,25 @@ module namespace::rbac {
 
     public(friend) fun to_fields(
         rbac: &RBAC
-    ): (address, &VecMap<address, vector<String>>, &VecMap<String, vector<Permission>>) {
-        (rbac.principal, &rbac.agent_roles, &rbac.role_permissions)
+    ): (address, &VecMap<address, String>, &VecMap<String, vector<Permission>>) {
+        (rbac.principal, &rbac.agent_role, &rbac.role_permissions)
     }
 
     public fun principal(rbac: &RBAC): address {
         rbac.principal
     }
 
-    public fun agent_roles(rbac: &RBAC): &VecMap<String, vector<String>> {
-        &rbac.agent_roles
+    public fun agent_role(rbac: &RBAC): &VecMap<address, String> {
+        &rbac.agent_role
     }
 
     public(friend) fun role_permissions(rbac: &RBAC): &VecMap<String, Permission> {
         &rbac.role_permissions
     }
 
-    public(friend) fun get_agent_permissions(rbac: &RBAC, agen: address): vector<Permission> {
+    public(friend) fun get_agent_permissions(rbac: &RBAC, agent: address): vector<Permission> {
         let role = vec_map2::get(&rbac.agent_roles, agent);
-        *vec_map2::get(&rbac.role_permissions, role)
+        *vec_map::get(&rbac.role_permissions, role)
     }
 }
 

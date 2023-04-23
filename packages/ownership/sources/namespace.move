@@ -23,28 +23,33 @@
 // If you want to rotate the master-key for a namespace, you can simply send the namespace to a new
 // address using SimpleTransfer.
 
-module namespace::namespace {
+module ownership::namespace {
+    use std::option;
+    use std::string::String;
+    use std::vector;
+
     use sui::dynamic_field;
     use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
+    use sui_utils::encode;
     use sui_utils::typed_id;
+    use sui_utils::vec_map2;
     
     use ownership::ownership;
+    use ownership::permissions::{Self, Permission, SingleUsePermission};
     use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::rbac::{Self, RBAC};
+    use ownership::simple_transfer::Witness as SimpleTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
-    
-    use namespace::rbac::{Self, RBAC};
-
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
-
-    use display::creator::{Self, Creator};
 
     // Error enums
-    const ENO_OWNER_AUTHORITY: u64 = 0;
-    const EPACKAGE_ALREADY_CLAIMED: u64 = 1;
-    const EPACKAGES_MUST_BE_EMPTY: u64 = 2;
+    const ENO_PERMISSION: u64 = 0;
+    const ENO_OWNER_AUTHORITY: u64 = 1;
+    const EPACKAGE_ALREADY_CLAIMED: u64 = 2;
+    const EPACKAGES_MUST_BE_EMPTY: u64 = 3;
+    const ENO_MODULE_AUTHORITY: u64 = 4;
 
     // Shared, root-level object.
     // The principal (address) is stored within the RBAC, and cannot be changed after creation
@@ -57,9 +62,10 @@ module namespace::namespace {
     // Placed on PublishReceipt to prevent namespaces from being claimed twice
     struct Key has store, copy, drop {}
 
-    // Permission type; used to receive packages from another namespace
+    // Permission type
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
+    struct SINGLE_USE {} // issue single-use permissions on behalf of the namespace
 
     // Authority object
     struct Witness has drop {}
@@ -120,7 +126,7 @@ module namespace::namespace {
 
     // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
-        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         add_package_internal(receipt, namespace);
     }
@@ -139,7 +145,7 @@ module namespace::namespace {
     // objects. To destroy a namespace, you must first remove any packages from it; this is to
     // prevent packages from being permanently orphaned without a namespace.
     public fun destroy(namespace: Namespace) {
-        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&namespace.packages), EPACKAGES_MUST_BE_EMPTY);
 
         let Namespace { id, packages: _, rbac: _ } = namespace;
@@ -160,7 +166,7 @@ module namespace::namespace {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): StoredPackage {
-        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         let package = vector::remove(&mut namespace.packages, package_id);
         StoredPackage {
@@ -170,9 +176,9 @@ module namespace::namespace {
     }
 
     public fun add_package_from_stored(namespace: &mut Namespace, stored_package: StoredPackage, auth: &TxAuthority) {
-        assert!(client::has_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
-        let StoredPackage = { id, package } = stored_package;
+        let StoredPackage { id, package } = stored_package;
         object::delete(id);
 
         vector::push_back(&mut namespace.packages, package);
@@ -183,38 +189,45 @@ module namespace::namespace {
     // The RBAC editor is private, and can only be accessed via this namespace module
 
     public entry fun set_role_for_agent(namespace: &mut Namespace, agent: address, role: String) {
-        assert!(client::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::set_role_for_agent(&mut namespace.rbac, agent, role);
     }
 
     public entry fun grant_admin_role_for_agent(namespace: &mut Namespace, agent: address) {
-        vec_map2::set(&mut rbac.agent_roles, agent, utf8(ADMIN));
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::grant_admin_role_for_agent(&mut namespace.rbac, agent);
     }
 
     public entry fun grant_manager_role_for_agent(namespace: &mut Namespace, agent: address) {
-        vec_map2::set(&mut rbac.agent_roles, agent, utf8(MANAGER));
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::grant_manager_role_for_agent(&mut namespace.rbac, agent);
     }
 
     public entry fun delete_agent(namespace: &mut Namespace, agent: address) {
-        vec_map2::remove_maybe(&mut rbac.agent_roles, agent);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::delete_agent(&mut namespace.rbac, agent);
     }
 
     public entry fun grant_permission_to_role<Permission>(namespace: &mut Namespace, role: String) {
-        let permission = permissions::new<Permission>();
-        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
-        vector2::merge(existing, vector[permission]);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::grant_permission_to_role<Permission>(&mut namespace.rbac, role);
     }
 
     public entry fun revoke_permission_from_role<Permission>(namespace: &mut Namespace, role: String) {
-        let permission = permissions::new<Permission>();
-        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
-        vector2::remove_maybe(existing, permission);
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::revoke_permission_from_role<Permission>(&mut namespace.rbac, role);
     }
 
-    public entry fun delete_role(namespace: &mut Namespace, role: String) {
-        vec_map2::remove_entries_with_value(&mut rbac.agent_roles, role);
-        vec_map2::remove_maybe(&mut rbac.role_permissions, role);
+    public entry fun delete_role_and_agents(namespace: &mut Namespace, role: String) {
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::delete_role_and_agents(&mut namespace.rbac, role);
     }
 
     // ======== For Agents ========
@@ -241,49 +254,14 @@ module namespace::namespace {
         tx_authority::add_namespace_internal(namespace.packages, principal(namespace), &auth)
     }
 
-    // This function could safely be public, believe it or not
+    // This function could safely be public, but we want users to use one of the above-two functions
     fun claim_permissions_for_agent(namespace: &Namespace, agent: address, auth: &TxAuthority): TxAuthority {
         let permissions = rbac::get_agent_permissions(&namespace.rbac, agent);
         let principal = principal(namespace);
         tx_authority::add_permissions_internal(principal, agent, permissions, auth)
     }
 
-    // ======== Namespace Provisioning ========
-    // If we want a namespace to have access to a non-native object, the owner must explicitly
-    // call into ownership::provision() and provision the namespace. From there the namespace
-    // can access the object's UID and write data to its own namespace.
-    // Namespaces can only be explicitly deleted by the namespace itself, even if the object-owner
-    // changes.
-
-    // Used to check which namespaces have access to this object
-    struct Key has store, copy drop { namespace: address } 
-
-    // permission type
-    struct PROVISION {} // allows provisioning and de-provisioning of namespaces
-
-    public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_OWNER_AUTHORITY);
-
-        dynamic_field2::set(uid, Key { namespace }, true);
-    }
-
-    public fun deprovision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
-
-        dynamic_field2::drop(uid, Key { namespace })
-    }
-
-    public fun is_provisioned(uid: &UID, namespace: address): bool {
-        dynamic_field::exists_(uid, Key { namespace })
-    }
-
-    // TO DO: we might want to auto-provision a namespace upon access to inventory or data::attach,
-    // so that access cannot be lost in the future.
-    // We might remove the type-checks in the future for PROVISION and make UID have referential-authority
-
     // ======== Single Use Permissions ========
-
-    struct SINGLE_USE {} // Permission to issue single-use permissions
 
     // In order to issue a single-use permission, the agent calling into this must:
     // (1) have (namespace, Permission); the agent already has this permission (or higher), and
@@ -293,11 +271,11 @@ module namespace::namespace {
         auth: &TxContext,
         ctx: &mut TxContext
     ): SingleUsePermission {
-        assert!(has_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
-        assert!(has_permission<Permission>(auth), ENO_OWNER_AUTHORITY);
+        assert!(tx_authority::has_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
+        assert!(tx_authority::has_permission<Permission>(auth), ENO_OWNER_AUTHORITY);
 
         let principal = option::destroy_some(tx_authority::lookup_namespace_for_package<Permission>(auth));
-        permissions::create_single_use_internal<Permission>(principal, ctx)
+        permissions::create_single_use<Permission>(principal, ctx)
     }
 
     // This is a module-witness pattern; this is equivalent to a storable Witness
@@ -306,9 +284,9 @@ module namespace::namespace {
         ctx: &mut TxContext
     ): SingleUsePermission {
         // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
-        assert!(ownership::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
+        assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
 
-        permissions::create_single_use_internal<Permission>(encode::type_into_address<Witness>(), ctx)
+        permissions::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
     }
 
     // ======== Getter Functions ========
@@ -328,23 +306,45 @@ module namespace::namespace {
     }
 
     public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
-        assert!(client::validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
+        assert!(ownership::validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
 
         &mut namespace.id
     }
 
 }
 
-// ======== Edit RBAC =====
-// Due to the limitations of Sui (no client-side composition involving passing references) we provide
-// a set of pass-through functions below, which allows the Namespace's RBAC to be edited by the
-// Namespace's owner.
+    // ======== Namespace Provisioning ========
+    // If we want a namespace to have access to a non-native object, the owner must explicitly
+    // call into ownership::provision() and provision the namespace. From there the namespace
+    // can access the object's UID and write data to its own namespace.
+    // Namespaces can only be explicitly deleted by the namespace itself, even if the object-owner
+    // changes.
 
-module ownership::namespace_rbac() {
+    // Used to check which namespaces have access to this object
+    // struct Key has store, copy, drop { namespace: address } 
 
-    // TO DO
+    // // permission type
+    // struct PROVISION {} // allows provisioning and de-provisioning of namespaces
 
-}
+    // public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
+    //     assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_OWNER_AUTHORITY);
+
+    //     dynamic_field2::set(uid, Key { namespace }, true);
+    // }
+
+    // public fun deprovision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
+    //     assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+
+    //     dynamic_field2::drop(uid, Key { namespace })
+    // }
+
+    // public fun is_provisioned(uid: &UID, namespace: address): bool {
+    //     dynamic_field::exists_(uid, Key { namespace })
+    // }
+
+    // TO DO: we might want to auto-provision a namespace upon access to inventory or data::attach,
+    // so that access cannot be lost in the future.
+    // We might remove the type-checks in the future for PROVISION and make UID have referential-authority
 
 
     // UPDATE: I think it's simply too dangerous to allow regular users to create Namespaces.

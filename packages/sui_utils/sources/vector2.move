@@ -1,4 +1,5 @@
 module sui_utils::vector2 {
+    use std::option::{Self, Option};
     use std::vector;
     
     const EINVALID_SLICE: u64 = 0;
@@ -81,17 +82,18 @@ module sui_utils::vector2 {
         }
     }
 
-    public fun and_filter<T>(vec: &vector<T>, filter: &vector<T>): vector<T> {
-        let filtered = vector::empty<T>();
+    // Only returns the elements both vectors share in common
+    public fun intersection<T: copy>(vec1: &vector<T>, vec2: &vector<T>): vector<T> {
+        let intersect = vector::empty<T>();
         let i = 0;
-        while (i < vector::length(vec)) {
-            let item = vector::borrow(vec, i);
-            if (vector::contains(filter, item)) {
-                vector::push_back(&mut filtered, *item);
+        while (i < vector::length(vec1)) {
+            let item = vector::borrow(vec1, i);
+            if (vector::contains(vec2, item)) {
+                vector::push_back(&mut intersect, *item);
             };
             i = i + 1;
         };
         
-        filtered
+        intersect
     }
 }

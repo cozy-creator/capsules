@@ -1,6 +1,6 @@
 [package]
 name = "Ownership"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
 published-at = "0x23c8327c6f4ae8b702de3ccbb24b85ee4a25d69e83a8cc191f56059b69621d08"
 

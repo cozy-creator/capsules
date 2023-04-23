@@ -15,6 +15,7 @@ module ownership::ownership {
     use sui::object::{Self, UID};
     use sui::dynamic_field;
 
+    use sui_utils::encode;
     use sui_utils::typed_id::{Self, TypedID};
     use sui_utils::struct_tag::{Self, StructTag};
     
@@ -35,7 +36,7 @@ module ownership::ownership {
     // then have the module re-initialize with a new owner and transfer auth. This isn't desired behavior;
     // see if it's possible.
     struct Ownership has store, copy, drop {
-        owner: vector<address>,
+        owner: Option<address>,
         transfer_auth: vector<address>,
         type: StructTag
     }
@@ -44,7 +45,9 @@ module ownership::ownership {
     struct Key has store, copy, drop { }
 
     // Permission type allowing access to the UID
-    struct UID_MUT {}
+    struct UID_MUT {} // Used to access UID_MUT
+    struct TRANSFER {} // Used to perform a transfer (change the owner)
+    struct MIGRATE {} // Used to change (migrate) the transfer-authority
 
     // ======= Initialize Ownership =======
     // The caller needs to supply a 'typed-id' here because `as_owned_object(&mut object.id, &object)`
@@ -75,21 +78,21 @@ module ownership::ownership {
         owner: vector<address>,
         auth: &TxAuthority
     ) {
-        let transfer = tx_authority::type_into_address<Transfer>();
+        let transfer = encode::type_into_address<Transfer>();
         as_shared_object_(uid, typed_id, owner, vector[transfer], auth);
     }
 
     public fun as_shared_object_<T: key>(
         uid: &mut UID,
         typed_id: TypedID<T>,
-        owner: vector<address>,
+        owner: address,
         transfer_auth: vector<address>,
         auth: &TxAuthority
     ) {
         assert_valid_initialization(uid, typed_id, auth);
 
         let ownership = Ownership {
-            owner,
+            owner: option::some(owner),
             transfer_auth,
             type: struct_tag::get<T>()
         };
@@ -109,12 +112,89 @@ module ownership::ownership {
         dynamic_field::exists_(uid, Key { })
     }
 
+    // Defaults to `true` if owner is not set.
+    public fun has_owner_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let owner = get_owner(uid);
+            if (option::is_none(&owner)) true
+            else {
+                let owner = option::destroy_some(owner);
+                tx_authority::has_admin_permission(owner, auth)
+            }
+        }
+    }
+
+    // Defaults to `true` if the owner does not exist
+    public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let owner = get_owner(uid);
+            if (option::is_none(&owner)) true
+            else {
+                let owner = option::destroy_some(owner);
+                tx_authority::has_permission<Permission>(owner, auth)
+            }
+        }
+    }
+
+    public fun has_module_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let module_authority = option::destroy_some(get_module_authority(uid));
+            tx_authority::has_admin_permission(module_authority, auth)
+        }
+    }
+
+    // If this is initialized, module authority exists and is always the native module (the module
+    // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
+    public fun has_module_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let module_authority = option::destroy_some(get_module_authority(uid));
+            tx_authority::has_permission<Permission>(module_authority, auth)
+        }
+    }
+
+    /// Defaults to `false` if transfer authority is not set.
+    public fun has_transfer_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let transfer = get_transfer_authority(uid);
+            if (vector::is_empty(&transfer)) false
+            else {
+                tx_authority::has_k_or_more_admin_agents(transfer, 1, auth)
+            }
+        }
+    }
+
+    /// Defaults to `false` if transfer authority is not set.
+    public fun has_transfer_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let transfer = get_transfer_authority(uid);
+            if (vector::is_empty(&transfer)) false
+            else {
+                tx_authority::has_k_or_more_agents_with_permission<Permission>(transfer, 1, auth)
+            }
+        }
+    }
+
+    // Checks all instances of why an agent needs mutable access to a UID
+    public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+        if (has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
+        if (has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+        if (has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
+
+        false
+    }
+
     // ========== Getter Functions =========
 
     public fun get_owner(uid: &UID): Option<address> {
-        if (!is_initialized(uid)) { return vector::empty() };
+        if (!is_initialized(uid)) { return option::none() };
 
-        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { })
+        let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
         ownership.owner
     }
 
@@ -140,20 +220,38 @@ module ownership::ownership {
         option::some(ownership.type)
     }
 
-    // ======== Internal Functions ========
+    // ======== Transfer Function ========
+    // Used by the assigned transfer module
 
-    friend ownership::transfer;
+    // Requires transfer authority. Does NOT require ownership or module authority.
+    // This means the specified transfer authority can change ownership unilaterally, without the current
+    // owner being the sender of the transaction.
+    // This is useful for marketplaces, reclaimers, and collateral-repossession.
+    public fun transfer(uid: &mut UID, new_owner: vector<address>, auth: &TxAuthority) {
+        assert!(client::has_transfer_permission<TRANSFER>(uid, auth), ENO_TRANSFER_AUTHORITY);
 
-    public(friend) fun set_owner_internal(uid: &mut UID, new_owner: vector<address>) {
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.owner = new_owner;
     }
 
-    public(friend) fun set_transfer_auth_internal(uid: &mut UID, new_transfer_auth: vector<address>) {
+    // Requires module, owner, and transfer authorities all to sign off on this migration
+    // This is a difficult operation to do!
+    // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
+    // allow for unilateral changes by the module-authority.
+    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
+        assert!(client::has_module_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_transfer_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.transfer_auth = new_transfer_auth;
     }
 
+    // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
+    // changed again.
+    public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
+        migrate_transfer_auth(uid, vector::empty(), auth);
+    }
 }
 
 #[test_only]
