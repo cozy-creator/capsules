@@ -114,14 +114,13 @@ module sui_utils::vec_map2 {
         vector2::merge(vec, vector[value]);
     }
 
-    public fun flatten<K: copy + drop, V: copy>(self: &VecMap<K, V>, keys: vector<K>): vector<V> {
-        let result = vector::empty();
-        let mut i = 0;
+    public fun get_many<K: copy + drop, V: copy>(self: &VecMap<K, V>, keys: vector<K>): vector<V> {
+        let (i, result) = (0, vector::empty());
         while (i < vector::length(&keys)) {
             let key = vector::borrow(&keys, i);
-            let value = *vec_map::get(self, &key);
+            let value = *vec_map::get(self, key);
             vector::push_back(&mut result, value);
-            i += 1;
+            i = i + 1;
         };
 
         result
@@ -133,7 +132,7 @@ module sui_utils::vec_map2 {
         let i = 0;
         while (i < vec_map::size(self)) {
             let (_, val) = vec_map::get_entry_by_idx(self, i);
-            if (val == value) { 
+            if (val == &value) { 
                 vec_map::remove_entry_by_idx(self, i); 
             } else {
                 i = i + 1;

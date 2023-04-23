@@ -16,7 +16,9 @@ module sui_utils::encode {
     use std::vector;
 
     use sui::address;
-    use sui:: hex;
+    use sui::bcs;
+    use sui::hash;
+    use sui::hex;
     use sui::object::{Self, ID};
 
     use sui_utils::vector2;
@@ -139,7 +141,7 @@ module sui_utils::encode {
     // ========== Convert Types into Addresses ==========
 
     public fun type_into_address<T>(): address {
-        let typename = encode::type_name<T>();
+        let typename = type_name<T>();
         type_string_into_address(typename)
     }
 

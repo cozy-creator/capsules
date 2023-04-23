@@ -6,7 +6,12 @@
 
 module ownership::permissions {
     use std::string::{String, utf8};
+    use std::vector;
+
     use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
+
+    use sui_utils::encode;
 
     friend ownership::rbac;
     friend ownership::tx_authority;
@@ -155,7 +160,7 @@ module ownership::permissions {
         SingleUsePermission {
             id: object::new(ctx),
             principal,
-            permission: admin<()
+            permission: admin()
         }
     }
 

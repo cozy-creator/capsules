@@ -5,7 +5,7 @@
 
 // This validity-checks should be used by modules to assert the correct permissions are present.
 
-module ownership::server {
+module authorization::server {
 
     use ownership::tx_authority::{Self, TxAuthority};
 

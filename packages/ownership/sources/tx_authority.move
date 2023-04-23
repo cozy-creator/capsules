@@ -11,10 +11,15 @@ module ownership::tx_authority {
     use sui::hash;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
+    use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
     use sui_utils::string2;
     use sui_utils::struct_tag::{Self, StructTag};
+    use sui_utils::vector2;
+    use sui_utils::vec_map2;
+
+    use ownership::permissions::{Self, Permission};
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
@@ -53,7 +58,7 @@ module ownership::tx_authority {
     }
 
     public fun begin_with_single_use(single_use: SingleUsePermission): TxAuthority {
-        let SingleUsePermission = { id, principal, permission } = single_use;
+        let SingleUsePermission { id, principal, permission } = single_use;
         object::delete(id);
 
         TxAuthority {
@@ -85,7 +90,7 @@ module ownership::tx_authority {
     public fun add_single_use(single_use: SingleUsePermission, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
 
-        let SingleUsePermission = { id, principal, permission } = single_use;
+        let SingleUsePermission { id, principal, permission } = single_use;
         object::delete(id);
         let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
         permissions::add(existing, vector[permission]);
@@ -229,7 +234,7 @@ module ownership::tx_authority {
         if (option::is_none(&permissions_maybe)) { return false };
         let permissions = option::destroy_some(permissions_maybe);
 
-        permissions::has_permission_exclude_manager<Permission>(&permissions);
+        permissions::has_permission_exclude_manager<Permission>(&permissions)
     }
 
     // ========= Getter Functions =========
@@ -313,10 +318,13 @@ module ownership::tx_authority {
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
-        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.permissions, agent, vector[]);
-        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
 
-        let permissions = vector2::filter(&new_permissions, agent_permissions);
+        // Delegation cannot expand the permissions that an agent already has; it can merely extend a
+        // subset of its existing permissions to a new principal
+        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.permissions, agent, vector[]);
+        let permissions = vector2::intersection(&new_permissions, agent_permissions);
+
+        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
         permissions::add(existing, permissions);
 
         new_auth
