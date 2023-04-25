@@ -51,7 +51,7 @@ module ownership::permissions {
     
     // Delegations only extend an agent's power to equal or lower levels, never up.
     // That is, everything in `permissions` that is outside of the `filter` will be removed
-    public(friend) fun filter(permissions: &vector<Permission>, filter: &vector<Permission>): vector<Permission> {
+    public(friend) fun intersection(permissions: &vector<Permission>, filter: &vector<Permission>): vector<Permission> {
         if (has_admin_permission(filter)) { return *permissions };
 
         if (has_manager_permission(filter)) {
@@ -63,7 +63,7 @@ module ownership::permissions {
             return *filter
         };
 
-        vector::filter(permissions, filter)
+        vector2::intersection(permissions, filter)
     }
 
     public(friend) fun add(existing: &mut vector<Permission>, new: vector<Permission>) {

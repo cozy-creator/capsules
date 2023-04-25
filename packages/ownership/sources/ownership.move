@@ -113,7 +113,7 @@ module ownership::ownership {
     }
 
     // Defaults to `true` if owner is not set.
-    public fun has_owner_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+    public fun is_owner(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let owner = get_owner(uid);
@@ -138,7 +138,7 @@ module ownership::ownership {
         }
     }
 
-    public fun has_module_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+    public fun is_module_authority(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let module_authority = option::destroy_some(get_module_authority(uid));
@@ -157,7 +157,7 @@ module ownership::ownership {
     }
 
     /// Defaults to `false` if transfer authority is not set.
-    public fun has_transfer_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+    public fun is_transfer_authority(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let transfer = get_transfer_authority(uid);

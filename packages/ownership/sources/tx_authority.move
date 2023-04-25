@@ -227,14 +227,53 @@ module ownership::tx_authority {
         has_permission<Permission>(encode::type_into_address<T>(), auth)
     }
 
+    // ========= Namespace Validity Checkers =========
+
+    public fun has_namespace_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
+        let principal_maybe = lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+
+       has_admin_permission(principal, auth)
+    }
+
+    // Convenience function. Permission and Namespace are the same module, so this is checking if
+    // the same module authorized this operation as the module that declared this permission type.
+    public fun has_namespace_permission<Permission>(auth: &TxAuthority): bool {
+        has_namespace_permission_<Permission, Permission>(auth)
+    }
+
+    // `NamespaceType` can be literally any type declared in any package belonging to that Namespace;
+    // we merely use this type to figure out the package-id, so that we can lookup the Namespace that
+    // owns that type (assuming it has been added to TxAuthority already).
+    // In this case, Namespace is the principal.
+    public fun has_namespace_permission_<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        let principal_maybe = lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+
+       has_permission<Permission>(principal, auth)
+    }
+
+    // This is best used for sensitive operations, where you want the agent to either explicitly have
+    // the permission, or be an admin. We do not want to automatically grant this permission by default
+    // by being a manager.
+    public fun has_namespace_permission_excluding_manager<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        let principal_maybe = lookup_namespace_for_package<NamespaceType>(auth);
+        if (option::is_none(&permissions_maybe)) { return false };
+        let permissions = option::destroy_some(permissions_maybe);
+
+        has_namespace_permission_excluding_manager_<Permission>(principal, auth)
+    }
+
     // Special-case function where we want to assign sensitive permissions to agents, but not grant them to
     // managers automatically (they are still granted to admins automatically)
-    public fun has_permission_excluding_manager<Permission>(principal: address, auth: &TxAuthority): bool {
+    public fun has_namespace_permission_excluding_manager_<Permission>(principal: address, auth: &TxAuthority): bool {
         let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
         if (option::is_none(&permissions_maybe)) { return false };
         let permissions = option::destroy_some(permissions_maybe);
 
-        permissions::has_permission_exclude_manager<Permission>(&permissions)
+        permissions::has_permission_excluding_manager<Permission>(&permissions)
     }
 
     // ========= Getter Functions =========
@@ -322,7 +361,7 @@ module ownership::tx_authority {
         // Delegation cannot expand the permissions that an agent already has; it can merely extend a
         // subset of its existing permissions to a new principal
         let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.permissions, agent, vector[]);
-        let permissions = vector2::intersection(&new_permissions, agent_permissions);
+        let permissions = permissions::intersection(&new_permissions, agent_permissions);
 
         let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
         permissions::add(existing, permissions);
