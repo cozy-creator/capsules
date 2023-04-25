@@ -20,24 +20,16 @@ module authorization::server {
 
     // Log the agent into the namespace, and assert that they have the specified permission
     public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
-        let auth = claim_permissions_(namespace, auth);
-        let principal = rbac::principal(&namespace.rbac);
-        assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
-
-        auth
+        namespace::assert_login_<Permission>(namespace, auth)
     }
 
-    public fun has_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-       tx_authority::has_admin_permission(principal, auth)
+    public fun has_namespace_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
+        tx_authority::has_namespace_admin_permission<NamespaceType>(auth)
     }
 
     // Convenience function. Permission and Namespace are the same module, so this is checking if
     // the same module authorized this operation as the module that declared this permission type.
-    public fun has_permission<Permission>(auth: &TxAuthority): bool {
+    public fun has_namespace_permission<Permission>(auth: &TxAuthority): bool {
         has_permission_<Permission, Permission>(auth)
     }
 
@@ -45,22 +37,14 @@ module authorization::server {
     // we merely use this type to figure out the package-id, so that we can lookup the Namespace that
     // owns that type (assuming it has been added to TxAuthority already).
     // In this case, Namespace is the principal.
-    public fun has_permission_<NamespaceType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-       tx_authority::has_permission<Permission>(principal, auth)
+    public fun has_namespace_permission_<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        tx_authority::has_namespace_permission<NamespaceType, Permission>(auth)
     }
 
     // This is best used for sensitive operations, where you want the agent to either explicitly have
     // the permission, or be an admin. We do not want to automatically grant this permission by default
-    // for being ba manager.
-    public fun has_permission_excluding_manager<NamespaceType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = tx_authority::lookup_namespace_for_package<NamespaceType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-        tx_authority::has_permission_excluding_manager<Permission>(principal, auth)
+    // by being a manager.
+    public fun has_namespace_permission_excluding_manager<NamespaceType, Permission>(auth: &TxAuthority): bool {
+        tx_authority::has_namespace_permission_excluding_manager<NamespaceType, Permission>(auth)
     }
 }

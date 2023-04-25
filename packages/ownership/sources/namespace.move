@@ -73,15 +73,15 @@ module ownership::namespace {
     // ======== Create Namespaces ======== 
 
     // Convenience entry function
-    public entry fun claim_package(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
-        let namespace = claim_package_(receipt, tx_context::sender(ctx), ctx);
+    public entry fun create_from_package(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
+        let namespace = create_from_package_(receipt, tx_context::sender(ctx), ctx);
         return_and_share(namespace);
     }
 
     // Claim a namespace object from a publish receipt.
     // The principal (address) will be the first package-ID used. We can combine several packags under the
     // same namespace.
-    public fun claim_package_(
+    public fun create_from_package_(
         receipt: &mut PublishReceipt,
         owner: address,
         ctx: &mut TxContext
@@ -109,6 +109,17 @@ module ownership::namespace {
         transfer::share_object(namespace);
     }
 
+    // Note that this is currently not callable, because Sui does not yet support destroying shared
+    // objects. To destroy a namespace, you must first remove any packages from it; this is to
+    // prevent packages from being permanently orphaned without a namespace.
+    public fun destroy(namespace: Namespace) {
+        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(vector::is_empty(&namespace.packages), EPACKAGES_MUST_BE_EMPTY);
+
+        let Namespace { id, packages: _, rbac: _ } = namespace;
+        object::delete(id);
+    }
+
     // ======== Edit Namespaces =====
     // You must be the owner of a namespace to edit it. If you want to change owners, call into SimpleTransfer.
     // Ownership of namespaces created with anything other than a publish_receipt are non-transferable.
@@ -121,8 +132,6 @@ module ownership::namespace {
         id: UID,
         package: ID
     }
-
-    // TO DO
 
     // Only the namespace owner can add the package
     public fun add_package(receipt: &mut PublishReceipt, namespace: &mut Namespace, auth: &TxAuthority) {
@@ -139,17 +148,6 @@ module ownership::namespace {
 
         let package_id = publish_receipt::into_package_id(receipt);
         vector::push_back(&mut namespace.packages, package_id);
-    }
-
-    // Note that this is currently not callable, because Sui does not yet support destroying shared
-    // objects. To destroy a namespace, you must first remove any packages from it; this is to
-    // prevent packages from being permanently orphaned without a namespace.
-    public fun destroy(namespace: Namespace) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-        assert!(vector::is_empty(&namespace.packages), EPACKAGES_MUST_BE_EMPTY);
-
-        let Namespace { id, packages: _, rbac: _ } = namespace;
-        object::delete(id);
     }
 
     // Convenience function. Must be called by the namespace-owner address. Transfer the package
@@ -230,6 +228,11 @@ module ownership::namespace {
         rbac::delete_role_and_agents(&mut namespace.rbac, role);
     }
 
+    public fun has_owner_or_admin_permission(uid: &UID, auth: &TxAuthority): bool {
+        ownership::is_owner(uid, auth) || 
+        // TO DO
+    }
+
     // ======== For Agents ========
     // Agents should call into this to retrieve any permissions assigned to them and stored within the
     // namespace. These permissions are brought into the current transaction-exeuction to pass validity-
@@ -259,6 +262,21 @@ module ownership::namespace {
         let permissions = rbac::get_agent_permissions(&namespace.rbac, agent);
         let principal = principal(namespace);
         tx_authority::add_permissions_internal(principal, agent, permissions, auth)
+    }
+
+    // Convenience function
+    public fun assert_login<Permission>(namespace: &Namespace, ctx: TxContext): TxAuthority {
+        let auth = tx_authority::begin(ctx);
+        assert_login_<Permission>(namespace, &auth)
+    }
+
+    // Log the agent into the namespace, and assert that they have the specified permission
+    public fun assert_login_<Permission>(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
+        let auth = claim_permissions_(namespace, auth);
+        let principal = rbac::principal(&namespace.rbac);
+        assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
+
+        auth
     }
 
     // ======== Single Use Permissions ========
