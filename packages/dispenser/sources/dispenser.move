@@ -315,7 +315,7 @@ module dispenser::dispenser {
             let index = total_available - 1;
             bag::remove<u64, T>(&mut self.items, index)
         } else {
-            let index = rand::rng(0, total_available, ctx);
+            let index = rand::rng_with_clock(0, total_available, clock, ctx);
             let selected_item = bag::remove<u64, T>(&mut self.items, index);
 
             // // replace the selected item with the last item
