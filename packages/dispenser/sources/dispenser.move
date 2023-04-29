@@ -73,16 +73,16 @@ module dispenser::dispenser {
     const ESCHEMA_ALREADY_SET: u64 = 6;
     const EINVALID_DISPENSER_SERIALIZATION: u64 = 7;
     const EMAXIMUM_CAPACITY_EXCEEDED: u64 = 8;
-    const EINVALID_START_TIME: u64 = 0;
-    const EINVALID_END_TIME: u64 = 0;
-    const EINVALID_PRICE: u64 = 0;
-    const EINVALID_ITEM_TYPE: u64 = 0;
-    const ESTART_TIME_NOT_REACHED: u64 = 0;
-    const EEND_TIME_ELAPSED: u64 = 0;
-    const EINSUFFICIENT_COIN_PAYMENT: u64 = 0;
-    const EDISPENSER_PAUSED: u64 = 0;
-    const EDISPENSER_NOT_PAUSED: u64 = 0;
-    const EINSUFFICIENT_BALANCE: u64 = 0;
+    const EINVALID_START_TIME: u64 = 9;
+    const EINVALID_END_TIME: u64 = 10;
+    const EINVALID_PRICE: u64 = 11;
+    const EINVALID_ITEM_TYPE: u64 = 12;
+    const ESTART_TIME_NOT_REACHED: u64 = 13;
+    const EEND_TIME_ELAPSED: u64 = 14;
+    const EINSUFFICIENT_COIN_PAYMENT: u64 = 15;
+    const EDISPENSER_PAUSED: u64 = 16;
+    const EDISPENSER_NOT_PAUSED: u64 = 17;
+    const EINSUFFICIENT_BALANCE: u64 = 18;
 
     // ========== Public functions ==========
 
