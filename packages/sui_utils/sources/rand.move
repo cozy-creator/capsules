@@ -9,47 +9,108 @@
 // Eventually this should be replaced by a VRF from Switchboard (work in progress)
 
 module sui_utils::rand {
+    use std::hash;
     use std::vector;
+
+    use sui::bcs;
     use sui::object;
-    use sui::math;
-    use sui::tx_context::TxContext;
+    use sui::clock::{Self, Clock};
+    use sui::tx_context::{Self, TxContext};
 
     const EBAD_RANGE: u64 = 0;
     const ETOO_FEW_BYTES: u64 = 1;
     const EDIVISOR_MUST_BE_NON_ZERO: u64 = 2;
 
-    // Generates an integer from the range [min, max), not inclusive of max
-    // bytes = vector<u8> with length of 20. However we only use the first 8 bytes
-    public fun rng(min: u64, max: u64, ctx: &mut TxContext): u64 {
-        assert!(max > min, EBAD_RANGE);
+    public fun rng_u64(min: u64, max: u64, ctx: &mut TxContext): u64 {
+        assert!(max >= min, EBAD_RANGE);
+        let value = u64_from_seed(seed(ctx));
 
-        let uid = object::new(ctx);
-        let bytes = object::uid_to_bytes(&uid);
-        object::delete(uid);
-
-        let num = from_bytes(bytes);
-        num % (max - min) + min
+        value % (max - min) + min
     }
 
-    public fun from_bytes(bytes: vector<u8>): u64 {
-        assert!(vector::length(&bytes) >= 8, ETOO_FEW_BYTES);
+    public fun rng_u128(min: u128, max: u128, ctx: &mut TxContext): u128 {
+        assert!(max > min, EBAD_RANGE);
+        let value = u128_from_seed(seed(ctx));
 
-        let i: u8 = 0;
-        let sum: u64 = 0;
-        while (i < 8) {
-            sum = sum + (*vector::borrow(&bytes, (i as u64)) as u64) * math::pow(2, (7 - i) * 8);
-            i = i + 1;
-        };
+        value % (max - min) + min
+    }
 
-        sum
+    public fun rng_u64_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
+        assert!(max > min, EBAD_RANGE);
+        let value = u64_from_seed(seed_with_clock(clock, ctx));
+
+        value % (max - min) + min
+    }
+
+    public fun rng_u128_with_clock(min: u128, max: u128, clock: &Clock, ctx: &mut TxContext): u128 {
+        assert!(max >= min, EBAD_RANGE);
+        let value = u128_from_seed(seed_with_clock(clock, ctx));
+
+        value % (max - min) + min
+    }
+
+    public fun u128_from_seed(seed: vector<u8>): u128 {
+        assert!(vector::length(&seed) >= 16, ETOO_FEW_BYTES);
+        bcs::peel_u128(&mut bcs::new(seed))
+    }
+
+    public fun u64_from_seed(seed: vector<u8>): u64 {
+        assert!(vector::length(&seed) >= 8, ETOO_FEW_BYTES);
+        bcs::peel_u64(&mut bcs::new(seed))
+    }
+
+    public fun rng_u64_from_clock(clock: &Clock, ctx: &mut TxContext): u64 {
+        let seed = seed_with_clock(clock, ctx);
+        u64_from_seed(seed)
+    }
+
+    public fun rng_u128_from_clock(clock: &Clock, ctx: &mut TxContext): u128 {
+        let seed = seed_with_clock(clock, ctx);
+        u128_from_seed(seed)
+    }
+
+    // generates seed using the tx context (epoch, sender and a newly created uid) and clock 
+    public fun seed_with_clock(clock: &Clock, ctx: &mut TxContext): vector<u8> {
+        let raw_seed = raw_seed(ctx);
+
+        let timestamp_bytes = bcs::to_bytes(&clock::timestamp_ms(clock));
+        vector::append(&mut raw_seed, timestamp_bytes);
+
+        hash::sha3_256(raw_seed)
+    }
+
+    // generates seed using the tx context (epoch, sender and a newly created uid)
+    public fun seed(ctx: &mut TxContext): vector<u8> {
+        let raw_seed = raw_seed(ctx);
+        hash::sha3_256(raw_seed)
+    }
+
+    public fun raw_seed(ctx: &mut TxContext): vector<u8> {
+        let sender = tx_context::sender(ctx);
+        let sender_bytes = bcs::to_bytes(&sender);
+
+        let epoch = tx_context::epoch(ctx);
+        let epoch_bytes = bcs::to_bytes(&epoch);
+
+        let id = object::new(ctx);
+        let id_bytes = object::uid_to_bytes(&id);
+        object::delete(id);
+
+        let raw_seed = vector::empty<u8>();
+        vector::append(&mut raw_seed, id_bytes);
+        vector::append(&mut raw_seed, epoch_bytes);
+        vector::append(&mut raw_seed, sender_bytes);
+
+        raw_seed
     }
 }
 
 #[test_only]
 module sui_utils::rand_tests {
-    // use std::debug;
     use sui::test_scenario;
     use sui::tx_context::TxContext;
+    use sui::clock::{Self, Clock};
+
     use sui_utils::rand;
 
     const EOUTSIDE_RANGE: u64 = 0;
@@ -57,8 +118,15 @@ module sui_utils::rand_tests {
     const EONE_IN_A_MILLION_ERROR: u64 = 2;
 
     public fun print_rand(min: u64, max: u64, ctx: &mut TxContext): u64 {
-        let num = rand::rng(min, max, ctx);
-        // debug::print(&num);
+        let num = rand::rng_u64(min, max, ctx);
+        // std::debug::print(&num);
+        assert!(num >= min && num < max, EOUTSIDE_RANGE);
+        num
+    }
+
+    public fun print_rand_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
+        let num = rand::rng_u64_with_clock(min, max, clock, ctx);
+        // std::debug::print(&num);
         assert!(num >= min && num < max, EOUTSIDE_RANGE);
         num
     }
@@ -84,12 +152,17 @@ module sui_utils::rand_tests {
 
         // 5th tx: 100 rands in the same tx
         test_scenario::next_tx(&mut scenario, @0x5);
-        let i = 0;
+        let (i, clock) = (0, clock::create_for_testing(test_scenario::ctx(&mut scenario)));
         while (i < 100) {
+            clock::increment_for_testing(&mut clock, 1);
+
             print_rand(0, 100, test_scenario::ctx(&mut scenario));
+            // std::debug::print(&utf8(b"-----------"));
+            print_rand_with_clock(0, 100, &clock, test_scenario::ctx(&mut scenario));
             i = i + 1;
         };
 
+        clock::destroy_for_testing(clock);
         test_scenario::end(scenario);
     }
 }
