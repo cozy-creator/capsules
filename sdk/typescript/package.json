@@ -1,6 +1,6 @@
 {
   "name": "@capsulecraft/serializer",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "author": "Paul Fidika <paul@fidika.com>",
   "license": "MIT",
   "scripts": {
@@ -18,11 +18,21 @@
   },
   "dependencies": {
     "@mysten/bcs": "^0.7.0",
-    "@mysten/sui.js": "^0.30.0",
+    "@mysten/sui.js": "0.32.x",
     "superstruct": "^1.0.3"
   },
   "description": "## Intro A small typescript sdk consisting of (de)serializing funtions. The purpose of this tool is to prepare argument data to invoke Move functions on the Sui blockchain.",
-  "main": "dist/src/index.js",
+  "main": "index.server.mjs",
+  "module": "index.client.mjs",
+  "type": "module",
+  "exports": {
+    ".": {
+      "require": "./index.server.mjs",
+      "import": "./index.client.mjs"
+    },
+    "./server": "./index.server.mjs",
+    "./client": "./index.client.mjs"
+  },
   "types": "dist/src/index.d.ts",
   "directories": {
     "example": "examples"
