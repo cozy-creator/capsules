@@ -59,16 +59,6 @@ module sui_utils::rand {
         bcs::peel_u64(&mut bcs::new(seed))
     }
 
-    public fun rng_u64_with_clock(clock: &Clock, ctx: &mut TxContext): u64 {
-        let seed = seed_with_clock(clock, ctx);
-        u64_from_seed(seed)
-    }
-
-    public fun rng_u128_with_clock(clock: &Clock, ctx: &mut TxContext): u128 {
-        let seed = seed_with_clock(clock, ctx);
-        u128_from_seed(seed)
-    }
-
     // generates seed using the tx context (epoch, sender and a newly created uid) and clock 
     public fun seed_with_clock(clock: &Clock, ctx: &mut TxContext): vector<u8> {
         let raw_seed = raw_seed(ctx);
