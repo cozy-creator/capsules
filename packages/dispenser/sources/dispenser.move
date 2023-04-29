@@ -81,6 +81,7 @@ module dispenser::dispenser {
     const EEND_TIME_ELAPSED: u64 = 0;
     const EINSUFFICIENT_COIN_PAYMENT: u64 = 0;
     const EDISPENSER_PAUSED: u64 = 0;
+    const EDISPENSER_NOT_PAUSED: u64 = 0;
 
     // ========== Public functions ==========
 
@@ -263,8 +264,17 @@ module dispenser::dispenser {
         option::fill(&mut self.config.schema, schema::create(schema));
     }
 
+    public fun resume<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(self.config.is_paused, EDISPENSER_NOT_PAUSED);
+
+        self.config.is_paused = false
+    }
+
     public fun pause<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
         // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!self.config.is_paused, EDISPENSER_PAUSED);
+
         self.config.is_paused = true
     }
 
