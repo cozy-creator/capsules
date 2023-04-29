@@ -21,40 +21,21 @@ module sui_utils::rand {
     const ETOO_FEW_BYTES: u64 = 1;
     const EDIVISOR_MUST_BE_NON_ZERO: u64 = 2;
 
-    public fun rng_u64(min: u64, max: u64, ctx: &mut TxContext): u64 {
+    public fun rng(min: u64, max: u64, ctx: &mut TxContext): u64 {
         assert!(max >= min, EBAD_RANGE);
-        let value = u64_from_seed(seed(ctx));
+        let value = from_seed(seed(ctx));
 
         value % (max - min) + min
     }
 
-    public fun rng_u128(min: u128, max: u128, ctx: &mut TxContext): u128 {
+    public fun rng_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
         assert!(max > min, EBAD_RANGE);
-        let value = u128_from_seed(seed(ctx));
+        let value = from_seed(seed_with_clock(clock, ctx));
 
         value % (max - min) + min
     }
 
-    public fun rng_u64_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
-        assert!(max > min, EBAD_RANGE);
-        let value = u64_from_seed(seed_with_clock(clock, ctx));
-
-        value % (max - min) + min
-    }
-
-    public fun rng_u128_with_clock(min: u128, max: u128, clock: &Clock, ctx: &mut TxContext): u128 {
-        assert!(max >= min, EBAD_RANGE);
-        let value = u128_from_seed(seed_with_clock(clock, ctx));
-
-        value % (max - min) + min
-    }
-
-    public fun u128_from_seed(seed: vector<u8>): u128 {
-        assert!(vector::length(&seed) >= 16, ETOO_FEW_BYTES);
-        bcs::peel_u128(&mut bcs::new(seed))
-    }
-
-    public fun u64_from_seed(seed: vector<u8>): u64 {
+    public fun from_seed(seed: vector<u8>): u64 {
         assert!(vector::length(&seed) >= 8, ETOO_FEW_BYTES);
         bcs::peel_u64(&mut bcs::new(seed))
     }
@@ -108,14 +89,14 @@ module sui_utils::rand_tests {
     const EONE_IN_A_MILLION_ERROR: u64 = 2;
 
     public fun print_rand(min: u64, max: u64, ctx: &mut TxContext): u64 {
-        let num = rand::rng_u64(min, max, ctx);
+        let num = rand::rng(min, max, ctx);
         // std::debug::print(&num);
         assert!(num >= min && num < max, EOUTSIDE_RANGE);
         num
     }
 
     public fun print_rand_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
-        let num = rand::rng_u64_with_clock(min, max, clock, ctx);
+        let num = rand::rng_with_clock(min, max, clock, ctx);
         // std::debug::print(&num);
         assert!(num >= min && num < max, EOUTSIDE_RANGE);
         num
