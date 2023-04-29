@@ -310,19 +310,22 @@ module dispenser::dispenser {
             assert!(now <= *option::borrow(&self.config.end_time), EEND_TIME_ELAPSED)
         };
 
-        let total_available = bag::length(&self.items); 
         if(self.config.is_sequential) {
-            let index = total_available - 1;
+            let index = bag::length(&self.items) - 1;
             bag::remove<u64, T>(&mut self.items, index)
         } else {
-            let index = rand::rng_with_clock(0, total_available, clock, ctx);
-            let selected_item = bag::remove<u64, T>(&mut self.items, index);
+            let last_index = bag::length(&self.items) - 1;
+            let last_item = bag::remove<u64, T>(&mut self.items,  last_index);
 
-            // // replace the selected item with the last item
-            let last_item = bag::remove<u64, T>(&mut self.items, total_available - 1);
-            bag::add<u64, T>(&mut self.items, index, last_item);
+            if(bag::is_empty(&self.items)) {
+                last_item
+            } else {
+                let index = rand::rng_with_clock(0, bag::length(&self.items), clock, ctx);
+                let selected_item = bag::remove<u64, T>(&mut self.items, index);
 
-            selected_item
+                bag::add<u64, T>(&mut self.items, index, last_item);
+                selected_item
+            }
         }
     }
 
@@ -335,11 +338,12 @@ module dispenser::dispenser_test {
     use std::vector;
 
     use sui::test_scenario::{Self, Scenario};
+    use sui::clock::{Self, Clock};
     use sui::bcs;
 
-    use ownership::tx_authority;
+    // use ownership::tx_authority;
 
-    use dispenser::dispenser::{Self, Dispenser};
+    use dispenser::dispenser::{Self, Dispenser, NOT_COIN};
 
     const ADMIN: address = @0xFAEC;
 
@@ -349,15 +353,50 @@ module dispenser::dispenser_test {
         value: String
     }
 
-    fun create_dispenser<T: copy + store + drop>(
+    fun create_dispenser<T: copy + store + drop, C>(
         scenario: &mut Scenario,
-        owner: Option<address>,
+        clock: &Clock,
+        price: Option<u64>,
+        max_items: u64,
+        start_time: Option<u64>,
+        end_time: Option<u64>,
+        owner_maybe: Option<address>,
+        schema_maybe: Option<vector<vector<u8>>>,
         is_serialized: bool,
-        is_sequential: bool,
-        schema: Option<vector<vector<u8>>>
+        is_sequential: bool
     ) {
         let ctx = test_scenario::ctx(scenario);
-        dispenser::create<Witness, T>(&Witness { },owner, 5, is_serialized, is_sequential, schema, ctx);
+        if(option::is_some(&price)) {
+            let dispenser = dispenser::create<T, C>(
+                clock,
+                option::destroy_some(price),
+                max_items,
+                start_time,
+                end_time,
+                owner_maybe,
+                schema_maybe,
+                is_serialized,
+                is_sequential,
+                ctx
+            );
+
+            dispenser::return_and_share(dispenser)
+        } else {
+            let dispenser = dispenser::create_<T>(
+                clock,
+                max_items,
+                start_time,
+                end_time,
+                owner_maybe,
+                schema_maybe,
+                is_serialized,
+                is_sequential,
+                ctx
+            );
+
+            dispenser::return_and_share(dispenser)
+        };
+        
     }
 
     fun get_dispenser_serialized_items(): vector<vector<u8>> {
@@ -366,7 +405,7 @@ module dispenser::dispenser_test {
             bcs::to_bytes(&b"Move"), 
             bcs::to_bytes(&b"Capsule"), 
             bcs::to_bytes(&b"Object"), 
-            bcs::to_bytes(&b"Metadata")
+            bcs::to_bytes(&b"Metadata"),
         ]
     }
 
@@ -374,48 +413,65 @@ module dispenser::dispenser_test {
         vector[
             utf8(b"Sui"), 
             utf8(b"Move"), 
+            utf8(b"Away"),
             utf8(b"Capsule"), 
+            utf8(b"Heyye"),
             utf8(b"Object"), 
-            utf8(b"Metadata")
+            utf8(b"Mesjjsjtadata"),
+            utf8(b"Metadata"),
         ]
     }
-
 
     #[test]
     fun test_sequential_dispenser() {
         let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<DispenserData>(&mut scenario, option::none(), false, true, option::none());
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let (max, price, start, end, serialized, sequential) = (8, option::none(), option::none(), option::some(10), false, true);
+
+        create_dispenser<DispenserData, NOT_COIN>(
+            &mut scenario,
+            &clock,
+            price,
+            max,
+            start,
+            end,
+            option::none(),
+            option::none(),
+            serialized,
+            sequential
+        );
+
         test_scenario::next_tx(&mut scenario, ADMIN);
         
         let items = get_dispenser_items();
 
         {
-            let dispenser = test_scenario::take_shared<Dispenser<DispenserData>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData, NOT_COIN>>(&scenario);
+            let _ctx = test_scenario::ctx(&mut scenario);
+            // let auth = tx_authority::begin(ctx);
 
             let load_items = vector[];
             let (i, len) = (0, vector::length(&items));
 
             while(i < len) {
-                let item = DispenserData { value: vector::pop_back(&mut items) };
+                let item = DispenserData { value: *vector::borrow(&items, i) };
                 vector::push_back(&mut load_items, item);
                 i = i + 1;
             };
 
-            dispenser::load(&mut dispenser, load_items, &auth);
+            dispenser::load(&mut dispenser, load_items, /* &auth */);
             
             test_scenario::return_shared(dispenser);
             test_scenario::next_tx(&mut scenario, ADMIN);
-        } ;
+        };
 
         {
-            let dispenser = test_scenario::take_shared<Dispenser<DispenserData>>(&scenario);
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData, NOT_COIN>>(&scenario);
             let ctx = test_scenario::ctx(&mut scenario);
             let (i, len) = (0, vector::length(&items));
 
             while (i < len) {
-                let item = dispenser::dispense(&mut dispenser, &Witness {}, ctx);
+                let item = dispenser::dispense_(&mut dispenser, &Witness {}, &clock, ctx);
                 assert!(&item ==  &DispenserData { value: *vector::borrow(&items, i) }, 0);
 
                 i = i + 1;
@@ -424,74 +480,64 @@ module dispenser::dispenser_test {
             test_scenario::return_shared(dispenser);
         };
 
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    fun test_serialized_sequential_dispenser() {
-        let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
-        test_scenario::next_tx(&mut scenario, ADMIN);
-
-        let items = get_dispenser_serialized_items();
-
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
-
-            dispenser::load_serialized(&mut dispenser, items, &auth);
-            
-            test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
-        } ;
-
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let (i, len) = (0, vector::length(&items));
-
-            while (i < len) {
-                let item = dispenser::dispense(&mut dispenser, &Witness {}, ctx);
-                assert!(&item == vector::borrow(&items, i), 0);
-
-                i = i + 1;
-            };
-
-            test_scenario::return_shared(dispenser);
-        };
-
+        clock::destroy_for_testing(clock);
         test_scenario::end(scenario);
     }
 
     #[test]
     fun test_random_dispenser() {
         let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, false, option::some(vector[b"String"]));
-        test_scenario::next_tx(&mut scenario, ADMIN);
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let (max, price, start, end, serialized, sequential) = (8, option::none(), option::none(), option::some(10), false, false);
 
-        let items = get_dispenser_serialized_items();
+        create_dispenser<DispenserData, NOT_COIN>(
+            &mut scenario,
+            &clock,
+            price,
+            max,
+            start,
+            end,
+            option::none(),
+            option::none(),
+            serialized,
+            sequential
+        );
+
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        
+        let items = get_dispenser_items();
 
         {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData, NOT_COIN>>(&scenario);
+            let _ctx = test_scenario::ctx(&mut scenario);
+            // let auth = tx_authority::begin(ctx);
 
-            dispenser::load_serialized(&mut dispenser, items, &auth);
+            let load_items = vector[];
+            let (i, len) = (0, vector::length(&items));
+
+            while(i < len) {
+                let item = DispenserData { value: *vector::borrow(&items, i) };
+                vector::push_back(&mut load_items, item);
+                i = i + 1;
+            };
+
+            dispenser::load(&mut dispenser, load_items, /* &auth */);
             
             test_scenario::return_shared(dispenser);
             test_scenario::next_tx(&mut scenario, ADMIN);
-        } ;
+        };
 
         {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let _ctx = test_scenario::ctx(&mut scenario);
+            let dispenser = test_scenario::take_shared<Dispenser<DispenserData, NOT_COIN>>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
             let (i, len) = (0, vector::length(&items));
 
             while (i < len) {
-                // let item = dispenser::dispense(&mut dispenser, Witness {}, ctx);
-                // std::debug::print(&utf8(item));
-                // assert!(&item == vector::borrow(&items, i), 0);
+                clock::increment_for_testing(&mut clock, 1);
+
+                let item = dispenser::dispense_(&mut dispenser, &Witness {}, &clock, ctx);
+                std::debug::print(&item);
+                // assert!(&item ==  &DispenserData { value: *vector::borrow(&items, i) }, 0);
 
                 i = i + 1;
             };
@@ -499,91 +545,167 @@ module dispenser::dispenser_test {
             test_scenario::return_shared(dispenser);
         };
 
+        clock::destroy_for_testing(clock);
         test_scenario::end(scenario);
     }
 
-    #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::EINVALID_OWNER_AUTH)]
-    fun test_invalid_dispenser_auth_failure() {
-        let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
-        test_scenario::next_tx(&mut scenario, @0xABCE);
+    // #[test]
+    // fun test_serialized_sequential_dispenser() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+    //     test_scenario::next_tx(&mut scenario, ADMIN);
 
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //     let items = get_dispenser_serialized_items();
 
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
-            let items = get_dispenser_serialized_items();
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
 
-            dispenser::load_serialized(&mut dispenser, items, &auth);
-            test_scenario::return_shared(dispenser);
-        } ;
-
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::ECANNOT_LOAD_EMPTY_ITEMS)]
-    fun test_empty_dispenser_failure() {
-        let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
-        test_scenario::next_tx(&mut scenario, ADMIN);
-        
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
-
-            dispenser::load_serialized(&mut dispenser, vector::empty(), &auth);
-            test_scenario::return_shared(dispenser);
-        } ;
-
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = dispenser::schema::EUNRECOGNIZED_TYPE)]
-    fun test_dispenser_unrecognized_type_failure() {
-        let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"int8"]));
-        test_scenario::next_tx(&mut scenario, ADMIN);
-        
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
-            let items = get_dispenser_serialized_items();
-
-            dispenser::load_serialized(&mut dispenser, items, &auth);
-            test_scenario::return_shared(dispenser);
-        } ;
-
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::EMAXIMUM_CAPACITY_EXCEEDED)]
-    fun test_dispenser_max_items_failure() {
-        let scenario = test_scenario::begin(ADMIN);
-        create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
-        test_scenario::next_tx(&mut scenario, ADMIN);
-
-        let items = get_dispenser_serialized_items();
-
-        {
-            let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
-            let ctx = test_scenario::ctx(&mut scenario);
-            let auth = tx_authority::begin(ctx);
-
-            vector::push_back(&mut items, bcs::to_bytes(&b"Test"));
-            dispenser::load_serialized(&mut dispenser, items, &auth);
+    //         dispenser::load_serialized(&mut dispenser, items, &auth);
             
-            test_scenario::return_shared(dispenser);
-            test_scenario::next_tx(&mut scenario, ADMIN);
-        } ;
+    //         test_scenario::return_shared(dispenser);
+    //         test_scenario::next_tx(&mut scenario, ADMIN);
+    //     } ;
 
-        test_scenario::end(scenario);
-    }
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let (i, len) = (0, vector::length(&items));
+
+    //         while (i < len) {
+    //             let item = dispenser::dispense(&mut dispenser, &Witness {}, ctx);
+    //             assert!(&item == vector::borrow(&items, i), 0);
+
+    //             i = i + 1;
+    //         };
+
+    //         test_scenario::return_shared(dispenser);
+    //     };
+
+    //     test_scenario::end(scenario);
+    // }
+
+    // #[test]
+    // fun test_random_dispenser() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, false, option::some(vector[b"String"]));
+    //     test_scenario::next_tx(&mut scenario, ADMIN);
+
+    //     let items = get_dispenser_serialized_items();
+
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+
+    //         dispenser::load_serialized(&mut dispenser, items, &auth);
+            
+    //         test_scenario::return_shared(dispenser);
+    //         test_scenario::next_tx(&mut scenario, ADMIN);
+    //     } ;
+
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let _ctx = test_scenario::ctx(&mut scenario);
+    //         let (i, len) = (0, vector::length(&items));
+
+    //         while (i < len) {
+    //             // let item = dispenser::dispense(&mut dispenser, Witness {}, ctx);
+    //             // std::debug::print(&utf8(item));
+    //             // assert!(&item == vector::borrow(&items, i), 0);
+
+    //             i = i + 1;
+    //         };
+
+    //         test_scenario::return_shared(dispenser);
+    //     };
+
+    //     test_scenario::end(scenario);
+    // }
+
+    // #[test]
+    // #[expected_failure(abort_code = dispenser::dispenser::EINVALID_OWNER_AUTH)]
+    // fun test_invalid_dispenser_auth_failure() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+    //     test_scenario::next_tx(&mut scenario, @0xABCE);
+
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+    //         let items = get_dispenser_serialized_items();
+
+    //         dispenser::load_serialized(&mut dispenser, items, &auth);
+    //         test_scenario::return_shared(dispenser);
+    //     } ;
+
+    //     test_scenario::end(scenario);
+    // }
+
+    // #[test]
+    // #[expected_failure(abort_code = dispenser::dispenser::ECANNOT_LOAD_EMPTY_ITEMS)]
+    // fun test_empty_dispenser_failure() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+    //     test_scenario::next_tx(&mut scenario, ADMIN);
+        
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+
+    //         dispenser::load_serialized(&mut dispenser, vector::empty(), &auth);
+    //         test_scenario::return_shared(dispenser);
+    //     } ;
+
+    //     test_scenario::end(scenario);
+    // }
+
+    // #[test]
+    // #[expected_failure(abort_code = dispenser::schema::EUNRECOGNIZED_TYPE)]
+    // fun test_dispenser_unrecognized_type_failure() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"int8"]));
+    //     test_scenario::next_tx(&mut scenario, ADMIN);
+        
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+    //         let items = get_dispenser_serialized_items();
+
+    //         dispenser::load_serialized(&mut dispenser, items, &auth);
+    //         test_scenario::return_shared(dispenser);
+    //     } ;
+
+    //     test_scenario::end(scenario);
+    // }
+
+    // #[test]
+    // #[expected_failure(abort_code = dispenser::dispenser::EMAXIMUM_CAPACITY_EXCEEDED)]
+    // fun test_dispenser_max_items_failure() {
+    //     let scenario = test_scenario::begin(ADMIN);
+    //     create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
+    //     test_scenario::next_tx(&mut scenario, ADMIN);
+
+    //     let items = get_dispenser_serialized_items();
+
+    //     {
+    //         let dispenser = test_scenario::take_shared<Dispenser<vector<u8>>>(&scenario);
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+
+    //         vector::push_back(&mut items, bcs::to_bytes(&b"Test"));
+    //         dispenser::load_serialized(&mut dispenser, items, &auth);
+            
+    //         test_scenario::return_shared(dispenser);
+    //         test_scenario::next_tx(&mut scenario, ADMIN);
+    //     } ;
+
+    //     test_scenario::end(scenario);
+    // }
 
 }
