@@ -59,12 +59,12 @@ module sui_utils::rand {
         bcs::peel_u64(&mut bcs::new(seed))
     }
 
-    public fun rng_u64_from_clock(clock: &Clock, ctx: &mut TxContext): u64 {
+    public fun rng_u64_with_clock(clock: &Clock, ctx: &mut TxContext): u64 {
         let seed = seed_with_clock(clock, ctx);
         u64_from_seed(seed)
     }
 
-    public fun rng_u128_from_clock(clock: &Clock, ctx: &mut TxContext): u128 {
+    public fun rng_u128_with_clock(clock: &Clock, ctx: &mut TxContext): u128 {
         let seed = seed_with_clock(clock, ctx);
         u128_from_seed(seed)
     }
