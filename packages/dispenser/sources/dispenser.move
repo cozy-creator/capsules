@@ -256,6 +256,13 @@ module dispenser::dispenser {
         dispense_internal(self, witness, clock, ctx)
     }
     
+    public fun set_schema<T, C>(self: &mut Dispenser<T, C>, schema: vector<vector<u8>>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(option::is_none(&self.config.schema), ESCHEMA_ALREADY_SET);
+
+        option::fill(&mut self.config.schema, schema::create(schema));
+    }
+
     public fun pause<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
         // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
         self.config.is_paused = true
@@ -266,12 +273,6 @@ module dispenser::dispenser {
         &mut self.id
     }
 
-    public fun set_schema<T, C>(self: &mut Dispenser<T, C>, schema: vector<vector<u8>>, /* auth: &TxAuthority */) {
-        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-        assert!(option::is_none(&self.config.schema), ESCHEMA_ALREADY_SET);
-
-        option::fill(&mut self.config.schema, schema::create(schema));
-    }
 
     fun dispense_internal<W: drop, T: copy + store + drop, C>(
         self: &mut Dispenser<T, C>,
