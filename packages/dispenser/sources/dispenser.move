@@ -6,13 +6,16 @@ module dispenser::dispenser {
 
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_field;
+    use sui::balance::{Self, Balance};
+    use sui::bag::{Self, Bag};
+    use sui::coin::{Self, Coin};
+    use sui::clock::{Self, Clock};
     use sui::transfer;
 
-    use ownership::ownership;
-    use ownership::tx_authority::{Self, TxAuthority};
+    // use ownership::ownership;
+    // use ownership::tx_authority::{Self, TxAuthority};
 
-    use sui_utils::typed_id;
+    // use sui_utils::typed_id;
     use sui_utils::rand;
 
     use dispenser::schema::{Self, Schema};
@@ -20,186 +23,284 @@ module dispenser::dispenser {
 
     // ========== Storage structs ==========
 
-    struct Dispenser<phantom T> has key, store {
+    struct Dispenser<phantom T, phantom C> has key {
         id: UID,
-        /// The address of the package that originated or created this dispenser
-        origin: address,
-        /// The dispenser configuration information
-        config: Config,
-        /// The number of items available in the dispenser
-        items_count: u64,
-        /// Schema used to validate every items if the `is_serialized` config is set to `true`
-        schema: Option<Schema>
+        /// `Bag` that holds the items available the dispenser
+        items: Bag,
+        /// The total number of items that have been loaded into the dispenser
+        items_loaded: u64,
+        /// The balance of coin `C` collected when an item is dispensed
+        balance: Balance<C>,
+        /// The dispenser configuration, determines how the dispenser behaves
+        config: DispenserConfig,
 
         // There's an `ownership::ownership::Key { }` attached to the dispenser. 
         // This contains the information about the ownership, module authority of the dispenser.
-
-        // The items of the dispenser are attached the dispenser with a `dispenser::dispenser::Key { slot: u64 }` key
     }
 
-    struct Config has store, copy, drop {
-        /// Indicates whether the dispenser items are serialized (BCS encoded)
+    struct DispenserConfig has copy, store {
+        /// The price or cost of dispensing each item
+        price: u64,
+        /// The maximum number of items that can be loaded into the dispenser
+        max_items: u64,
+        /// Indicates whether the dispenser is paused or not
+        is_paused: bool,
+        /// Indicates whether the dispenser items are serialized using BCS encoding
         is_serialized: bool,
-        /// Indicates whether the dispenser should dispense sequentially or randmomly
+        /// Indicates whether the dispenser should dispense items in a sequential or random order
         is_sequential: bool,
-        /// Maximum number of items that can be loaded into the dispenser
-        maximum_capacity: u64,
+        /// The schema is used to validate each item if items are serialized
+        schema: Option<Schema>,
+        /// The time from which the dispenser should start dispensing items
+        start_time: Option<u64>,
+        /// The time from which the dispenser should stop dispensing items
+        end_time: Option<u64>,
     }
-
-    // key used to store a given item in the dispenser
-    struct Key has store, copy, drop { slot: u64 }
-
+ 
     // ========== Witness structs =========
     struct Witness has drop {}
+    struct NOT_COIN {}
 
 
     // ========== Error constants ==========
 
     const EINVALID_OWNER_AUTH: u64 = 0;
     const EINVALID_MODULE_AUTH: u64 = 1;
-    const ELOAD_EMPTY_ITEMS: u64 = 2;
+    const ECANNOT_LOAD_EMPTY_ITEMS: u64 = 2;
     const ECAPACITY_EXCEEDED: u64 = 3;
     const ESCHEMA_NOT_SET: u64 = 4;
     const EDISPENSER_EMPTY: u64 = 5;
     const ESCHEMA_ALREADY_SET: u64 = 6;
-    const EDISPENSER_TYPE_MISMATCH: u64 = 7;
+    const EINVALID_DISPENSER_SERIALIZATION: u64 = 7;
     const EMAXIMUM_CAPACITY_EXCEEDED: u64 = 8;
+    const EINVALID_START_TIME: u64 = 0;
+    const EINVALID_END_TIME: u64 = 0;
+    const EINVALID_PRICE: u64 = 0;
+    const EINVALID_ITEM_TYPE: u64 = 0;
+    const ESTART_TIME_NOT_REACHED: u64 = 0;
+    const EEND_TIME_ELAPSED: u64 = 0;
+    const EINSUFFICIENT_COIN_PAYMENT: u64 = 0;
+    const EDISPENSER_PAUSED: u64 = 0;
 
     // ========== Public functions ==========
 
-    public fun create<W: drop, T: copy + store + drop>(
-        witness: &W,
+    public fun create_<T: copy + store + drop>(
+        clock: &Clock,
+        max_items: u64,
+        start_time: Option<u64>,
+        end_time: Option<u64>,
         owner_maybe: Option<address>,
-        maximum_capacity: u64,
+        schema_maybe: Option<vector<vector<u8>>>,
         is_serialized: bool,
         is_sequential: bool,
-        schema_maybe: Option<vector<vector<u8>>>,
         ctx: &mut TxContext
-    ) {
-        let dispenser = create_<W, T>(witness, owner_maybe, maximum_capacity, is_serialized, is_sequential, schema_maybe, ctx);
-        transfer::share_object(dispenser)
+    ): Dispenser<T, NOT_COIN> {
+        let price = 0;
+
+        create<T, NOT_COIN>(
+            clock,
+            price,
+            max_items,
+            start_time,
+            end_time,
+            owner_maybe,
+            schema_maybe,
+            is_serialized,
+            is_sequential,
+            ctx
+        )
     }
-    
-    /// Creates the dispenser and returns it by value
-    public fun create_<W: drop, T: copy + store + drop>(
-        _witness: &W,
+
+    public fun create<T: copy + store + drop, C>(
+        clock: &Clock,
+        price: u64,
+        max_items: u64,
+        start_time: Option<u64>,
+        end_time: Option<u64>,
         owner_maybe: Option<address>,
-        maximum_capacity: u64,
+        schema_maybe: Option<vector<vector<u8>>>,
         is_serialized: bool,
         is_sequential: bool,
-        schema_maybe: Option<vector<vector<u8>>>,
         ctx: &mut TxContext
-    ): Dispenser<T> {
-        let origin = tx_authority::type_into_address<W>();
+    ): Dispenser<T, C> {
+        let now = clock::timestamp_ms(clock);
+
+        if(type_name::get<C>() == type_name::get<NOT_COIN>()) {
+            assert!(price == 0, EINVALID_PRICE);
+        };
+
+        if(option::is_some(&start_time)) {
+            assert!(*option::borrow(&start_time) >= now, EINVALID_START_TIME);
+
+            if(option::is_some(&end_time)) {
+                assert!(*option::borrow(&end_time) > *option::borrow(&start_time), EINVALID_END_TIME);
+            };
+        };
 
         let dispenser = Dispenser {
             id: object::new(ctx),
-            origin,
-            items_count: 0,
-            schema: option::none(),
-            config: Config {
+            items: bag::new(ctx),
+            balance: balance::zero<C>(),
+            items_loaded: 0,
+            config: DispenserConfig {
+                price,
+                end_time,
+                max_items,
+                start_time,
                 is_serialized,
                 is_sequential,
-                maximum_capacity,
+                is_paused: false,
+                schema: option::none(),
             }
         };
 
-        let owner = if(option::is_some(&owner_maybe)) {
-            option::destroy_some(owner_maybe)
+        let _owner = if(option::is_some(&owner_maybe)) {
+          option::destroy_some(owner_maybe)
         } else {
             tx_context::sender(ctx)
         };
 
-        let typed_id = typed_id::new(&dispenser);
-        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
-        ownership::as_shared_object_(&mut dispenser.id, typed_id, vector[owner], vector::empty(), &auth);
+        // let typed_id = typed_id::new(&dispenser);
+        // let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
+        // ownership::as_shared_object_(&mut dispenser.id, typed_id, vector[owner], vector::empty(), &auth);
 
         if(is_serialized) {
-            assert!(type_name::into_string(type_name::get<T>()) == string(b"vector<u8>"), 0);
+            assert!(type_name::into_string(type_name::get<T>()) == string(b"vector<u8>"), EINVALID_ITEM_TYPE);
             assert!(option::is_some(&schema_maybe), 0);
 
-            set_schema(&mut dispenser, option::destroy_some(schema_maybe), &auth);
+            set_schema(&mut dispenser, option::destroy_some(schema_maybe), /* &auth */);
         };
 
         dispenser
     }
 
-    public fun load_serialized(self: &mut Dispenser<vector<u8>>, items: vector<vector<u8>>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-        assert!(self.config.is_serialized, EDISPENSER_TYPE_MISMATCH);
-        assert!(option::is_some(&self.schema), ESCHEMA_NOT_SET);
-        assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
+    public fun return_and_share<T, C>(self: Dispenser<T, C>) {
+        transfer::share_object(self)
+    }
 
-        let schema = option::borrow(&self.schema);
+    public fun load_<C>(self: &mut Dispenser<vector<u8>, C>, items: vector<vector<u8>>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!vector::is_empty(&items), ECANNOT_LOAD_EMPTY_ITEMS);
+        assert!(self.config.is_serialized, EINVALID_DISPENSER_SERIALIZATION);
+        assert!(option::is_some(&self.config.schema), ESCHEMA_NOT_SET);
+
         let (i, len) = (0, vector::length(&items));
-        let items_count = self.items_count + len;
+        let items_loaded = self.items_loaded + len;
+        let schema = option::borrow(&self.config.schema);
 
-        assert!(items_count <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+        assert!(items_loaded <= self.config.max_items, EMAXIMUM_CAPACITY_EXCEEDED);
 
         while (i < len) {
             let item = vector::pop_back(&mut items);
             schema::validate(schema, item);
-            dynamic_field::add<Key, vector<u8>>(&mut self.id, Key { slot: i }, item);
+
+            let index = bag::length(&self.items);
+            bag::add(&mut self.items, index, item);
 
             i = i + 1;
         };
      
-        self.items_count = items_count;
+        self.items_loaded = items_loaded;
     }
 
-    public fun load<T: copy + store + drop>(self: &mut Dispenser<T>, items: vector<T>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-        assert!(!self.config.is_serialized, EDISPENSER_TYPE_MISMATCH);
-        assert!(!vector::is_empty(&items), ELOAD_EMPTY_ITEMS);
+    public fun load<T: copy + store + drop, C>(self: &mut Dispenser<T, C>, items: vector<T>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!vector::is_empty(&items), ECANNOT_LOAD_EMPTY_ITEMS);
+        assert!(!self.config.is_serialized, EINVALID_DISPENSER_SERIALIZATION);
 
         let (i, len) = (0, vector::length(&items));
-        let items_count = self.items_count + len;
+        let items_loaded = self.items_loaded + len;
 
-        assert!(items_count <= self.config.maximum_capacity, EMAXIMUM_CAPACITY_EXCEEDED);
+        assert!(items_loaded <= self.config.max_items, EMAXIMUM_CAPACITY_EXCEEDED);
 
-        while (i < items_count) {
+        while (i < len) {
             let item = vector::pop_back(&mut items);
-            dynamic_field::add<Key, T>(&mut self.id, Key { slot: i }, item);
+            let index = bag::length(&self.items);
+
+            bag::add(&mut self.items, index, item);
 
             i = i + 1;
         };
 
-        self.items_count =  items_count;
+        self.items_loaded = items_loaded;
     }
 
-    public fun dispense<W: drop, T: copy + store + drop>(self: &mut Dispenser<T>, _witness: &W, ctx: &mut TxContext): T {
-        assert!(tx_authority::type_into_address<W>() == self.origin, EINVALID_MODULE_AUTH);
+    public fun dispense_<W: drop, T: copy + store + drop>(
+        self: &mut Dispenser<T, NOT_COIN>,
+        witness: &W,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): T {
+        dispense_internal(self, witness, clock, ctx)
+    }
 
-        if(self.config.is_sequential) {
-            self.items_count = self.items_count - 1;
-            dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count })
+    public fun dispense<W: drop, T: copy + store + drop, C>(
+        self: &mut Dispenser<T, C>,
+        witness: &W,
+        clock: &Clock,
+        coin: Coin<C>,
+        ctx: &mut TxContext
+    ): T {
+        let coin_value = coin::value(&coin);
+        assert!(coin_value >= self.config.price, EINSUFFICIENT_COIN_PAYMENT);
+
+        let payment = if(coin_value > self.config.price) {
+            let payment = coin::split(&mut coin, self.config.price, ctx);
+            transfer::public_transfer(coin, tx_context::sender(ctx));
+            payment
         } else {
-            let slot = rand::rng(0, self.items_count, ctx);
-            self.items_count = self.items_count - 1;
+            coin
+        };
 
-            let selected_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot });
+        balance::join(&mut self.balance, coin::into_balance(payment));
+        dispense_internal(self, witness, clock, ctx)
+    }
 
-            // replace the selected item with the last item
-            let last_item = dynamic_field::remove<Key, T>(&mut self.id, Key { slot: self.items_count });
-            dynamic_field::add<Key, T>(&mut self.id, Key { slot }, last_item);
+    fun dispense_internal<W: drop, T: copy + store + drop, C>(
+        self: &mut Dispenser<T, C>,
+        _witness: &W,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): T {
+        // TODO: verify module auth when the ownership module is properly working
+        assert!(!self.config.is_paused, EDISPENSER_PAUSED);
+
+        let now = clock::timestamp_ms(clock);
+
+        if(option::is_some(&self.config.start_time)) {
+            assert!(now >= *option::borrow(&self.config.start_time), ESTART_TIME_NOT_REACHED)
+        };
+
+        if(option::is_some(&self.config.end_time)) {
+            assert!(now <= *option::borrow(&self.config.end_time), EEND_TIME_ELAPSED)
+        };
+
+        let total_available = bag::length(&self.items); 
+        if(self.config.is_sequential) {
+            let index = total_available - 1;
+            bag::remove<u64, T>(&mut self.items, index)
+        } else {
+            let index = rand::rng(0, total_available, ctx);
+            let selected_item = bag::remove<u64, T>(&mut self.items, index);
+
+            // // replace the selected item with the last item
+            let last_item = bag::remove<u64, T>(&mut self.items, total_available - 1);
+            bag::add<u64, T>(&mut self.items, index, last_item);
 
             selected_item
         }
     }
 
-    /// Returns the mutable reference of the dispenser id
-    public fun extend<T>(self: &mut Dispenser<T>, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-
+    public fun extend<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */): &mut UID {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
         &mut self.id
     }
 
-    /// Sets the schema of the dispenser item. aborts if schema is already set
-    fun set_schema<T>(self: &mut Dispenser<T>, schema: vector<vector<u8>>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-        assert!(option::is_none(&self.schema), ESCHEMA_ALREADY_SET);
+    fun set_schema<T, C>(self: &mut Dispenser<T, C>, schema: vector<vector<u8>>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(option::is_none(&self.config.schema), ESCHEMA_ALREADY_SET);
 
-        option::fill(&mut self.schema, schema::create(schema));
+        option::fill(&mut self.config.schema, schema::create(schema));
     }
 }
 
@@ -399,7 +500,7 @@ module dispenser::dispenser_test {
     }
 
     #[test]
-    #[expected_failure(abort_code = dispenser::dispenser::ELOAD_EMPTY_ITEMS)]
+    #[expected_failure(abort_code = dispenser::dispenser::ECANNOT_LOAD_EMPTY_ITEMS)]
     fun test_empty_dispenser_failure() {
         let scenario = test_scenario::begin(ADMIN);
         create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
@@ -439,7 +540,7 @@ module dispenser::dispenser_test {
 
     #[test]
     #[expected_failure(abort_code = dispenser::dispenser::EMAXIMUM_CAPACITY_EXCEEDED)]
-    fun test_dispenser_maximum_capacity_failure() {
+    fun test_dispenser_max_items_failure() {
         let scenario = test_scenario::begin(ADMIN);
         create_dispenser<vector<u8>>(&mut scenario, option::none(), true, true, option::some(vector[b"String"]));
         test_scenario::next_tx(&mut scenario, ADMIN);
