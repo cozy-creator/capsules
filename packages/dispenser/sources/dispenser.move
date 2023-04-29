@@ -82,6 +82,7 @@ module dispenser::dispenser {
     const EINSUFFICIENT_COIN_PAYMENT: u64 = 0;
     const EDISPENSER_PAUSED: u64 = 0;
     const EDISPENSER_NOT_PAUSED: u64 = 0;
+    const EINSUFFICIENT_BALANCE: u64 = 0;
 
     // ========== Public functions ==========
 
@@ -262,6 +263,12 @@ module dispenser::dispenser {
         assert!(option::is_none(&self.config.schema), ESCHEMA_ALREADY_SET);
 
         option::fill(&mut self.config.schema, schema::create(schema));
+    }
+
+    public fun withdraw<T, C>(self: &mut Dispenser<T, C>, amount: u64, ctx: &mut TxContext): Coin<C> {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(amount <= balance::value(&self.balance), EINSUFFICIENT_BALANCE);
+        coin::take(&mut self.balance, amount, ctx)
     }
 
     public fun resume<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
