@@ -255,6 +255,11 @@ module dispenser::dispenser {
         balance::join(&mut self.balance, coin::into_balance(payment));
         dispense_internal(self, witness, clock, ctx)
     }
+    
+    public fun pause<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
+        // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
+        self.config.is_paused = true
+    }
 
     public fun extend<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */): &mut UID {
         // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
