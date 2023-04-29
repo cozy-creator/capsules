@@ -1,26 +1,45 @@
-import { BCS, BcsConfig, EnumTypeDefinition, BcsReader } from "@mysten/bcs";
-import { DevInspectResults } from "@mysten/sui.js";
-import { is, object, integer, bigint, string, boolean, record, array, union, any, Struct, define } from "superstruct";
+// Note that for addresses (and IDs) BCS doesn't do any validation; you can use non-hex
+// strings even when it's configured for hex-addresses and it won't abort. The 0x prefix
+// is optional and doens't affect anything.
+
+import { BCS, BcsConfig, EnumTypeDefinition, BcsWriter, BcsReader } from '@mysten/bcs';
+import { DevInspectResults } from '@mysten/sui.js';
+import {
+  is,
+  object,
+  integer,
+  bigint,
+  string,
+  boolean,
+  record,
+  array,
+  union,
+  any,
+  Struct,
+  define
+} from 'superstruct';
 
 // ===== Declared Supported Types =====
 
 const supportedTypes = [
-  "address",
-  "bool",
-  "id",
-  "u8",
-  "u16",
-  "u32",
-  "u64",
-  "u128",
-  "u256",
-  "String",
-  "Url",
-  "vector<u8>",
-  "VecMap",
+  'address',
+  'bool',
+  'ID',
+  'u8',
+  'u16',
+  'u32',
+  'u64',
+  'u128',
+  'u256',
+  'String',
+  'Url',
+  'vector<u8>',
+  'VecMap'
 ] as const;
 
-type SupportedMoveTypes = typeof supportedTypes[number] | `Option<${typeof supportedTypes[number]}>`;
+type SupportedMoveTypes =
+  | (typeof supportedTypes)[number]
+  | `Option<${(typeof supportedTypes)[number]}>`;
 
 type SupportedJSTypes =
   | Uint8Array
@@ -39,9 +58,9 @@ type JSTypes<T extends Record<string, keyof MoveToJSTypes>> = {
 };
 
 type MoveToJSTypes = {
-  address: Uint8Array;
+  address: string;
   bool: boolean;
-  id: Uint8Array;
+  ID: string;
   u8: number;
   u16: number;
   u32: number;
@@ -50,43 +69,43 @@ type MoveToJSTypes = {
   u256: bigint;
   String: string;
   Url: URL;
-  "vector<address>": Uint8Array[];
-  "vector<bool>": boolean[];
-  "vector<id>": Uint8Array[];
-  "vector<u8>": Uint8Array;
-  "vector<u16>": Uint16Array;
-  "vector<u32>": Uint32Array;
-  "vector<u64>": BigUint64Array;
-  "vector<u128>": BigInt[];
-  "vector<u256>": BigInt[];
-  "vector<String>": string[];
-  "vector<Url>": string[];
-  "vector<vector<u8>>": Uint8Array[];
+  'vector<address>': string[];
+  'vector<bool>': boolean[];
+  'vector<ID>': string[];
+  'vector<u8>': Uint8Array;
+  'vector<u16>': Uint16Array;
+  'vector<u32>': Uint32Array;
+  'vector<u64>': BigUint64Array;
+  'vector<u128>': BigInt[];
+  'vector<u256>': BigInt[];
+  'vector<String>': string[];
+  'vector<Url>': string[];
+  'vector<vector<u8>>': Uint8Array[];
   VecMap: Record<string, string>;
-  "Option<address>": { none: null } | { some: Uint8Array };
-  "Option<bool>": { none: null } | { some: boolean };
-  "Option<id>": { none: null } | { some: Uint8Array };
-  "Option<u8>": { none: null } | { some: number };
-  "Option<u16>": { none: null } | { some: number };
-  "Option<u32>": { none: null } | { some: number };
-  "Option<u64>": { none: null } | { some: bigint };
-  "Option<u128>": { none: null } | { some: bigint };
-  "Option<u256>": { none: null } | { some: bigint };
-  "Option<String>": { none: null } | { some: string };
-  "Option<Url>": { none: null } | { some: string };
-  "Option<vector<address>>": { none: null } | { some: Uint8Array[] };
-  "Option<vector<bool>>": { none: null } | { some: boolean[] };
-  "Option<vector<id>>": { none: null } | { some: Uint8Array[] };
-  "Option<vector<u8>>": { none: null } | { some: Uint8Array };
-  "Option<vector<u16>>": { none: null } | { some: Uint16Array };
-  "Option<vector<u32>>": { none: null } | { some: Uint32Array };
-  "Option<vector<u64>>": { none: null } | { some: BigUint64Array };
-  "Option<vector<u128>>": { none: null } | { some: BigInt[] };
-  "Option<vector<u256>>": { none: null } | { some: BigInt[] };
-  "Option<vector<String>>": { none: null } | { some: string[] };
-  "Option<vector<Url>>": { none: null } | { some: string[] };
-  "Option<vector<vector<u8>>>": { none: null } | { some: Uint8Array[] };
-  "Option<VecMap>": { none: null } | { some: Record<string, string> };
+  'Option<address>': { none: null } | { some: string };
+  'Option<bool>': { none: null } | { some: boolean };
+  'Option<ID>': { none: null } | { some: string };
+  'Option<u8>': { none: null } | { some: number };
+  'Option<u16>': { none: null } | { some: number };
+  'Option<u32>': { none: null } | { some: number };
+  'Option<u64>': { none: null } | { some: bigint };
+  'Option<u128>': { none: null } | { some: bigint };
+  'Option<u256>': { none: null } | { some: bigint };
+  'Option<String>': { none: null } | { some: string };
+  'Option<Url>': { none: null } | { some: string };
+  'Option<vector<address>>': { none: null } | { some: string[] };
+  'Option<vector<bool>>': { none: null } | { some: boolean[] };
+  'Option<vector<ID>>': { none: null } | { some: string[] };
+  'Option<vector<u8>>': { none: null } | { some: Uint8Array };
+  'Option<vector<u16>>': { none: null } | { some: Uint16Array };
+  'Option<vector<u32>>': { none: null } | { some: Uint32Array };
+  'Option<vector<u64>>': { none: null } | { some: BigUint64Array };
+  'Option<vector<u128>>': { none: null } | { some: BigInt[] };
+  'Option<vector<u256>>': { none: null } | { some: BigInt[] };
+  'Option<vector<String>>': { none: null } | { some: string[] };
+  'Option<vector<Url>>': { none: null } | { some: string[] };
+  'Option<vector<vector<u8>>>': { none: null } | { some: Uint8Array[] };
+  'Option<VecMap>': { none: null } | { some: Record<string, string> };
 };
 
 // ===== Define Option enums =====
@@ -107,10 +126,12 @@ supportedTypes.forEach((typeName) => {
 
 // ===== Instantiate bcs =====
 
+const SUI_ADDRESS_LENGTH = 32;
 let bcsConfig: BcsConfig = {
-  vectorType: "vector",
-  addressLength: 20,
-  addressEncoding: "hex",
+  vectorType: 'vector<T>',
+  addressLength: SUI_ADDRESS_LENGTH,
+  addressEncoding: 'hex',
+  genericSeparators: ['<', '>'],
   types: { enums },
   withPrimitives: true,
 };
@@ -118,6 +139,8 @@ let bcsConfig: BcsConfig = {
 let bcs = new BCS(bcsConfig);
 
 // ===== Register String, Url, and VecMap<String,String> custom serializers =====
+
+bcs.registerAlias('ID', BCS.ADDRESS);
 
 bcs.registerType(
   "String",
@@ -201,7 +224,7 @@ const UrlSchema = define("url", (value: unknown): value is URL => {
 const MoveToStruct: Record<string, Struct<any, any>> = {
   address: array(integer()),
   bool: boolean(),
-  id: array(integer()),
+  ID: array(integer()),
   u8: integer(),
   u16: integer(),
   u32: integer(),

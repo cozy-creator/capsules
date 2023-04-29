@@ -279,6 +279,12 @@ module ownership::namespace {
         auth
     }
 
+    // This is helpful if you just want to define this namespace within the current TxAuthority,
+    // and you don't care about searching for any stored permissions inside the namespace itself.
+    public fun add_to_tx_authority(namespace: &Namespace, auth: &TxAuthority): TxAuthority {
+        tx_authority::add_namespace_internal(namespace.packages, principal(namespace), &auth)
+    }
+
     // ======== Single Use Permissions ========
 
     // In order to issue a single-use permission, the agent calling into this must:

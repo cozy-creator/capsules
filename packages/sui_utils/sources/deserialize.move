@@ -17,12 +17,11 @@ module sui_utils::deserialize {
     use sui_utils::bcs2;
     use sui_utils::vector2;
 
+    const SUI_ADDRESS_LENGTH: u64 = 32;
+
     // Error constants
     const EINCORRECT_DATA_SIZE: u64 = 0;
     const ENOT_BOOLEAN: u64 = 1;
-
-    /// Address length in Sui is 20 bytes.
-    const SUI_ADDRESS_LENGTH: u64 = 20;
 
     public fun address_(bytes: &vector<u8>, start: u64): (address, u64) {
         (address::from_bytes(vector2::slice(bytes, start, start + SUI_ADDRESS_LENGTH)), start + SUI_ADDRESS_LENGTH)

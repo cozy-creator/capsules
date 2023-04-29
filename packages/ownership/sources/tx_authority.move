@@ -73,6 +73,14 @@ module ownership::tx_authority {
 
     // ========= Add Agents =========
 
+    // This will be more useful once Sui supports multi-party transactions (August 2023)
+    public fun add_signer<T: key>(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
+        let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
+        vec_map2::set(&mut new_auth.permissions, tx_context::sender(ctx), permissions::admin());
+
+        new_auth
+    }
+
     public fun add_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, namespaces: auth.namespaces };
         vec_map2::set(&mut new_auth.permissions, object::id_address(cap), permissions::admin());
