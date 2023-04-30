@@ -17,6 +17,8 @@ module sui_utils::rand {
     use sui::clock::{Self, Clock};
     use sui::tx_context::{Self, TxContext};
 
+    use sui_utils::counter::{Self, Counter};
+
     const EBAD_RANGE: u64 = 0;
     const ETOO_FEW_BYTES: u64 = 1;
     const EDIVISOR_MUST_BE_NON_ZERO: u64 = 2;
@@ -28,9 +30,38 @@ module sui_utils::rand {
         value % (max - min) + min
     }
 
+
     public fun rng_with_clock(min: u64, max: u64, clock: &Clock, ctx: &mut TxContext): u64 {
         assert!(max > min, EBAD_RANGE);
         let value = from_seed(seed_with_clock(clock, ctx));
+
+        value % (max - min) + min
+    }
+
+    public fun rng_with_counter<T>(
+        w: &T,
+        min: u64,
+        max: u64,
+        counter: &mut Counter<T>,
+        ctx: &mut TxContext
+    ): u64 {
+        assert!(max > min, EBAD_RANGE);
+        let value = from_seed(seed_with_counter(w, counter, ctx));
+
+        value % (max - min) + min
+    }
+
+    public fun rng_with_clock_and_counter<T>(
+        w: &T,
+        min: u64,
+        max: u64,
+        clock: &Clock,
+        counter: &mut Counter<T>,
+        ctx: &mut TxContext
+    ): u64 {
+        assert!(max > min, EBAD_RANGE);
+
+        let value = from_seed(seed_with_clock_and_counter(w, clock, counter, ctx));
 
         value % (max - min) + min
     }
@@ -46,6 +77,29 @@ module sui_utils::rand {
 
         let timestamp_bytes = bcs::to_bytes(&clock::timestamp_ms(clock));
         vector::append(&mut raw_seed, timestamp_bytes);
+
+        hash::sha3_256(raw_seed)
+    }
+
+    // generates seed using the tx context (epoch, sender and a newly created uid) and a counter 
+    public fun seed_with_counter<T>(w: &T, counter: &mut Counter<T>, ctx: &mut TxContext): vector<u8> {
+        let raw_seed = raw_seed(ctx);
+
+        let counter_bytes = bcs::to_bytes(&counter::increment(counter, w));
+        vector::append(&mut raw_seed, counter_bytes);
+
+        hash::sha3_256(raw_seed)
+    }
+
+    // generates seed using the tx context (epoch, sender and a newly created uid) and clock 
+    public fun seed_with_clock_and_counter<T>(w: &T, clock: &Clock, counter: &mut Counter<T>, ctx: &mut TxContext): vector<u8> {
+        let raw_seed = raw_seed(ctx);
+
+        let timestamp_bytes = bcs::to_bytes(&clock::timestamp_ms(clock));
+        let counter_bytes = bcs::to_bytes(&counter::increment(counter, w));
+
+        vector::append(&mut raw_seed, timestamp_bytes);
+        vector::append(&mut raw_seed, counter_bytes);
 
         hash::sha3_256(raw_seed)
     }
