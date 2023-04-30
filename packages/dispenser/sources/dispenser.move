@@ -10,6 +10,7 @@ module dispenser::dispenser {
     use sui::bag::{Self, Bag};
     use sui::coin::{Self, Coin};
     use sui::clock::{Self, Clock};
+    use sui::dynamic_field;
     use sui::transfer;
 
     // use ownership::ownership;
@@ -17,6 +18,7 @@ module dispenser::dispenser {
 
     // use sui_utils::typed_id;
     use sui_utils::rand;
+    use sui_utils::counter::{Self, Counter};
 
     use dispenser::schema::{Self, Schema};
 
@@ -61,6 +63,7 @@ module dispenser::dispenser {
     struct Witness has drop {}
     struct NOT_COIN {}
 
+    struct Key has store, copy, drop { slot: vector<u8> }
 
     // ========== Error constants ==========
 
@@ -83,6 +86,8 @@ module dispenser::dispenser {
     const EDISPENSER_PAUSED: u64 = 16;
     const EDISPENSER_NOT_PAUSED: u64 = 17;
     const EINSUFFICIENT_BALANCE: u64 = 18;
+
+    const COUNTER_BYTES: vector<u8> = b"Counter";
 
     // ========== Public functions ==========
 
@@ -171,6 +176,12 @@ module dispenser::dispenser {
             assert!(option::is_some(&schema_maybe), 0);
 
             set_schema(&mut dispenser, option::destroy_some(schema_maybe), /* &auth */);
+        };
+
+        if(!is_sequential) {
+            let key = Key { slot: COUNTER_BYTES };
+            let counter = counter::new_<Witness>(Witness {}, ctx);
+            dynamic_field::add<Key, Counter<Witness>>(&mut dispenser.id, key, counter)
         };
 
         dispenser
@@ -320,7 +331,8 @@ module dispenser::dispenser {
             if(bag::is_empty(&self.items)) {
                 last_item
             } else {
-                let index = rand::rng_with_clock(0, bag::length(&self.items), clock, ctx);
+                let counter = dynamic_field::borrow_mut<Key, Counter<Witness>>(&mut self.id, Key { slot: COUNTER_BYTES });
+                let index = rand::rng_with_clock_and_counter(&Witness {}, 0, bag::length(&self.items), clock, counter, ctx);
                 let selected_item = bag::remove<u64, T>(&mut self.items, index);
 
                 bag::add<u64, T>(&mut self.items, index, last_item);
