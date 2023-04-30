@@ -301,6 +301,9 @@ module dispenser::dispenser {
         &mut self.id
     }
 
+    public fun balance<T, C>(self: &Dispenser<T, C>): u64 {
+        balance::value(&self.balance)
+    }
 
     fun dispense_internal<W: drop, T: copy + store + drop, C>(
         self: &mut Dispenser<T, C>,
