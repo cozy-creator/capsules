@@ -331,7 +331,8 @@ module dispenser::dispenser {
             if(bag::is_empty(&self.items)) {
                 last_item
             } else {
-                let counter = dynamic_field::borrow_mut<Key, Counter<Witness>>(&mut self.id, Key { slot: COUNTER_BYTES });
+                let key = Key { slot: COUNTER_BYTES };
+                let counter = dynamic_field::borrow_mut<Key, Counter<Witness>>(&mut self.id, key);
                 let index = rand::rng_with_clock_and_counter(&Witness {}, 0, bag::length(&self.items), clock, counter, ctx);
                 let selected_item = bag::remove<u64, T>(&mut self.items, index);
 
