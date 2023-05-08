@@ -1,6 +1,4 @@
 module guard::guard_set {
-    use std::vector;
-
     use sui::transfer;
     use sui::bag::{Self, Bag};
     use sui::object::{Self, UID};
@@ -11,21 +9,18 @@ module guard::guard_set {
 
     struct GuardSet<phantom T> has key, store { 
         id: UID,
-        data: GuardSetData
+        guards: Bag,
     }
 
-    struct GuardSetData has store {
-        guards: Bag,
-        enabled: vector<u8>
-    }
+    // struct GuardSetData has store {
+    //     guards: Bag,
+    //     enabled: vector<u8>
+    // }
 
     public fun create<T: drop>(_witness: &T, ctx: &mut TxContext): GuardSet<T> {
         GuardSet {
             id: object::new(ctx),
-            data: GuardSetData {
-                guards: bag::new(ctx),
-                enabled: vector::empty(),
-            }
+            guards: bag::new(ctx),
         }
     }
 
@@ -34,11 +29,11 @@ module guard::guard_set {
     }
 
     public fun guards<T>(self: &GuardSet<T>): &Bag {
-        &self.data.guards
+        &self.guards
     }
 
     public(friend) fun guards_mut<T>(self: &mut GuardSet<T>): &mut Bag {
-        &mut self.data.guards
+        &mut self.guards
     }
 }
 
