@@ -47,7 +47,7 @@ module guard::coin_payment {
         assert!(bag::contains(guards, guard_id), EGuardDoesNotExist);
 
         let coin_payment = bag::borrow_mut<u64, CoinPayment<C>>(guards, guard_id);
-        let coin = take_coin_internal(coin, coin_payment.amount, ctx);
+        let coin = split_coin_internal(coin, coin_payment.amount, ctx);
         balance::join(&mut coin_payment.balance, coin::into_balance(coin));
     }
 
@@ -55,7 +55,7 @@ module guard::coin_payment {
         let guard_id = guard_id::coin_payment();
         let guards = guard_set::guards_mut(guard_set);
 
-        assert!(bag::contains(guards, guard_id), 0);
+        assert!(bag::contains(guards, guard_id), EGuardDoesNotExist);
 
         let coin_payment = bag::borrow_mut<u64, CoinPayment<C>>(guards, guard_id);
         coin::take(&mut coin_payment.balance, amount, ctx)
@@ -65,13 +65,13 @@ module guard::coin_payment {
         let guard_id = guard_id::coin_payment();
         let guards = guard_set::guards(guard_set);
 
-        assert!(bag::contains(guards, guard_id), 0);
-        let coin_payment = bag::borrow<u64, CoinPayment<C>>(guards, guard_id);
+        assert!(bag::contains(guards, guard_id), EGuardDoesNotExist);
 
+        let coin_payment = bag::borrow<u64, CoinPayment<C>>(guards, guard_id);
         balance::value(&coin_payment.balance)
     }
 
-    fun take_coin_internal<C>(coin: Coin<C>, amount: u64, ctx: &mut TxContext): Coin<C> {
+    fun split_coin_internal<C>(coin: Coin<C>, amount: u64, ctx: &mut TxContext): Coin<C> {
         if(coin::value(&coin) > amount) { 
             let split_coin = coin::split(&mut coin, amount, ctx);
             if(coin::value(&coin) == 0) {
