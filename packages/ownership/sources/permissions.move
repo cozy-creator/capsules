@@ -5,17 +5,18 @@
 // but they're not droppable, so they'd have to explicitly be destroyed at the end of every tx.
 
 module ownership::permissions {
-    use std::string::{String, utf8};
+    use std::string::String;
     use std::vector;
 
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     use sui_utils::encode;
+    use sui_utils::vector2;
 
     friend ownership::rbac;
     friend ownership::tx_authority;
-    friend ownership::namespace;
+    friend ownership::organization;
 
     // These are special system-level permissions.
     // If the principal gives an agent the MANAGER role, then they can act as
@@ -66,7 +67,7 @@ module ownership::permissions {
             return *permissions
         };
 
-        if (has_admin_permission(permissions) || has_manager_permissions(permissions)) { 
+        if (has_admin_permission(permissions) || has_manager_permission(permissions)) { 
             return *filter
         };
 
@@ -80,11 +81,11 @@ module ownership::permissions {
         if (has_admin_permission(existing)) { return };
 
         // These superseed and replace all existing permissions
-        if (vector::contains(&new, admin)) {
+        if (vector::contains(&new, &admin)) {
             *existing = vector[admin];
-            return;
+            return
         };
-        if (vector::contains(&new, manager)) { 
+        if (vector::contains(&new, &manager)) { 
             *existing = vector[manager];
             return
         };
@@ -95,7 +96,7 @@ module ownership::permissions {
     // This works because ADMIN replaces all other permissions in this array
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
         if (vector::length(permissions) > 0) {
-            let permission = vector::borrow(&permissions, 0);
+            let permission = vector::borrow(permissions, 0);
             is_admin_permission(permission)
         } else {
             false
@@ -109,7 +110,7 @@ module ownership::permissions {
     // This works because MANAGER replaces all other permissions in this array
     public fun has_manager_permission(permissions: &vector<Permission>): bool {
         if (vector::length(permissions) > 0) {
-            let permission = vector::borrow(&permissions, 0);
+            let permission = vector::borrow(permissions, 0);
             is_manager_permission(permission)
         } else {
             false
@@ -120,44 +121,44 @@ module ownership::permissions {
         permission.inner == encode::type_name<MANAGER>()
     }
 
-    public fun has_permission<Permission>(permissions: &vector<Permission>): bool {
+    public fun has_permission<P>(permissions: &vector<Permission>): bool {
         if (has_admin_permission(permissions) || has_manager_permission(permissions)) {
             return true
         };
 
-        let type_name = encode::type_name<Permission>();
+        let type_name = encode::type_name<P>();
         let i = 0;
-        while (i < vector::length(&permissions)) {
-            let permission = vector::borrow(&permissions, i);
-            if (&permission.inner == &type_name) {  return true };
+        while (i < vector::length(permissions)) {
+            let permission = vector::borrow(permissions, i);
+            if (permission.inner == type_name) {  return true };
             i = i + 1;
         };
 
         false
     }
 
-    public fun has_permission_excluding_manager<Permission>(permissions: &vector<Permission>): bool {
+    public fun has_permission_excluding_manager<P>(permissions: &vector<Permission>): bool {
         if (has_manager_permission(permissions)) { return false };
-        has_permission<Permission>(permissions)
+        has_permission<P>(permissions)
     }
 
     // =========== Single-use permissions ===========
-    // Created by ownership::namespace, destroyed by ownership::tx_authority to be added to TxAuthority
+    // Created by ownership::organization, destroyed by ownership::tx_authority to be added to TxAuthority
     // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
     // half of the transaction into a single-use permission, and then have the second party complete it
 
-    public(friend) fun create_single_use<Permission>(
+    public(friend) fun create_single_use<P>(
         principal: address,
         ctx: &mut TxContext
     ): SingleUsePermission {
         SingleUsePermission {
             id: object::new(ctx),
             principal,
-            permission: new<Permission>()
+            permission: new<P>()
         }
     }
 
-    public(friend) fun consume_single_use(permission: SingleUsePermission): (principal, Permission) {
+    public(friend) fun consume_single_use(permission: SingleUsePermission): (address, Permission) {
         let SingleUsePermission { id, principal, permission } = permission;
         object::delete(id);
         (principal, permission)

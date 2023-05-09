@@ -5,7 +5,7 @@
 
 // This validity-checks should be used by modules to assert the correct permissions are present.
 
-module authorization::client {
+module ownership::client {
     use std::vector;
 
     use sui::dynamic_field;
@@ -29,8 +29,8 @@ module authorization::client {
 
     // If this is initialized, module authority exists and is always the native module (the module
     // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun has_module_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::has_module_permission<Permission>(uid, auth)
+    public fun has_package_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::has_package_permission<Permission>(uid, auth)
     }
 
     /// Defaults to `false` if transfer authority is not set.
@@ -41,7 +41,7 @@ module authorization::client {
     // Also checks to see if a namespace has previously been provisioned in this UID
     public fun can_borrow_uid_mut(uid: &UID, auth: &TxAuthority): bool {
         if (ownership::has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (ownership::has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
+        if (ownership::has_package_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
         if (ownership::has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
 
         // Check for namespace provisioning--these are manually added by an owner or namespace to an object's UID

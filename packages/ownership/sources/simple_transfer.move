@@ -5,7 +5,6 @@ module ownership::simple_transfer {
     use std::option;
 
     use sui::object::{Self, UID};
-    use sui::tx_context::{TxContext};
 
     use sui_utils::encode;
 

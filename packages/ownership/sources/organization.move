@@ -35,11 +35,11 @@ module ownership::organization {
 
     use sui_utils::encode;
     use sui_utils::typed_id;
-    use sui_utils::vec_map2;
+    use sui_utils::vector2;
 
     use ownership::client;
     use ownership::ownership;
-    use ownership::permissions::{Self, Permission, SingleUsePermission, ADMIN};
+    use ownership::permissions::{Self, SingleUsePermission, ADMIN};
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
     use ownership::simple_transfer::Witness as SimpleTransfer;
@@ -88,7 +88,7 @@ module ownership::organization {
         ctx: &mut TxContext
     ): Organization {
         let package_id = publish_receipt::into_package_id(receipt);
-        let rbac = rbac::create_internal(package_id);
+        let rbac = rbac::create(object::id_to_address(&package_id));
 
         let organization = Organization { 
             id: object::new(ctx),
@@ -113,7 +113,7 @@ module ownership::organization {
     // Note that this is currently not callable, because Sui does not yet support destroying shared
     // objects. To destroy a organization, you must first remove any packages from it; this is to
     // prevent packages from being permanently orphaned without a organization.
-    public fun destroy(organization: Organization) {
+    public fun destroy(organization: Organization, auth: &TxAuthority) {
         assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&organization.packages), EPACKAGES_MUST_BE_EMPTY);
 
@@ -151,6 +151,7 @@ module ownership::organization {
         vector::push_back(&mut organization.packages, package_id);
     }
 
+    // Aborst if package_id does not exist within the organization
     public fun remove_package(
         organization: &mut Organization,
         package_id: ID,
@@ -159,7 +160,7 @@ module ownership::organization {
     ): StoredPackage {
         assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
 
-        let package = vector::remove(&mut organization.packages, package_id);
+        let package = option::destroy_some(vector2::remove_maybe(&mut organization.packages, &package_id));
         StoredPackage {
             id: object::new(ctx),
             package
@@ -238,11 +239,11 @@ module ownership::organization {
     }
 
     public fun claim_permissions_(organization: &Organization, auth: &TxAuthority): TxAuthority {
-        let i = 0;
-        let agents = tx_authority::agents(auth);
+        let (i, auth) = (0, tx_authority::copy_(auth));
+        let agents = tx_authority::agents(&auth);
         while (i < vector::length(&agents)) {
             let agent = *vector::borrow(&agents, i);
-            auth = claim_permissions_for_agent(organization, agent, auth);
+            auth = claim_permissions_for_agent(organization, agent, &auth);
             i = i + 1;
         };
         
@@ -257,7 +258,7 @@ module ownership::organization {
     }
 
     // Convenience function
-    public fun assert_login<Permission>(organization: &Organization, ctx: TxContext): TxAuthority {
+    public fun assert_login<Permission>(organization: &Organization, ctx: &TxContext): TxAuthority {
         let auth = tx_authority::begin(ctx);
         assert_login_<Permission>(organization, &auth)
     }
@@ -274,7 +275,7 @@ module ownership::organization {
     // This is helpful if you just want to define this organization within the current TxAuthority,
     // and you don't care about searching for any stored permissions inside the organization itself.
     public fun add_to_tx_authority(organization: &Organization, auth: &TxAuthority): TxAuthority {
-        tx_authority::add_organization_internal(organization.packages, principal(organization), &auth)
+        tx_authority::add_organization_internal(organization.packages, principal(organization), auth)
     }
 
     // ======== Single Use Permissions ========
@@ -284,13 +285,14 @@ module ownership::organization {
     // (2) have (organization, SINGLE_USE); the agent was granted the authority to issue single-use permissions 
     // (or is an admin; the manager role is not sufficient)
     public fun create_single_use_permission<Permission>(
-        auth: &TxContext,
+        auth: &TxAuthority,
         ctx: &mut TxContext
     ): SingleUsePermission {
-        assert!(tx_authority::has_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
-        assert!(tx_authority::has_permission<Permission>(auth), ENO_OWNER_AUTHORITY);
-
         let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
+
+        assert!(tx_authority::has_org_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
+        assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
+
         permissions::create_single_use<Permission>(principal, ctx)
     }
 

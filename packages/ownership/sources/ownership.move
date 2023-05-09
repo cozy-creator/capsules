@@ -76,7 +76,7 @@ module ownership::ownership {
     public fun as_shared_object<T: key, Transfer>(
         uid: &mut UID,
         typed_id: TypedID<T>,
-        owner: vector<address>,
+        owner: address,
         auth: &TxAuthority
     ) {
         let transfer = encode::type_into_address<Transfer>();

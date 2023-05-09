@@ -25,20 +25,20 @@
 // you should instead use the grant_admin_role_for_agent() and grant_manager_role_for_agent() functions.
 // These give special reserved role-names, as defined in ownership::permissions.
 
-// For safety, this module is only callable by ownership::namespace
+// For safety, this module is only callable by ownership::organization
 
 module ownership::rbac {
-    use std::string::{Self, String, utf8};
+    use std::string::String;
     use std::vector;
 
     use sui::vec_map::{Self, VecMap};
 
+    use sui_utils::vector2;
     use sui_utils::vec_map2;
 
-    use ownership::permissions::{Self, Permission, ADMIN, MANAGER};
-    use ownership::tx_authority::{Self, StoredPermission};
+    use ownership::permissions::{Self, Permission};
 
-    friend ownership::namespace;
+    friend ownership::organization;
 
     // Error enums
     const ENO_PRINCIPAL_AUTHORITY: u64 = 0;
@@ -95,7 +95,7 @@ module ownership::rbac {
 
     public(friend) fun grant_permission_to_role<Permission>(rbac: &mut RBAC, role: String) {
         let permission = permissions::new<Permission>();
-        if (permissions::is_admin(&permission) || permissions::is_manager(&permission)) {
+        if (permissions::is_admin_permission(&permission) || permissions::is_manager_permission(&permission)) {
             // Admin and Manager permissions overwrite all other existing permissions
             vec_map2::set(&mut rbac.role_permissions, role, vector[permission]);
         } else {
@@ -108,7 +108,7 @@ module ownership::rbac {
     public(friend) fun revoke_permission_from_role<Permission>(rbac: &mut RBAC, role: String) {
         let permission = permissions::new<Permission>();
         let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
-        vector2::remove_maybe(existing, permission);
+        vector2::remove_maybe(existing, &permission);
     }
 
     // Any agent with this role will also be removed. The agents can always be re-added with new roles.
@@ -138,7 +138,7 @@ module ownership::rbac {
     }
 
     public(friend) fun get_agent_permissions(rbac: &RBAC, agent: address): vector<Permission> {
-        let role = vec_map::get(&rbac.agent_role, agent);
+        let role = vec_map::get(&rbac.agent_role, &agent);
         *vec_map::get(&rbac.role_permissions, role)
     }
 }

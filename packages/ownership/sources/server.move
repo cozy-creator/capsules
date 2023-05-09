@@ -6,6 +6,9 @@
 // This validity-checks should be used by modules to assert the correct permissions are present.
 
 module ownership::server {
+    use std::option::{Self, Option};
+
+    use sui::object::{ID};
     use sui::tx_context::TxContext;
 
     use ownership::organization::{Self, Organization};
@@ -39,8 +42,8 @@ module ownership::server {
         package: Option<ID>,
         auth: &TxAuthority
     ): bool {
-        if (option::is_none(package)) { return true; };
-        tx_authority::has_package_permission_<Permission>(package, auth)
+        if (option::is_none(&package)) { return true };
+        tx_authority::has_package_permission_<Permission>(option::destroy_some(package), auth)
     }
 
     public fun has_package_permission<Permission>(
