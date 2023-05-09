@@ -23,14 +23,14 @@ module authorization::server {
         namespace::assert_login_<Permission>(namespace, auth)
     }
 
-    public fun has_namespace_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
-        tx_authority::has_namespace_admin_permission<NamespaceType>(auth)
-    }
+    // public fun has_namespace_admin_permission<NamespaceType>(auth: &TxAuthority): bool {
+    //     tx_authority::has_namespace_admin_permission<NamespaceType>(auth)
+    // }
 
     // Convenience function. Permission and Namespace are the same module, so this is checking if
     // the same module authorized this operation as the module that declared this permission type.
     public fun has_namespace_permission<Permission>(auth: &TxAuthority): bool {
-        has_permission_<Permission, Permission>(auth)
+        has_namespace_permission_<Permission, Permission>(auth)
     }
 
     // `NamespaceType` can be literally any type declared in any package belonging to that Namespace;

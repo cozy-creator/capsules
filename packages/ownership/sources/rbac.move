@@ -43,6 +43,10 @@ module ownership::rbac {
     // Error enums
     const ENO_PRINCIPAL_AUTHORITY: u64 = 0;
 
+    // Reserved role names
+    // const ADMIN_ROLE: vector<u8> = b"ADMIN";
+    // const MANAGER_ROLE: vector<u8> = b"MANAGER";
+
     // After creation the principal cannot be changed
     // This can be modified with mere referential authority; store this somewhere private
     struct RBAC has store, drop {
@@ -73,15 +77,15 @@ module ownership::rbac {
 
     // The agent is now indistinguishable from the principal during transaction execution.
     // This is a dangerous role to grant, as the agent can now grant and edit permissions as well
-    // Use this with caution
-    public(friend) fun grant_admin_role_for_agent(rbac: &mut RBAC, agent: address) {
-        vec_map2::set(&mut rbac.agent_roles, agent, utf8(ADMIN));
-    }
+    // Use this with caution.
+    // public(friend) fun grant_admin_role_for_agent(rbac: &mut RBAC, agent: address) {
+    //     vec_map2::set(&mut rbac.agent_roles, agent, utf8(ADMIN_ROLE));
+    // }
 
-    // Grants all permissions, except for admin
-    public(friend) fun grant_manager_role_for_agent(rbac: &mut RBAC, agent: address) {
-        vec_map2::set(&mut rbac.agent_roles, agent, utf8(MANAGER));
-    }
+    // // Grants all permissions, except for admin
+    // public(friend) fun grant_manager_role_for_agent(rbac: &mut RBAC, agent: address) {
+    //     vec_map2::set(&mut rbac.agent_roles, agent, utf8(MANAGER_ROLE));
+    // }
 
     public(friend) fun delete_agent(rbac: &mut RBAC, agent: address) {
         vec_map2::remove_maybe(&mut rbac.agent_roles, agent);
@@ -91,8 +95,13 @@ module ownership::rbac {
 
     public(friend) fun grant_permission_to_role<Permission>(rbac: &mut RBAC, role: String) {
         let permission = permissions::new<Permission>();
-        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
-        vector2::merge(existing, vector[permission]);
+        if (permissions::is_admin(&permission) || permissions::is_manager(&permission)) {
+            // Admin and Manager permissions overwrite all other existing permissions
+            vec_map2::set(&mut rbac.role_permissions, role, vector[permission]);
+        } else {
+            let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
+            vector2::merge(existing, vector[permission]);
+        };
     }
 
     // Empty roles (with no permissions) are not automatically deleted
@@ -102,7 +111,7 @@ module ownership::rbac {
         vector2::remove_maybe(existing, permission);
     }
 
-    // Any agent with this role will also be removed
+    // Any agent with this role will also be removed. The agents can always be re-added with new roles.
     public(friend) fun delete_role_and_agents(rbac: &mut RBAC, role: String) {
         vec_map2::remove_entries_with_value(&mut rbac.agent_roles, role);
         vec_map2::remove_maybe(&mut rbac.role_permissions, role);

@@ -17,14 +17,15 @@ module ownership::permissions {
     friend ownership::tx_authority;
     friend ownership::namespace;
 
-    // These are reserved role names. If the principal gives an agent the MANAGER role, then they can act as
+    // These are special system-level permissions.
+    // If the principal gives an agent the MANAGER role, then they can act as
     // that agent for all permission-types (there is no scope), except for admin.
-    // With the ADMIN role, a delegate is indistinguishable from the principal.
+    // With the ADMIN role, an agent is indistinguishable from the delegating principal.
     // Granting the ADMIN role is potentially dangerous, as the agent can then grant _other_ agents
     // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
     // to revoke the rights of the agent and make the principal secure again.
-    const ADMIN: vector<u8> = b"ADMIN";
-    const MANAGER: vector<u8> = b"MANAGER";
+    struct ADMIN {}
+    struct MANAGER {}
 
     // This has `store` + `copy` which could be dangerous? We need to keep all refs these private
     struct Permission has store, copy, drop {
@@ -38,11 +39,11 @@ module ownership::permissions {
     }
 
     public(friend) fun admin(): Permission {
-        Permission { inner: utf8(ADMIN) }
+        Permission { inner: encode::type_name<ADMIN>() }
     }
 
     public(friend) fun manager(): Permission {
-        Permission { inner: utf8(MANAGER) }
+        Permission { inner: encode::type_name<MANAGER>() }
     }
 
     public(friend) fun new<P>(): Permission {
@@ -50,6 +51,12 @@ module ownership::permissions {
     }
     
     // Delegations only extend an agent's power to equal or lower levels, never up.
+    //
+    // Example: Alice delegates [CREATE] to Bob--this means Bob can call in and perform a CREATE operation
+    // as if he were Alice. Bob now delegates [CREATE, DELETE] to Charlie. This means Charlie can now call
+    // in and do both CREATE and DELETE as Bob, and by inheritance, can also do CREATE as Alice as well.
+    // However, Charlie cannot perform DELETE or any other action as Alice.
+    //
     // That is, everything in `permissions` that is outside of the `filter` will be removed
     public(friend) fun intersection(permissions: &vector<Permission>, filter: &vector<Permission>): vector<Permission> {
         if (has_admin_permission(filter)) { return *permissions };
@@ -89,20 +96,28 @@ module ownership::permissions {
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
         if (vector::length(permissions) > 0) {
             let permission = vector::borrow(&permissions, 0);
-            permission.inner == utf8(ADMIN)
+            is_admin_permission(permission)
         } else {
             false
         }
+    }
+
+    public fun is_admin_permission(permission: &Permission): bool {
+        permission.inner == encode::type_name<ADMIN>()
     }
 
     // This works because MANAGER replaces all other permissions in this array
     public fun has_manager_permission(permissions: &vector<Permission>): bool {
         if (vector::length(permissions) > 0) {
             let permission = vector::borrow(&permissions, 0);
-            permission.inner == utf8(MANAGER)
+            is_manager_permission(permission)
         } else {
             false
         }
+    }
+
+    public fun is_manager_permission(permission: &Permission): bool {
+        permission.inner == encode::type_name<MANAGER>()
     }
 
     public fun has_permission<Permission>(permissions: &vector<Permission>): bool {
@@ -139,28 +154,6 @@ module ownership::permissions {
             id: object::new(ctx),
             principal,
             permission: new<Permission>()
-        }
-    }
-
-    public(friend) fun create_single_use_manager(
-        principal: address,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        SingleUsePermission {
-            id: object::new(ctx),
-            principal,
-            permission: manager()
-        }
-    }
-
-    public(friend) fun create_single_use_admin(
-        principal: address,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        SingleUsePermission {
-            id: object::new(ctx),
-            principal,
-            permission: admin()
         }
     }
 

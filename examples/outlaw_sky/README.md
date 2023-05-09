@@ -298,3 +298,9 @@ This means you can generate 37 NFTs per dollar (assuming SUI = $1).
 
 This works out to about 3 cents per NFT
 $300 for a 10k collection
+
+### Benchmarking Versus Others
+
+- SuiDuckz Mint (Keepsake NFT): 16 milliSUI (0 dynamic fields) (6.8 milliSUI rebate)
+- Keepsake went with their own struct-type.
+- Key + store, it's not royalty-enforceable.

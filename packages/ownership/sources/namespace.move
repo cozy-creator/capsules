@@ -38,7 +38,7 @@ module ownership::namespace {
     use sui_utils::vec_map2;
     
     use ownership::ownership;
-    use ownership::permissions::{Self, Permission, SingleUsePermission};
+    use ownership::permissions::{Self, Permission, SingleUsePermission, ADMIN};
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
     use ownership::simple_transfer::Witness as SimpleTransfer;
@@ -62,7 +62,7 @@ module ownership::namespace {
     // Placed on PublishReceipt to prevent namespaces from being claimed twice
     struct Key has store, copy, drop {}
 
-    // Permission type
+    // Permission types
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
     struct SINGLE_USE {} // issue single-use permissions on behalf of the namespace
@@ -124,7 +124,7 @@ module ownership::namespace {
     // You must be the owner of a namespace to edit it. If you want to change owners, call into SimpleTransfer.
     // Ownership of namespaces created with anything other than a publish_receipt are non-transferable.
 
-    // This is a special strut that acts as an intermediary to transfer packages between namespaces.
+    // This is a special struct that acts as an intermediary to transfer packages between namespaces.
     // This is necessary because Sui does not support multi-signer-transactions, so we cannot do this
     // exchange atomically in a single transaction. Rather, the sender must first remove the package from its
     // namespace and send it to the intended recipient. The recipient must then merge it into their namespace.
@@ -150,15 +150,7 @@ module ownership::namespace {
         vector::push_back(&mut namespace.packages, package_id);
     }
 
-    // Convenience function. Must be called by the namespace-owner address. Transfer the package
-    // to this owner address.
-    public entry fun remove_package(namespace: &mut Namespace, package_id: ID, ctx: &mut TxContext) {
-        let auth = tx_authority::begin(ctx);
-        let stored_package = remove_package(namespace, package_id, &auth, ctx);
-        transfer::transfer(stored_package, tx_context::sender(ctx));
-    }
-
-    public fun remove_package_(
+    public fun remove_package(
         namespace: &mut Namespace,
         package_id: ID,
         auth: &TxAuthority,
@@ -173,7 +165,11 @@ module ownership::namespace {
         }
     }
 
-    public fun add_package_from_stored(namespace: &mut Namespace, stored_package: StoredPackage, auth: &TxAuthority) {
+    public fun add_package_from_stored(
+        namespace: &mut Namespace,
+        stored_package: StoredPackage,
+        auth: &TxAuthority
+    ) {
         assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
 
         let StoredPackage { id, package } = stored_package;
@@ -186,51 +182,46 @@ module ownership::namespace {
     // This is just a pass-through layer into RBAC itself + authority-checking + pass-through
     // The RBAC editor is private, and can only be accessed via this namespace module
 
-    public entry fun set_role_for_agent(namespace: &mut Namespace, agent: address, role: String) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    public fun set_role_for_agent_(ns: &mut Namespace, agent: address, role: String, auth: &TxAuthority) {
+        assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::set_role_for_agent(&mut namespace.rbac, agent, role);
+        rbac::set_role_for_agent(&mut ns.rbac, agent, role);
     }
 
-    public entry fun grant_admin_role_for_agent(namespace: &mut Namespace, agent: address) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    // public fun grant_admin_role_for_agent(ns: &mut Namespace, agent: address, auth: &TxAuthority) {
+    //     assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::grant_admin_role_for_agent(&mut namespace.rbac, agent);
+    //     rbac::grant_admin_role_for_agent(&mut ns.rbac, agent);
+    // }
+
+    // public fun grant_manager_role_for_agent(ns: &mut Namespace, agent: address, auth: &TxAuthority) {
+    //     assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
+
+    //     rbac::grant_manager_role_for_agent(&mut ns.rbac, agent);
+    // }
+
+    public fun delete_agent(ns: &mut Namespace, agent: address, auth: &TxAuthority) {
+        assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
+
+        rbac::delete_agent(&mut ns.rbac, agent);
     }
 
-    public entry fun grant_manager_role_for_agent(namespace: &mut Namespace, agent: address) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    public fun grant_permission_to_role<Permission>(ns: &mut Namespace, role: String, auth: &TxAuthority) {
+        assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::grant_manager_role_for_agent(&mut namespace.rbac, agent);
+        rbac::grant_permission_to_role<Permission>(&mut ns.rbac, role);
     }
 
-    public entry fun delete_agent(namespace: &mut Namespace, agent: address) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    public fun revoke_permission_from_role<Permission>(ns: &mut Namespace, role: String, auth: &TxAuthority) {
+        assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::delete_agent(&mut namespace.rbac, agent);
+        rbac::revoke_permission_from_role<Permission>(&mut ns.rbac, role);
     }
 
-    public entry fun grant_permission_to_role<Permission>(namespace: &mut Namespace, role: String) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
+    public fun delete_role_and_agents(ns: &mut Namespace, role: String, auth: &TxAuthority) {
+        assert!(ownership::has_owner_permission<ADMIN>(&ns.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::grant_permission_to_role<Permission>(&mut namespace.rbac, role);
-    }
-
-    public entry fun revoke_permission_from_role<Permission>(namespace: &mut Namespace, role: String) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-
-        rbac::revoke_permission_from_role<Permission>(&mut namespace.rbac, role);
-    }
-
-    public entry fun delete_role_and_agents(namespace: &mut Namespace, role: String) {
-        assert!(ownership::has_owner_admin_permission(&namespace.id, auth), ENO_OWNER_AUTHORITY);
-
-        rbac::delete_role_and_agents(&mut namespace.rbac, role);
-    }
-
-    public fun has_owner_or_admin_permission(uid: &UID, auth: &TxAuthority): bool {
-        ownership::is_owner(uid, auth) || 
-        // TO DO
+        rbac::delete_role_and_agents(&mut ns.rbac, role);
     }
 
     // ======== For Agents ========
@@ -330,45 +321,32 @@ module ownership::namespace {
     }
 
     public fun uid_mut(namespace: &mut Namespace, auth: &TxAuthority): &mut UID {
-        assert!(ownership::validate_uid_mut(&namespace.id, auth), ENO_PERMISSION);
+        assert!(client::can_borrow_uid_mut(&namespace.id, auth), ENO_PERMISSION);
 
         &mut namespace.id
     }
 
+    // ======== Convenience Entry Functions ========
+    // These improve usability by making namespace functions callable directly by the Sui CLI; no need
+    // for client-side composition to construct a TxAuthority object.
+
+    public entry fun remove_package_(
+        namespace: &mut Namespace,
+        package_id: ID,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        let stored_package = remove_package(namespace, package_id, &auth, ctx);
+        transfer::transfer(stored_package, recipient);
+    }
+
+    public entry fun set_role_for_agent(ns: &mut Namespace, agent: address, role: String, ctx: &TxContext) {
+        let auth = tx_authority::begin(ctx);
+        set_role_for_agent_(ns, agent, role, &auth);
+    }
+
 }
-
-    // ======== Namespace Provisioning ========
-    // If we want a namespace to have access to a non-native object, the owner must explicitly
-    // call into ownership::provision() and provision the namespace. From there the namespace
-    // can access the object's UID and write data to its own namespace.
-    // Namespaces can only be explicitly deleted by the namespace itself, even if the object-owner
-    // changes.
-
-    // Used to check which namespaces have access to this object
-    // struct Key has store, copy, drop { namespace: address } 
-
-    // // permission type
-    // struct PROVISION {} // allows provisioning and de-provisioning of namespaces
-
-    // public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-    //     assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_OWNER_AUTHORITY);
-
-    //     dynamic_field2::set(uid, Key { namespace }, true);
-    // }
-
-    // public fun deprovision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-    //     assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
-
-    //     dynamic_field2::drop(uid, Key { namespace })
-    // }
-
-    // public fun is_provisioned(uid: &UID, namespace: address): bool {
-    //     dynamic_field::exists_(uid, Key { namespace })
-    // }
-
-    // TO DO: we might want to auto-provision a namespace upon access to inventory or data::attach,
-    // so that access cannot be lost in the future.
-    // We might remove the type-checks in the future for PROVISION and make UID have referential-authority
 
 
     // UPDATE: I think it's simply too dangerous to allow regular users to create Namespaces.

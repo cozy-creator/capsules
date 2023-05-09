@@ -112,19 +112,6 @@ module ownership::ownership {
         dynamic_field::exists_(uid, Key { })
     }
 
-    // Defaults to `true` if owner is not set.
-    public fun is_owner(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let owner = get_owner(uid);
-            if (option::is_none(&owner)) true
-            else {
-                let owner = option::destroy_some(owner);
-                tx_authority::has_admin_permission(owner, auth)
-            }
-        }
-    }
-
     // Defaults to `true` if the owner does not exist
     public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
@@ -138,33 +125,13 @@ module ownership::ownership {
         }
     }
 
-    public fun is_module_authority(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let module_authority = option::destroy_some(get_module_authority(uid));
-            tx_authority::has_admin_permission(module_authority, auth)
-        }
-    }
-
     // If this is initialized, module authority exists and is always the native module (the module
-    // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
+    // declaring the object's type). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
     public fun has_module_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let module_authority = option::destroy_some(get_module_authority(uid));
             tx_authority::has_permission<Permission>(module_authority, auth)
-        }
-    }
-
-    /// Defaults to `false` if transfer authority is not set.
-    public fun is_transfer_authority(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
-        else {
-            let transfer = get_transfer_authority(uid);
-            if (vector::is_empty(&transfer)) false
-            else {
-                tx_authority::has_k_or_more_admin_agents(transfer, 1, auth)
-            }
         }
     }
 
@@ -182,9 +149,9 @@ module ownership::ownership {
 
     // Checks all instances of why an agent needs mutable access to a UID
     public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+        if (has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
         if (has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
         if (has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
-        if (has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
 
         false
     }
