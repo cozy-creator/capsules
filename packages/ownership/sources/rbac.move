@@ -61,7 +61,7 @@ module ownership::rbac {
     public(friend) fun create(principal: address): RBAC {
         RBAC {
             principal,
-            agent_roles: vec_map::empty(),
+            agent_role: vec_map::empty(),
             role_permissions: vec_map::empty()
         }
     }
@@ -70,7 +70,7 @@ module ownership::rbac {
 
     // Creates or overwrites existing role for agent
     public(friend) fun set_role_for_agent(rbac: &mut RBAC, agent: address, role: String) {
-        vec_map2::set(&mut rbac.agent_roles, agent, role);
+        vec_map2::set(&mut rbac.agent_role, agent, role);
         // Ensure that role exists in rbac.role_permissions
         vec_map2::borrow_mut_fill(&mut rbac.role_permissions, role, vector::empty());
     }
@@ -79,16 +79,16 @@ module ownership::rbac {
     // This is a dangerous role to grant, as the agent can now grant and edit permissions as well
     // Use this with caution.
     // public(friend) fun grant_admin_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_roles, agent, utf8(ADMIN_ROLE));
+    //     vec_map2::set(&mut rbac.agent_role, agent, utf8(ADMIN_ROLE));
     // }
 
     // // Grants all permissions, except for admin
     // public(friend) fun grant_manager_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_roles, agent, utf8(MANAGER_ROLE));
+    //     vec_map2::set(&mut rbac.agent_role, agent, utf8(MANAGER_ROLE));
     // }
 
     public(friend) fun delete_agent(rbac: &mut RBAC, agent: address) {
-        vec_map2::remove_maybe(&mut rbac.agent_roles, agent);
+        vec_map2::remove_maybe(&mut rbac.agent_role, agent);
     }
 
     // ======= Assign Permissions to Roles =======
@@ -113,7 +113,7 @@ module ownership::rbac {
 
     // Any agent with this role will also be removed. The agents can always be re-added with new roles.
     public(friend) fun delete_role_and_agents(rbac: &mut RBAC, role: String) {
-        vec_map2::remove_entries_with_value(&mut rbac.agent_roles, role);
+        vec_map2::remove_entries_with_value(&mut rbac.agent_role, role);
         vec_map2::remove_maybe(&mut rbac.role_permissions, role);
     }
 
@@ -133,12 +133,12 @@ module ownership::rbac {
         &rbac.agent_role
     }
 
-    public(friend) fun role_permissions(rbac: &RBAC): &VecMap<String, Permission> {
+    public(friend) fun role_permissions(rbac: &RBAC): &VecMap<String, vector<Permission>> {
         &rbac.role_permissions
     }
 
     public(friend) fun get_agent_permissions(rbac: &RBAC, agent: address): vector<Permission> {
-        let role = vec_map2::get(&rbac.agent_roles, agent);
+        let role = vec_map::get(&rbac.agent_role, agent);
         *vec_map::get(&rbac.role_permissions, role)
     }
 }
@@ -189,7 +189,7 @@ module ownership::rbac {
     //     if (!dynamic_field::exists_(uid, Key { principal })) { return auth };
 
     //     let rbac = dynamic_field::borrow<Key, RBAC>(uid, Key { principal });
-    //     let roles = vec_map2::get_with_default(&rbac.agent_roles, agent, vector::empty());
+    //     let roles = vec_map2::get_with_default(&rbac.agent_role, agent, vector::empty());
     //     let i = 0;
     //     while (i < vector::length(roles)) {
     //         let permission = vec_map::get(&rbac.role_permissions, *vector::borrow(roles, i));

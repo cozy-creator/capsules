@@ -61,11 +61,14 @@ module attach::data {
     // This will abort if `T` is not supported by the schema system.
     public fun set_<T: store + drop>(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         keys: vector<String>,
         values: vector<T>,
-        _auth: &TxAuthority
+        auth: &TxAuthority
     ) {
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+
+        assert!(tx_author)
         assert!(tx_authority::is_allowed__<Key>(namespace, SET, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 

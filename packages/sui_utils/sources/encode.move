@@ -87,6 +87,12 @@ module sui_utils::encode {
         object::id_from_bytes(hex::decode(bytes))
     }
 
+    // Aborts if type_name is incorrectly formatted
+    public fun package_id_(type_name: String): ID {
+        let bytes = vector2::slice(string::bytes(&type_name), 0, address::length() * 2); 
+        object::id_from_bytes(hex::decode(bytes))
+    }
+
     // Faster than decomposing the entire type name
     public fun module_name<T>(): String {
         let s1 = type_name<T>();

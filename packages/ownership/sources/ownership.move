@@ -12,7 +12,7 @@ module ownership::ownership {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::dynamic_field;
 
     use sui_utils::encode;
@@ -20,6 +20,7 @@ module ownership::ownership {
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::permissions::MANAGER;
 
     // error enums
     const ENO_MODULE_AUTHORITY: u64 = 0;
@@ -105,7 +106,7 @@ module ownership::ownership {
     public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
         assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
-        assert!(tx_authority::is_signed_by_module<T>(auth), ENO_MODULE_AUTHORITY);
+        assert!(tx_authority::has_package_permission<T, MANAGER>(auth), ENO_MODULE_AUTHORITY);
     }
 
     public fun is_initialized(uid: &UID): bool {
@@ -127,11 +128,11 @@ module ownership::ownership {
 
     // If this is initialized, module authority exists and is always the native module (the module
     // declaring the object's type). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun has_module_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun has_package_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
-            let module_authority = option::destroy_some(get_module_authority(uid));
-            tx_authority::has_permission<Permission>(module_authority, auth)
+            let package_id = option::destroy_some(get_package_authority(uid));
+            tx_authority::has_package_permission_<Permission>(package_id, auth)
         }
     }
 
@@ -150,7 +151,7 @@ module ownership::ownership {
     // Checks all instances of why an agent needs mutable access to a UID
     public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
         if (has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (has_module_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
+        if (has_package_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
         if (has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
 
         false
@@ -165,13 +166,19 @@ module ownership::ownership {
         ownership.owner
     }
 
-    public fun get_module_authority(uid: &UID): Option<address> {
+    public fun get_package_authority(uid: &UID): Option<ID> {
         if (!is_initialized(uid)) { return option::none() };
-
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-        let addr = tx_authority::witness_addr_from_struct_tag(&ownership.type);
-        option::some(addr)
+        option::some(struct_tag::package_id(&ownership.type))
     }
+
+    // public fun get_module_authority(uid: &UID): Option<address> {
+    //     if (!is_initialized(uid)) { return option::none() };
+
+    //     let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+    //     let addr = tx_authority::witness_addr_from_struct_tag(&ownership.type);
+    //     option::some(addr)
+    // }
 
     public fun get_transfer_authority(uid: &UID): vector<address> {
         if (!is_initialized(uid)) { return vector::empty() };
@@ -194,8 +201,8 @@ module ownership::ownership {
     // This means the specified transfer authority can change ownership unilaterally, without the current
     // owner being the sender of the transaction.
     // This is useful for marketplaces, reclaimers, and collateral-repossession.
-    public fun transfer(uid: &mut UID, new_owner: vector<address>, auth: &TxAuthority) {
-        assert!(client::has_transfer_permission<TRANSFER>(uid, auth), ENO_TRANSFER_AUTHORITY);
+    public fun transfer(uid: &mut UID, new_owner: Option<address>, auth: &TxAuthority) {
+        assert!(has_transfer_permission<TRANSFER>(uid, auth), ENO_TRANSFER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.owner = new_owner;
@@ -206,12 +213,12 @@ module ownership::ownership {
     // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
     // allow for unilateral changes by the module-authority.
     public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
-        assert!(client::has_module_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(client::has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(client::has_transfer_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.transfer_auth = new_transfer_auth;
+        ownership.transfer_auth = new_transfer_auths;
     }
 
     // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
