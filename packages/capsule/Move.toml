@@ -1,0 +1,12 @@
+[package]
+name = "Capsule"
+version = "0.1.0"
+authors = ["Paul Fidika (paul@fidika.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+SuiUtils = { local = "../sui_utils" }
+Ownership = { local = "../ownership" }
+
+[addresses]
+capsule =  ""

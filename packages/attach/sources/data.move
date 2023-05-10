@@ -23,36 +23,39 @@ module attach::data {
     use std::vector;
 
     use sui::dynamic_field;
-    use sui::object::UID;
+    use sui::object::{UID, ID};
 
     use sui_utils::dynamic_field2;
+    use sui_utils::encode;
 
+    use ownership::server;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
     use attach::serializer;
 
     // Error enums
-    const ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE: u64 = 0;
+    const ENO_NAMESPACE_AUTHORITY: u64 = 0;
     const EINCORRECT_DATA_LENGTH: u64 = 1;
     const EKEY_DOES_NOT_EXIST_ON_SCHEMA: u64 = 2;
     const EUNRECOGNIZED_TYPE: u64 = 3;
 
-    // Permission enums
-    const SET: u8 = 0;
-
     // Key used to store data on an object for a given namespace + key
-    struct Key has store, copy, drop { namespace: Option<address>, key: String }
+    struct Key has store, copy, drop { namespace: Option<ID>, key: String }
 
-    // Convenience function using a Witness pattern. 'witness' is the Namespace
+    // Permission types
+    struct WRITE {}
+
+    // Convenience function using a Witness pattern. 'witness' is the Namespace, and must have
+    // struct-name `Witness
     public fun set<Namespace: drop, T: store + copy + drop>(
         witness: Namespace,
         uid: &mut UID,
         keys: vector<String>,
         values: vector<T>
     ) {
-        let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        let auth = tx_authority::begin_with_package_witness(witness);
+        let namespace_addr = encode::package_id<Namespace>();
         set_(uid, option::some(namespace_addr), keys, values, &auth);
     }
 
@@ -67,9 +70,6 @@ module attach::data {
         auth: &TxAuthority
     ) {
         assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
-
-        assert!(tx_author)
-        assert!(tx_authority::is_allowed__<Key>(namespace, SET, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
@@ -91,8 +91,8 @@ module attach::data {
         data: vector<vector<u8>>,
         fields: vector<vector<String>>,
     ) {
-        let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        let auth = tx_authority::begin_with_package_witness(witness);
+        let namespace_addr = encode::package_id<Namespace>();
         deserialize_and_set_(uid, option::some(namespace_addr), data, fields, &auth);
     }
 
@@ -102,12 +102,12 @@ module attach::data {
     // system.
     public fun deserialize_and_set_(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         data: vector<vector<u8>>,
         fields: vector<vector<String>>,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
         assert!(vector::length(&data) == vector::length(&fields), EINCORRECT_DATA_LENGTH);
         
         let old_types_to_drop = schema::update_object_schema(uid, namespace, fields);
@@ -130,18 +130,18 @@ module attach::data {
         uid: &mut UID,
         keys: vector<String>
     ) {
-        let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        let auth = tx_authority::begin_with_package_witness(witness);
+        let namespace_addr = encode::package_id<Namespace>();
         remove_(uid, option::some(namespace_addr), keys, &auth);
     }
 
     public fun remove_(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         keys: vector<String>,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let old_types = schema::remove(uid, namespace, keys);
 
@@ -163,17 +163,17 @@ module attach::data {
         witness: Namespace,
         uid: &mut UID
     ) {
-        let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        let auth = tx_authority::begin_with_package_witness(witness);
+        let namespace_addr = encode::package_id<Namespace>();
         remove_all_(uid, option::some(namespace_addr), &auth);
     }
 
     public fun remove_all_(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::remove_all(uid, namespace);
 
@@ -190,12 +190,12 @@ module attach::data {
 
     // ===== Accessor Functions =====
 
-    public fun exists_(uid: &UID, namespace: Option<address>, key: String): bool {
+    public fun exists_(uid: &UID, namespace: Option<ID>, key: String): bool {
         dynamic_field::exists_(uid, Key { namespace, key })
     }
 
     // Hint: use schema::get_type(uid, namespace, key) to get the type of the value as an Option<String>.
-    public fun exists_with_type<T: store>(uid: &UID, namespace: Option<address>, key: String): bool {
+    public fun exists_with_type<T: store>(uid: &UID, namespace: Option<ID>, key: String): bool {
         dynamic_field::exists_with_type<Key, T>(uid, Key { namespace, key })
     }
 
@@ -203,7 +203,7 @@ module attach::data {
     // encourage composability between projects, rather than keeping data private between namespaces.
     // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
     // will abort.
-    public fun borrow<T: store>(uid: &UID, namespace: Option<address>, key: String): &T {
+    public fun borrow<T: store>(uid: &UID, namespace: Option<ID>, key: String): &T {
         dynamic_field::borrow<Key, T>(uid, Key { namespace, key })
     }
 
@@ -213,7 +213,7 @@ module attach::data {
         uid: &mut UID,
         key: String
     ): &mut T {
-        let namespace = option::some(tx_authority::type_into_address<Namespace>());
+        let namespace = option::some(encode::package_id<Namespace>());
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
 
@@ -222,11 +222,11 @@ module attach::data {
     // will abort.
     public fun borrow_mut_<T: store>(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         key: String,
         auth: &TxAuthority
     ): &mut T {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
@@ -238,8 +238,8 @@ module attach::data {
         key: String,
         default: T
     ): &mut T {
-        let auth = tx_authority::begin_with_type(&witness);
-        let namespace_addr = tx_authority::type_into_address<Namespace>();
+        let auth = tx_authority::begin_with_package_witness(witness);
+        let namespace_addr = encode::package_id<Namespace>();
         borrow_mut_fill_(uid, option::some(namespace_addr), key, default, &auth)
     }
 
@@ -247,12 +247,12 @@ module attach::data {
     // if it does not.
     public fun borrow_mut_fill_<T: store + drop>(
         uid: &mut UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         key: String,
         default: T,
         auth: &TxAuthority
     ): &mut T {
-        assert!(tx_authority::is_signed_by_(namespace, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field2::borrow_mut_fill<Key, T>(uid, Key { namespace, key }, default)
     }
@@ -261,19 +261,19 @@ module attach::data {
     // Duplicate data from a namespace to another namespace, or copy from one object to another
 
     public fun duplicate<Source, Destination>(source_uid: &UID, destination_uid: &mut UID, auth: &TxAuthority) {
-        let source = option::some(tx_authority::type_into_address<Source>());
-        let destination = option::some(tx_authority::type_into_address<Destination>());
+        let source = option::some(encode::package_id<Source>());
+        let destination = option::some(encode::package_id<Destination>());
         duplicate_(source, destination, source_uid, destination_uid, auth);
     }
 
     public fun duplicate_(
-        source: Option<address>,
-        destination: Option<address>,
+        source: Option<ID>,
+        destination: Option<ID>,
         source_uid: &UID,
         destination_uid: &mut UID,
         auth: &TxAuthority
     ) {
-        assert!(tx_authority::is_signed_by_(destination, auth), ENO_AUTHORITY_TO_WRITE_TO_NAMESPACE);
+        assert!(server::has_package_permission_opt<WRITE>(destination, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::into_keys_types(source_uid, source);
         let i = 0;
@@ -337,13 +337,13 @@ module attach::data {
     // ============= devInspect (view) Functions =============
 
     // This is the same as calling `view` with all the keys in its schema
-    public fun view_all(uid: &UID, namespace: Option<address>): vector<u8> {
+    public fun view_all(uid: &UID, namespace: Option<ID>): vector<u8> {
         view(uid, namespace, schema::into_keys(uid, namespace))
     }
 
     // The response is raw BCS bytes; the client app will need to consult this object's schema for the
     // specified namespace + specified keys order to deserialize the results.
-    public fun view(uid: &UID, namespace: Option<address>, keys: vector<String>): vector<u8> {
+    public fun view(uid: &UID, namespace: Option<ID>, keys: vector<String>): vector<u8> {
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
 
         while (i < len) {
@@ -359,7 +359,7 @@ module attach::data {
 
     // Same as above, but with separated vectors per type
     // This only matters for on-chain functions; off-chain all the vectors get concatenated together
-    public fun view_parsed(uid: &UID, namespace: Option<address>, keys: vector<String>): vector<vector<u8>> {
+    public fun view_parsed(uid: &UID, namespace: Option<ID>, keys: vector<String>): vector<vector<u8>> {
         let (i, response, len) = (0, vector::empty<vector<u8>>(), vector::length(&keys));
 
         while (i < len) {
@@ -377,7 +377,7 @@ module attach::data {
     public fun view_with_default(
         uid: &UID,
         default: &UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         keys: vector<String>
     ): vector<u8> {
         let (i, response, len) = (0, vector::empty<u8>(), vector::length(&keys));
@@ -396,7 +396,7 @@ module attach::data {
     // This is necessary because only attach::data can construct Key { } to access these fields
     public fun get_bcs_bytes(
         uid: &UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         key: String
     ): vector<u8> {
         let type_maybe = schema::get_type(uid, namespace, key);
@@ -476,9 +476,10 @@ module attach::data_tests {
 
     use sui_utils::typed_id;
 
-    use ownership::tx_authority;
+    use ownership::client;
+    use ownership::server;
     use ownership::ownership;
-    use ownership::tx_authority::TxAuthority;
+    use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::data;
     use attach::schema;
@@ -500,7 +501,7 @@ module attach::data_tests {
     }
 
     public fun uid_mut(test_object: &mut TestObject, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&test_object.id, auth), ENOT_OWNER);
+        assert!(client::can_borrow_uid_mut(&test_object.id, auth), ENOT_OWNER);
 
         &mut test_object.id
     }
@@ -513,7 +514,7 @@ module attach::data_tests {
 
         let typed_id = typed_id::new(&object);
         let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
-        let owner = vector[tx_context::sender(ctx)];
+        let owner = option::some(tx_context::sender(ctx));
 
         ownership::as_shared_object_(&mut object.id, typed_id, owner, owner, &auth);
         transfer::share_object(object)
@@ -577,7 +578,7 @@ module attach::data_tests {
         }
     }
 
-    fun assert_deserialize_serialized_data(uid: &mut UID, namespace: Option<address>, values: vector<vector<u8>>, fields: vector<vector<String>>) {
+    fun assert_deserialize_serialized_data(uid: &mut UID, namespace: Option<ID>, values: vector<vector<u8>>, fields: vector<vector<String>>) {
         let data = data::view_all(uid, namespace);
         let (i, types) = (0, vector[]);
 

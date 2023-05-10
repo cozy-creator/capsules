@@ -93,6 +93,18 @@ module sui_utils::encode {
         object::id_from_bytes(hex::decode(bytes))
     }
 
+    // Same as above, except an address instead of an ID
+    public fun package_addr<T>(): address {
+        let bytes_full = ascii::into_bytes(type_name::into_string(type_name::get<T>()));
+        let bytes = vector2::slice(&bytes_full, 0, address::length() * 2); 
+        address::from_bytes(hex::decode(bytes))
+    }
+    
+    public fun package_addr_(type_name: String): address {
+        let bytes = vector2::slice(string::bytes(&type_name), 0, address::length() * 2); 
+        address::from_bytes(hex::decode(bytes))
+    }
+
     // Faster than decomposing the entire type name
     public fun module_name<T>(): String {
         let s1 = type_name<T>();
