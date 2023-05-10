@@ -83,18 +83,13 @@ module display::package {
         transfer::share_object(package);
     }
 
-    // Convenience function
-    public entry fun transfer_creator(package: &mut Package, creator: &Creator, ctx: &mut TxContext) {
-        transfer_creator_(package, creator, &tx_authority::begin(ctx));
-    }
-
-    // If Person-A controls the package, and they want to give it to a Creator-B, this is a two-step
+    // If Creator-A controls the package, and they want to give it to a Creator-B, this is a two-step
     // process, because Sui does not yet support multi-signer transactions.
-    // Tx-1: signed by Person-A; transfer ownership of `package` to Creator-B
+    // Tx-1: signed by Creator-A; sui::transfer::transfer(package, Creator-B) Creator-B
     // Tx-2: signed by Creator-B; creator must call this function to set themselves as the new creator
-    public fun transfer_creator_(package: &mut Package, creator: &Creator, auth: &TxAuthority) {
+    public fun assign_new_creator(package: &mut Package, new_creator: &Creator, auth: &TxAuthority) {
         assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
-        assert!(ownership::is_authorized_by_owner(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
+        assert!(ownership::is_authorized_by_owner(creator::uid(new_creator), auth), ESENDER_UNAUTHORIZED);
 
         package.creator = object::id(creator);
     }
@@ -113,5 +108,6 @@ module display::package {
     }
 
     // ======== ???? =====
-    // Some sort of pakage endorsement system would make sense as well...
+    // Some sort of package endorsement system would make sense as well... this would require package to be a
+    // shared object however
 }

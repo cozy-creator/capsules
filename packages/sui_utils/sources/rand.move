@@ -24,8 +24,8 @@ module sui_utils::rand {
     const EDIVISOR_MUST_BE_NON_ZERO: u64 = 2;
 
     public fun rng(min: u64, max: u64, ctx: &mut TxContext): u64 {
-        assert!(max >= min, EBAD_RANGE);
-        let value = from_seed(seed(ctx));
+        if (max == min) return min;
+        assert!(max > min, EBAD_RANGE);
 
         value % (max - min) + min
     }

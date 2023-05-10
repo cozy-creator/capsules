@@ -16,7 +16,9 @@ module sui_utils::encode {
     use std::vector;
 
     use sui::address;
-    use sui:: hex;
+    use sui::bcs;
+    use sui::hash;
+    use sui::hex;
     use sui::object::{Self, ID};
 
     use sui_utils::vector2;
@@ -85,6 +87,24 @@ module sui_utils::encode {
         object::id_from_bytes(hex::decode(bytes))
     }
 
+    // Aborts if type_name is incorrectly formatted
+    public fun package_id_(type_name: String): ID {
+        let bytes = vector2::slice(string::bytes(&type_name), 0, address::length() * 2); 
+        object::id_from_bytes(hex::decode(bytes))
+    }
+
+    // Same as above, except an address instead of an ID
+    public fun package_addr<T>(): address {
+        let bytes_full = ascii::into_bytes(type_name::into_string(type_name::get<T>()));
+        let bytes = vector2::slice(&bytes_full, 0, address::length() * 2); 
+        address::from_bytes(hex::decode(bytes))
+    }
+    
+    public fun package_addr_(type_name: String): address {
+        let bytes = vector2::slice(string::bytes(&type_name), 0, address::length() * 2); 
+        address::from_bytes(hex::decode(bytes))
+    }
+
     // Faster than decomposing the entire type name
     public fun module_name<T>(): String {
         let s1 = type_name<T>();
@@ -134,6 +154,19 @@ module sui_utils::encode {
         string::append(&mut module_addr, struct_name);
 
         module_addr
+    }
+
+    // ========== Convert Types into Addresses ==========
+
+    public fun type_into_address<T>(): address {
+        let typename = type_name<T>();
+        type_string_into_address(typename)
+    }
+
+    public fun type_string_into_address(type: String): address {
+        let typename_bytes = string::bytes(&type);
+        let hashed_typename = hash::blake2b256(typename_bytes);
+        bcs::peel_address(&mut bcs::new(hashed_typename))
     }
 
     // ========== Parser Functions ==========

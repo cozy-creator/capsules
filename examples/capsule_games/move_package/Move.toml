@@ -1,10 +1,10 @@
 [package]
-name = "SuiUtils"
-version = "0.12.4"
-published-at = "0x0" # Testnet
+name = "CapsuleGames"
+version = "0.1.0"
+authors = ["Paul Fidika (paul@fidika.com)"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 
 [addresses]
-sui_utils =  "0x0"
+games = "0x0"

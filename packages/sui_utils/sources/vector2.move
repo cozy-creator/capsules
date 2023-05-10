@@ -1,11 +1,12 @@
 module sui_utils::vector2 {
+    use std::option::{Self, Option};
     use std::vector;
     
     const EINVALID_SLICE: u64 = 0;
 
     // Takes a slice of a vector from the start-index up to, but not including, the end-index.
     // Does not modify the original vector
-    public fun slice<T: store + copy>(vec: &vector<T>, start: u64, end: u64): vector<T> {
+    public fun slice<T: copy>(vec: &vector<T>, start: u64, end: u64): vector<T> {
         assert!(end >= start, EINVALID_SLICE);
 
         let (i, slice) = (start, vector::empty<T>());
@@ -19,7 +20,7 @@ module sui_utils::vector2 {
 
     // O(n) operation. Preserves order of vector. Removes and returns the segment of the vector
     // corresponding to [start, end) (the end-index is not included).
-    public fun slice_mut<T: store>(vec: &mut vector<T>, start: u64, end: u64): vector<T> {
+    public fun slice_mut<T>(vec: &mut vector<T>, start: u64, end: u64): vector<T> {
         assert!(end >= start, EINVALID_SLICE);
 
         let (i, slice) = (start, vector::empty<T>());
@@ -49,7 +50,7 @@ module sui_utils::vector2 {
 
     // Returns a mutable reference to vec[index], padding the vector out with empty values if necessary because the
     // index isn't that big yet. Note that vector indexes are limited in length to 256^2, the maximum size of a u16.
-    public fun borrow_mut_padding<T: store + copy + drop>(vec: &mut vector<T>, index: u16, default_value: T): &mut T {
+    public fun borrow_mut_padding<T: copy + drop>(vec: &mut vector<T>, index: u16, default_value: T): &mut T {
         let len = vector::length(vec);
         let new_len = (index as u64) + 1;
         if (len < new_len) {
@@ -60,5 +61,39 @@ module sui_utils::vector2 {
             };
         };
         vector::borrow_mut(vec, (index as u64))
+    }
+
+    // Merges the source-vector into the destination-vector without duplicating values
+    public fun merge<T: drop>(destination: &mut vector<T>, source: vector<T>) {
+        while (vector::length(&source) > 0) {
+            let item = vector::pop_back(&mut source);
+            if (!vector::contains(destination, &item)) {
+                vector::push_back(destination, item);
+            };
+        };
+    }
+
+    public fun remove_maybe<T>(vec: &mut vector<T>, item: &T): Option<T> {
+        let (exists, i) = vector::index_of(vec, item);
+        if (exists) {
+            option::some(vector::swap_remove(vec, i))
+        } else {
+            option::none()
+        }
+    }
+
+    // Only returns the elements both vectors share in common
+    public fun intersection<T: copy>(vec1: &vector<T>, vec2: &vector<T>): vector<T> {
+        let intersect = vector::empty<T>();
+        let i = 0;
+        while (i < vector::length(vec1)) {
+            let item = vector::borrow(vec1, i);
+            if (vector::contains(vec2, item)) {
+                vector::push_back(&mut intersect, *item);
+            };
+            i = i + 1;
+        };
+        
+        intersect
     }
 }
