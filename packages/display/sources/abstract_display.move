@@ -19,7 +19,7 @@ module display::abstract_display {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
@@ -30,14 +30,15 @@ module display::abstract_display {
     use sui_utils::struct_tag::{Self, StructTag};
     use sui_utils::vec_map2;
 
+    use ownership::client;
     use ownership::ownership;
+    use ownership::permissions::{ADMIN};
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::simple_transfer::Witness as SimpleTransfer;
 
     use attach::data;
     use attach::schema;
-
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
@@ -119,12 +120,8 @@ module display::abstract_display {
     public fun return_and_share(abstract_type: AbstractDisplay, owner: address) {
         let auth = tx_authority::begin_with_type(&Witness { });
         let typed_id = typed_id::new(&abstract_type);
-        ownership::as_shared_object<AbstractDisplay, SimpleTransfer>(
-            &mut abstract_type.id,
-            typed_id,
-            vector[owner],
-            &auth
-        );
+
+        ownership::as_shared_object<AbstractDisplay, SimpleTransfer>(&mut abstract_type.id, typed_id, owner, &auth);
         transfer::share_object(abstract_type);
     }
 
@@ -149,7 +146,7 @@ module display::abstract_display {
         resolver_strings: vector<vector<String>>,
         auth: &TxAuthority
     ) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_permission<ADMIN>(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         let (i, len) = (0, vector::length(&keys));
         assert!(len == vector::length(&resolver_strings), EVEC_LENGTH_MISMATCH);
@@ -171,11 +168,11 @@ module display::abstract_display {
 
     /// Remove keys from the Type object
     public fun remove_resolvers_(self: &mut AbstractDisplay, keys: vector<String>, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_permission<ADMIN>(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         let (i, len) = (0, vector::length(&keys));
         while (i < len) {
-            vec_map2::remove_maybe(&mut self.resolvers, vector::borrow(&keys, i));
+            vec_map2::remove_maybe(&mut self.resolvers, *vector::borrow(&keys, i));
             i = i + 1;
         };
     }
@@ -190,7 +187,7 @@ module display::abstract_display {
         self: &mut AbstractDisplay,
         auth: &TxAuthority
     ): &mut VecMap<String, vector<String>> {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_permission<ADMIN>(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut self.resolvers
     }
@@ -204,7 +201,7 @@ module display::abstract_display {
     // AbstractDisplay objects serve as convenient view-function fallbacks
     public fun view_with_default<T>(
         uid: &UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         display: &AbstractDisplay
     ): vector<u8> {
         data::view_with_default(uid, &display.id, namespace, schema::into_keys(uid, namespace))
@@ -217,7 +214,7 @@ module display::abstract_display {
     }
 
     public fun uid_mut(self: &mut AbstractDisplay, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(client::has_owner_permission<ADMIN>(&self.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut self.id
     }

@@ -11,10 +11,12 @@ module display::creator {
     use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
     
+    use ownership::client;
     use ownership::ownership;
+    use ownership::permissions::{ADMIN, MANAGER};
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::simple_transfer::Witness as SimpleTransfer;
 
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     // Error enums
     const ESENDER_UNAUTHORIZED: u64 = 0;
@@ -40,12 +42,7 @@ module display::creator {
         // Initialize ownership
         let typed_id = typed_id::new(&creator);
         let auth = tx_authority::begin_with_type(&Witness { });
-        ownership::as_shared_object<Creator, SimpleTransfer>(
-            &mut creator.id,
-            typed_id,
-            vector[owner],
-            &auth
-        );
+        ownership::as_shared_object<Creator, SimpleTransfer>(&mut creator.id, typed_id, owner, &auth);
 
         transfer::share_object(creator);
     }
@@ -58,7 +55,7 @@ module display::creator {
     }
 
     public fun uid_mut(creator: &mut Creator, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&creator.id, auth), ESENDER_UNAUTHORIZED);
+        assert!(client::has_owner_permission<ADMIN>(&creator.id, auth), ESENDER_UNAUTHORIZED);
 
         &mut creator.id
     }
@@ -77,13 +74,13 @@ module display::creator {
     struct Endorsement has store, copy, drop { from: address }
     
     public fun add_endorsement_(creator: &mut Creator, from: address, auth: &TxAuthority) {
-        assert!(tx_authority::is_signed_by(from, auth), ESENDER_UNAUTHORIZED);
+        assert!(tx_authority::has_permission<MANAGER>(from, auth), ESENDER_UNAUTHORIZED);
 
         dynamic_field2::set<Endorsement, bool>(&mut creator.id, Endorsement { from }, true);
     }
 
     public fun remove_endorsement_(creator: &mut Creator, from: address, auth: &TxAuthority) {
-        assert!(tx_authority::is_signed_by(from, auth), ESENDER_UNAUTHORIZED);
+        assert!(tx_authority::has_permission<MANAGER>(from, auth), ESENDER_UNAUTHORIZED);
 
         dynamic_field2::drop<Endorsement, bool>(&mut creator.id, Endorsement { from });
     }

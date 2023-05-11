@@ -6,11 +6,12 @@ module display::package {
 
     use sui_utils::typed_id;
     
+    use ownership::client;
     use ownership::ownership;
-    use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::permissions::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
-
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
+    use ownership::publish_receipt::{Self, PublishReceipt};
+    use ownership::simple_transfer::Witness as SimpleTransfer;
 
     use display::creator::{Self, Creator};
 
@@ -53,7 +54,7 @@ module display::package {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): Package {
-        assert!(ownership::is_authorized_by_owner(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
+        assert!(client::has_owner_permission<ADMIN>(creator::uid(creator), auth), ESENDER_UNAUTHORIZED);
 
         // This package can only ever be claimed once
         let receipt_uid = publish_receipt::uid_mut(receipt);
@@ -69,12 +70,7 @@ module display::package {
         // Initialize ownership
         let typed_id = typed_id::new(&package);
         let auth = tx_authority::begin_with_type(&Witness { });
-        ownership::as_shared_object<Package, SimpleTransfer>(
-            &mut package.id,
-            typed_id,
-            vector[owner],
-            &auth
-        );
+        ownership::as_shared_object<Package, SimpleTransfer>(&mut package.id, typed_id, owner, &auth);
 
         package
     }
@@ -88,10 +84,10 @@ module display::package {
     // Tx-1: signed by Creator-A; sui::transfer::transfer(package, Creator-B) Creator-B
     // Tx-2: signed by Creator-B; creator must call this function to set themselves as the new creator
     public fun assign_new_creator(package: &mut Package, new_creator: &Creator, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
-        assert!(ownership::is_authorized_by_owner(creator::uid(new_creator), auth), ESENDER_UNAUTHORIZED);
+        assert!(client::has_owner_permission<ADMIN>(&package.id, auth), ESENDER_UNAUTHORIZED);
+        assert!(client::has_owner_permission<ADMIN>(creator::uid(new_creator), auth), ESENDER_UNAUTHORIZED);
 
-        package.creator = object::id(creator);
+        package.creator = object::id(new_creator);
     }
 
     // ======== For Owners =====
@@ -102,7 +98,7 @@ module display::package {
     }
 
     public fun uid_mut(package: &mut Package, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&package.id, auth), ESENDER_UNAUTHORIZED);
+        assert!(client::has_owner_permission<ADMIN>(&package.id, auth), ESENDER_UNAUTHORIZED);
 
         &mut package.id
     }

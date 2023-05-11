@@ -17,7 +17,7 @@ module display::display {
     use std::string::String;
     use std::vector;
 
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field;
     use sui::transfer;
@@ -195,7 +195,7 @@ module display::display {
     public entry fun remove_resolvers<T>(self: &mut Display<T>, keys: vector<String>) {
         let (i, len) = (0, vector::length(&keys));
         while (i < len) {
-            vec_map2::remove_maybe(&mut self.resolvers, vector::borrow(&keys, i));
+            vec_map2::remove_maybe(&mut self.resolvers, *vector::borrow(&keys, i));
             i = i + 1;
         };
     }
@@ -215,7 +215,7 @@ module display::display {
     // Display objects serve as convenient view-function fallbacks
     public fun view_with_default<T>(
         uid: &UID,
-        namespace: Option<address>,
+        namespace: Option<ID>,
         display: &Display<T>
     ): vector<u8> {
         data::view_with_default(uid, &display.id, namespace, schema::into_keys(uid, namespace))

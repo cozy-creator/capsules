@@ -8,7 +8,6 @@ dependencies = [
   { name = "Ownership" },
   { name = "Sui" },
   { name = "SuiUtils" },
-  { name = "TransferSystem" },
 ]
 
 [[move.package]]
@@ -48,14 +47,4 @@ source = { local = "../sui_utils" }
 
 dependencies = [
   { name = "Sui" },
-]
-
-[[move.package]]
-name = "TransferSystem"
-source = { local = "../transfer_system" }
-
-dependencies = [
-  { name = "Ownership" },
-  { name = "Sui" },
-  { name = "SuiUtils" },
 ]

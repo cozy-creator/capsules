@@ -8,7 +8,6 @@ published-at = "0x1f0ecee646e7baf1ee305fb5882579307284f78ef82bf190ee0746fdfbc942
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
-TransferSystem = { local = "../transfer_system" }
 Attach = { local = "../attach" }
 
 [addresses]
