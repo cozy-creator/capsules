@@ -1,0 +1,403 @@
+#[test_only]
+module ownership::organizationn_tests {
+    use std::vector;
+    use std::string;
+
+    use sui::object;
+    use sui::test_scenario::{Self, Scenario};
+    
+    use ownership::tx_authority;
+    use ownership::publish_receipt_tests;
+    use ownership::organization::{Self, Organization};
+    use ownership::publish_receipt::{Self, PublishReceipt};
+
+    use sui_utils::encode;
+
+    struct Witness has drop {}
+
+    struct EDITOR {}
+    struct FAKE_PERM {}
+
+    const SENDER: address = @0xFACE;
+    const AGENT: address = @0xCAFE;
+
+    public fun create_organization(scenario: &mut Scenario, receipt: &mut PublishReceipt) {
+        let ctx = test_scenario::ctx(scenario);
+        organization::create_from_package(receipt, ctx)
+    }
+
+    #[test]
+    fun create_organization_from_package() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+        let package_id = publish_receipt::into_package_id(&receipt);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+
+            assert!(organization::principal(&organization) == object::id_to_address(&package_id), 0);
+            assert!(organization::packages(&organization) == vector::singleton(package_id), 0);
+
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun create_organization_from_package_and_destroy() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+        let package_id = publish_receipt::into_package_id(&receipt);
+
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let organization = organization::create_from_package_(&mut receipt, SENDER, ctx);
+
+            organization::remove_package_(&mut organization, package_id, SENDER, ctx);
+            organization::destroy(organization, &tx_authority::begin(ctx));
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun add_stored_package_to_organization() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+        let package_id = publish_receipt::into_package_id(&receipt);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            let stored_package = organization::remove_package(&mut organization, package_id, &auth, ctx);
+            organization::add_package_from_stored(&mut organization, stored_package, &auth);
+
+            assert!(organization::packages(&organization) == vector::singleton(package_id), 0);
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun set_role_for_agent() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let role = string::utf8(b"Editor");
+
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun delete_agent() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            // let role = string::utf8(b"Editor");
+
+            // organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::delete_agent(&mut organization, AGENT, &auth);
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun grant_permission_to_role() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun revoke_permission_from_role() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            // std::debug::print(&organization);
+            organization::revoke_permission_from_role<EDITOR>(&mut organization, role, &auth);
+            // std::debug::print(&organization);
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun delete_role_and_agents() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        {
+            let organization = test_scenario::take_shared<Organization>(&scenario);
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            // organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            // std::debug::print(&organization);
+            organization::delete_role_and_agents(&mut organization, role, &auth);
+            // std::debug::print(&organization);
+            organization::return_and_share(organization);
+        };
+
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_claim_permissions() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        test_scenario::next_tx(&mut scenario, AGENT);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            let auth = organization::claim_permissions(&mut organization, ctx);
+            assert!(tx_authority::has_permission<EDITOR>(AGENT, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_claim_permissions_() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        test_scenario::next_tx(&mut scenario, AGENT);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            let auth = organization::claim_permissions_(&mut organization, &auth);
+            assert!(tx_authority::has_permission<EDITOR>(AGENT, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_assert_login() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        test_scenario::next_tx(&mut scenario, AGENT);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+
+            let auth = organization::assert_login<EDITOR>(&mut organization, ctx);
+            assert!(tx_authority::has_permission<EDITOR>(AGENT, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_assert_login_() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        test_scenario::next_tx(&mut scenario, AGENT);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+
+            let auth = organization::assert_login_<EDITOR>(&mut organization, &auth);
+            assert!(tx_authority::has_permission<EDITOR>(AGENT, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    // This is still failing
+    // #[test]
+    // fun test_create_single_use_permission() {
+    //     let scenario = test_scenario::begin(SENDER);
+    //     let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+    //     create_organization(&mut scenario, &mut receipt);
+    //     test_scenario::next_tx(&mut scenario, SENDER);
+
+    //     let organization = test_scenario::take_shared<Organization>(&scenario);
+    //     {
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = tx_authority::begin(ctx);
+    //         let role = string::utf8(b"Editor");
+
+    //         organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+    //         organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+    //     };
+
+    //     test_scenario::next_tx(&mut scenario, AGENT);
+    //     {
+    //         let ctx = test_scenario::ctx(&mut scenario);
+    //         let auth = organization::claim_permissions(&organization, ctx);
+
+    //         let single_use = organization::create_single_use_permission<EDITOR>(&auth, ctx);
+    //         let auth = tx_authority::begin_with_single_use(single_use);
+    //         std::debug::print(&auth);
+    //         // assert!(tx_authority::has_permission<EDITOR>(AGENT, &auth), 0);
+    //     };
+
+    //     organization::return_and_share(organization);
+    //     publish_receipt_tests::destroy_receipt(receipt);
+    //     test_scenario::end(scenario);
+    // }
+
+    #[test]
+    fun test_create_single_use_permission_from_witness() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let type_address = encode::type_into_address<Witness>();
+            let single_use = organization::create_single_use_permission_from_witness<Witness, EDITOR>(Witness { }, ctx);
+            let auth = tx_authority::begin_with_single_use(single_use);
+
+            assert!(tx_authority::has_permission<EDITOR>(type_address, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+}

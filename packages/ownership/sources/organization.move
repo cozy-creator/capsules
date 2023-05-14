@@ -98,7 +98,7 @@ module ownership::organization {
 
         // Initialize ownership
         let typed_id = typed_id::new(&organization);
-        let auth = tx_authority::begin_with_type(&Witness { });
+        let auth = tx_authority::begin_with_package_witness(Witness { });
         ownership::as_shared_object<Organization, SimpleTransfer>(&mut organization.id, typed_id, owner, &auth);
 
         add_package_internal(receipt, &mut organization);
