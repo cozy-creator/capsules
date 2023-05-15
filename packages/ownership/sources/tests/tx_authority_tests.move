@@ -265,5 +265,4 @@ module ownership::tx_authority_tests {
         delete_test_object(test_object);
         test_scenario::end(scenario);
     }
-
 }
