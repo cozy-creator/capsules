@@ -265,4 +265,37 @@ module ownership::tx_authority_tests {
         delete_test_object(test_object);
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
+    public fun has_org_permission_excluding_manager_no_org() {
+        let scenario = test_scenario::begin(SENDER);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let auth = tx_authority::begin(ctx);
+
+        assert!(tx_authority::has_org_permission_excluding_manager<Witness, ADMIN>(&auth), 0);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
+    public fun has_org_permission_excluding_manager_no_principal() {
+        let scenario = test_scenario::begin(SENDER);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let auth = tx_authority::begin(ctx);
+
+        assert!(tx_authority::has_org_permission_excluding_manager_<ADMIN>(@0xFADE, &auth), 0);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
+    fun has_package_permission_invalid_package() {
+        let scenario = test_scenario::begin(SENDER);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let auth = tx_authority::begin(ctx);
+
+        assert!(tx_authority::has_package_permission<Witness, ADMIN>(&auth), 0);
+        test_scenario::end(scenario);
+    }
 }
