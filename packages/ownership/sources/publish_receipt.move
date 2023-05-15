@@ -61,11 +61,8 @@ module ownership::publish_receipt {
     // Note that because PublishReceipt has key + store, it can be transfered and frozen generically
 
     #[test_only]
-    public fun claim_for_testing<GENESIS: drop>(_: &GENESIS, ctx: &mut TxContext): PublishReceipt {
-        PublishReceipt {
-            id: object::new(ctx),
-            package: encode::package_id<GENESIS>()
-        }
+    public fun claim_for_testing<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): PublishReceipt {
+        claim(genesis, ctx)
     }
 
     #[test_only]
