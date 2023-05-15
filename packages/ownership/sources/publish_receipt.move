@@ -53,7 +53,7 @@ module ownership::publish_receipt {
         &mut publisher.id
     }
 
-    public entry fun destroy(publisher: PublishReceipt) {
+    public fun destroy(publisher: PublishReceipt) {
         let PublishReceipt { id, package: _ } = publisher;
         object::delete(id);
     }
@@ -70,7 +70,6 @@ module ownership::publish_receipt {
 
     #[test_only]
     public fun destroy_for_testing(receipt: PublishReceipt) {
-        let PublishReceipt { id, package: _ } = receipt;
-        object::delete(id)
+        destroy(receipt)
     }
 }

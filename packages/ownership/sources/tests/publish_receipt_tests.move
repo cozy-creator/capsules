@@ -1,5 +1,6 @@
 #[test_only]
 module ownership::publish_receipt_tests {
+    use sui::object;
     use sui::test_scenario::{Self, Scenario};
 
     use sui_utils::encode;
@@ -26,6 +27,18 @@ module ownership::publish_receipt_tests {
 
         assert!(publish_receipt::into_package_id(&receipt) == package_id, 0);
         assert!(publish_receipt::did_publish<RECEIPT_GENESIS>(&receipt), 0);
+
+        destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_uid() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = create_receipt(&mut scenario);
+
+        let uid = publish_receipt::uid(&receipt);
+        assert!(object::uid_to_inner(uid) == object::id(&receipt), 0);
 
         destroy_receipt(receipt);
         test_scenario::end(scenario);
