@@ -6,13 +6,15 @@ module ownership::publish_receipt_tests {
     use sui_utils::encode;
     use ownership::publish_receipt::{Self, PublishReceipt};
 
-    struct RECEIPT_GENESIS has drop {}
+    struct BAD_WITNESS has drop {}
+    struct PUBLISH_RECEIPT_TESTS has drop {}
 
     const SENDER: address = @0xFAEC;
 
+    #[test_only]
     public fun create_receipt(scenario: &mut Scenario): PublishReceipt {
         let ctx = test_scenario::ctx(scenario);
-        publish_receipt::claim_for_testing(&RECEIPT_GENESIS { }, ctx)
+        publish_receipt::claim_for_testing(&PUBLISH_RECEIPT_TESTS { }, ctx)
     }
 
     public fun destroy_receipt(receipt: PublishReceipt) {
@@ -23,10 +25,21 @@ module ownership::publish_receipt_tests {
     fun claim_receipt() {
         let scenario = test_scenario::begin(SENDER);
         let receipt = create_receipt(&mut scenario);
-        let package_id = encode::package_id<RECEIPT_GENESIS>();
+        let package_id = encode::package_id<PUBLISH_RECEIPT_TESTS>();
 
         assert!(publish_receipt::into_package_id(&receipt) == package_id, 0);
-        assert!(publish_receipt::did_publish<RECEIPT_GENESIS>(&receipt), 0);
+        assert!(publish_receipt::did_publish<PUBLISH_RECEIPT_TESTS>(&receipt), 0);
+
+        destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code=ownership::publish_receipt::EBAD_WITNESS)]
+    fun claim_receipt_bad_witness() {
+        let scenario = test_scenario::begin(SENDER);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let receipt = publish_receipt::claim_for_testing(&BAD_WITNESS { }, ctx);
 
         destroy_receipt(receipt);
         test_scenario::end(scenario);
