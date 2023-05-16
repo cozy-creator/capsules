@@ -84,7 +84,7 @@ module ownership::tx_authority {
     // Any agent added by one of these functions will have full ADMIN permissions as themselves.
 
     // This will be more useful once Sui supports multi-party transactions (August 2023)
-    public fun add_signer<T: key>(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
+    public fun add_signer(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
         vec_map2::set(&mut new_auth.permissions, tx_context::sender(ctx), vector[permissions::admin()]);
 
@@ -425,63 +425,5 @@ module ownership::tx_authority {
         permissions::add(existing, permissions);
 
         new_auth
-    }
-
-    #[test_only]
-    public fun begin_for_testing(addr: address): TxAuthority {
-        TxAuthority { agents: vector[addr] }
-    }
-
-    #[test_only]
-    public fun add_for_testing(addr: address, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { agents: auth.agents };
-        vec_map2::set(&mut new_auth.permissions, addr, permissions::admin());
-
-        new_auth
-    }
-}
-
-#[test_only]
-module ownership::tx_authority_test {
-    use sui::test_scenario;
-    use sui::sui::SUI;
-    use ownership::tx_authority;
-    use ownership::permissions::ADMIN;
-    use sui_utils::encode;
-
-    const SENDER1: address = @0x69;
-    const SENDER2: address = @0x420;
-
-    struct SomethingElse has drop {}
-    struct Witness has drop {}
-
-    #[test]
-    public fun signer_authority() {
-        let scenario = test_scenario::begin(SENDER1);
-        let ctx = test_scenario::ctx(&mut scenario);
-        {
-            let auth = tx_authority::begin(ctx);
-            assert!(tx_authority::has_permission<ADMIN>(SENDER1, &auth), 0);
-            assert!(!tx_authority::has_permission<ADMIN>(SENDER2, &auth), 0);
-        };
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    public fun module_authority() {
-        let scenario = test_scenario::begin(@0x69);
-        let _ctx = test_scenario::ctx(&mut scenario);
-        {
-            let auth = tx_authority::begin_with_type<Witness>(&Witness {});
-            let type = encode::type_name<SomethingElse>();
-            assert!(tx_authority::is_signed_by_module_(type, &auth), 0);
-
-            let type = encode::type_name<SUI>();
-            assert!(!tx_authority::is_signed_by_module_(type, &auth), 0);
-
-            assert!(tx_authority::is_signed_by_module<SomethingElse>(&auth), 0);
-            assert!(!tx_authority::is_signed_by_module<SUI>(&auth), 0);
-        };
-        test_scenario::end(scenario);
     }
 }

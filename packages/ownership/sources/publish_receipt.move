@@ -53,7 +53,7 @@ module ownership::publish_receipt {
         &mut publisher.id
     }
 
-    public entry fun destroy(publisher: PublishReceipt) {
+    public fun destroy(publisher: PublishReceipt) {
         let PublishReceipt { id, package: _ } = publisher;
         object::delete(id);
     }
@@ -61,10 +61,12 @@ module ownership::publish_receipt {
     // Note that because PublishReceipt has key + store, it can be transfered and frozen generically
 
     #[test_only]
-    public fun test_claim<GENESIS: drop>(_: &GENESIS, ctx: &mut TxContext): PublishReceipt {
-        PublishReceipt {
-            id: object::new(ctx),
-            package: encode::package_id<GENESIS>()
-        }
+    public fun claim_for_testing<GENESIS: drop>(genesis: &GENESIS, ctx: &mut TxContext): PublishReceipt {
+        claim(genesis, ctx)
+    }
+
+    #[test_only]
+    public fun destroy_for_testing(receipt: PublishReceipt) {
+        destroy(receipt)
     }
 }
