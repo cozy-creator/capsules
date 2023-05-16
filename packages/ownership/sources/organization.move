@@ -35,6 +35,7 @@ module ownership::organization {
 
     use sui_utils::encode;
     use sui_utils::typed_id;
+    use sui_utils::dynamic_field2;
 
     use ownership::client;
     use ownership::ownership;
@@ -101,7 +102,7 @@ module ownership::organization {
     // The organization-address (principal) will be generated and cannot be changed. It is not
     // the same as the Organization object's ID.
     // Organization objects allow us to combine several packages under the same organization.
-    public fun create_from_receipt_(
+    public fun create_from_receipt(
         receipt: &mut PublishReceipt,
         owner: address,
         ctx: &mut TxContext
@@ -189,15 +190,15 @@ module ownership::organization {
         while (i < vector::length(&organization.packages)) {
             let package = vector::borrow(&organization.packages, i);
             if (package.package_id == package_id) {
-                return vector::remove(&mut organization.packages, i);
+                return vector::remove(&mut organization.packages, i)
             };
             i = i + 1;
         };
 
-        return abort(EPACKAGE_NOT_FOUND);
+        abort EPACKAGE_NOT_FOUND
     }
 
-    public fun create_from_stored_(package: Package, owner: address, ctx: &mut TxContext): Organization {
+    public fun create_from_stored(package: Package, owner: address, ctx: &mut TxContext): Organization {
         let organization = create_internal(owner, ctx);
         vector::push_back(&mut organization.packages, package);
         organization
@@ -217,7 +218,7 @@ module ownership::organization {
     // This is just a pass-through layer into RBAC itself + authority-checking + pass-through
     // The RBAC editor is private, and can only be accessed via this organization module
 
-    public fun set_role_for_agent_(org: &mut Organization, agent: address, role: String, auth: &TxAuthority) {
+    public fun set_role_for_agent(org: &mut Organization, agent: address, role: String, auth: &TxAuthority) {
         assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::set_role_for_agent(&mut org.rbac, agent, role);
@@ -347,6 +348,53 @@ module ownership::organization {
         result
     }
 
+     // ======== Organization Endorsement System =====
+    // This is part of Capsule's on-chain Trust and Safety system
+    //
+    // Organizations can be independently endorsed by trusted entities; the owner of the Organization object's
+    // consent is not required to add or remove endorsements.
+    //
+    // Objects that originate from packages whose organizations are not endorsed by a trusted authority
+    // should not be displayed in wallets / marketplaces, and should be viewed as spam.
+    //
+    // We use dynamic fields, rather than vectors, because it scales O(1) instead of O(n) for n endorsements.
+
+    struct Endorsement has store, copy, drop { from: address }
+    struct ENDORSE {} // permission type
+    
+    public fun add_endorsement(org: &mut Organization, from: address, auth: &TxAuthority) {
+        assert!(tx_authority::has_permission<ENDORSE>(from, auth), ENO_PERMISSION);
+
+        dynamic_field2::set<Endorsement, bool>(&mut org.id, Endorsement { from }, true);
+    }
+
+    public fun remove_endorsement(org: &mut Organization, from: address, auth: &TxAuthority) {
+        assert!(tx_authority::has_permission<ENDORSE>(from, auth), ENO_PERMISSION);
+
+        dynamic_field2::drop<Endorsement, bool>(&mut org.id, Endorsement { from });
+    }
+
+    public fun is_endorsed_by(org: &Organization, from: address): bool {
+        dynamic_field::exists_(&org.id, Endorsement { from })
+    }
+
+    // Useful to see if this org has been endorsed by a minimum threshold of trusted entities
+    public fun is_endorsed_by_num(org: &Organization, endorsers: vector<address>): u64 {
+        let (count, i) = (0, 0);
+        while (i < vector::length(&endorsers)) {
+            if (is_endorsed_by(org, *vector::borrow(&endorsers, i))) {
+                count = count + 1;
+            };
+            i = i + 1;
+        };
+
+        count
+    }
+
+    // FUTURE: Perhaps we should have an endorsement system for packages as well?
+    // Perhaps to marke if a package is audited or not, or its current version / type, etc.?
+    // FUTURE: we could possibly store upgrade-caps, publish-receipts, or Display-objects as well
+
     // ======== Extend Pattern ========
 
     public fun uid(organization: &Organization): &UID {
@@ -359,17 +407,54 @@ module ownership::organization {
         &mut organization.id
     }
 
+    public fun package_uid(package: &Package): &UID {
+        &package.id
+    }
+
+    public fun package_uid_(organization: &Organization, package_id: ID): &UID {
+        let i = 0;
+        while (i < vector::length(&organization.packages)) {
+            let package = vector::borrow(&organization.packages, i);
+            if (package.package_id == package_id) {
+                return &package.id
+            };
+            i = i + 1;
+        };
+
+        abort EPACKAGE_NOT_FOUND
+    }
+
+    public fun package_uid_mut(package: &mut Package): &mut UID {
+        // No need for ownership check because Package is an single-writer object
+        &mut package.id
+    }
+
+    public fun package_uid_mut_(organization: &mut Organization, package_id: ID, auth: &TxAuthority): &mut UID {
+        assert!(client::can_borrow_uid_mut(&organization.id, auth), ENO_PERMISSION);
+
+        let i = 0;
+        while (i < vector::length(&organization.packages)) {
+            let package = vector::borrow_mut(&mut organization.packages, i);
+            if (package.package_id == package_id) {
+                return &mut package.id
+            };
+            i = i + 1;
+        };
+
+        abort EPACKAGE_NOT_FOUND
+    }
+
     // ======== Convenience Entry Functions ========
     // These improve usability by making organization functions callable directly by the Sui CLI; no need
     // for client-side composition to construct a TxAuthority object.
 
-    public entry fun create_from_receipt(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
-        let organization = create_from_receipt_(receipt, tx_context::sender(ctx), ctx);
+    public entry fun create_from_receipt_(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
+        let organization = create_from_receipt(receipt, tx_context::sender(ctx), ctx);
         return_and_share(organization);
     }
 
-    public entry fun create_from_stored(stored: Package, ctx: &mut TxContext) {
-        let organization = create_from_stored_(stored, tx_context::sender(ctx), ctx);
+    public entry fun create_from_stored_(stored: Package, ctx: &mut TxContext) {
+        let organization = create_from_stored(stored, tx_context::sender(ctx), ctx);
         return_and_share(organization);
     }
 
@@ -384,9 +469,9 @@ module ownership::organization {
         transfer::transfer(package, recipient);
     }
 
-    public entry fun set_role_for_agent(org: &mut Organization, agent: address, role: String, ctx: &TxContext) {
+    public entry fun set_role_for_agent_(org: &mut Organization, agent: address, role: String, ctx: &TxContext) {
         let auth = tx_authority::begin(ctx);
-        set_role_for_agent_(org, agent, role, &auth);
+        set_role_for_agent(org, agent, role, &auth);
     }
 
     // *** TO DO: Add Convenience entry functions for RBAC operations here ***
