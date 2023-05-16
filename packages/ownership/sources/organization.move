@@ -198,7 +198,7 @@ module ownership::organization {
         abort EPACKAGE_NOT_FOUND
     }
 
-    public fun create_from_stored(package: Package, owner: address, ctx: &mut TxContext): Organization {
+    public fun create_from_package(package: Package, owner: address, ctx: &mut TxContext): Organization {
         let organization = create_internal(owner, ctx);
         vector::push_back(&mut organization.packages, package);
         organization
@@ -453,8 +453,8 @@ module ownership::organization {
         return_and_share(organization);
     }
 
-    public entry fun create_from_stored_(stored: Package, ctx: &mut TxContext) {
-        let organization = create_from_stored(stored, tx_context::sender(ctx), ctx);
+    public entry fun create_from_package_(stored: Package, ctx: &mut TxContext) {
+        let organization = create_from_package(stored, tx_context::sender(ctx), ctx);
         return_and_share(organization);
     }
 
