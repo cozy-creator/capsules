@@ -213,9 +213,9 @@ module ownership::ownership {
     // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
     // allow for unilateral changes by the module-authority.
     public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
-        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
-        assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.transfer_auth = new_transfer_auths;

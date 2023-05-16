@@ -1,15 +1,14 @@
 [package]
 name = "OutlawSky"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
-published-at = "0x71de931268b6a05481d8f3b48413303ea92fe5ace3086cc302e73656d8e57ca9" # testnet
+published-at = "0xc0f7edde0333c767a2a788acdc2bbb67751ab24b10e779634f72e8cae0c5a697" # testnet
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 SuiUtils = { local = "../../../packages/sui_utils" }
 Ownership = { local = "../../../packages/ownership" }
-TransferSystem = { local = "../../../packages/transfer_system" }
 Attach = { local = "../../../packages/attach" }
 
 [addresses]
-outlaw_sky = "0x71de931268b6a05481d8f3b48413303ea92fe5ace3086cc302e73656d8e57ca9"
+outlaw_sky = "0xc0f7edde0333c767a2a788acdc2bbb67751ab24b10e779634f72e8cae0c5a697"

@@ -304,3 +304,6 @@ $300 for a 10k collection
 - SuiDuckz Mint (Keepsake NFT): 16 milliSUI (0 dynamic fields) (6.8 milliSUI rebate)
 - Keepsake went with their own struct-type.
 - Key + store, it's not royalty-enforceable.
+
+- Clutchy Keepsake minting: 26.8 milliSUI
+- Owned object, 'Origin Byte Kiosk'
