@@ -2,7 +2,7 @@ module outlaw_sky::outlaw_sky {
     use std::string::{String, utf8};
     use std::option::Option;
 
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::vec_map::{Self, VecMap};
@@ -10,13 +10,13 @@ module outlaw_sky::outlaw_sky {
     use sui_utils::typed_id;
     use sui_utils::vec_map2;
 
+    use ownership::client;
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::publish_receipt;
+    use ownership::simple_transfer::Witness as SimpleTransfer;
 
     use attach::data;
-
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     // use outlaw_sky::warship::Witness as Namespace;
     // use outlaw_sky::warship::Warship;
@@ -35,13 +35,16 @@ module outlaw_sky::outlaw_sky {
         // Data fields
     }
 
+    // Permission types
+    struct EDIT {}
+
     // ==== Admin Functions ====
     // In production, you would gate each of these functions to make sure they're being called by an
     // authorized party rather than just anyone.
 
     public entry fun create(data: vector<vector<u8>>, fields: vector<vector<String>>, ctx: &mut TxContext) {
         let auth = tx_authority::begin_with_type(&Witness {});
-        let owner = vector[tx_context::sender(ctx)];
+        let owner = tx_context::sender(ctx);
         let outlaw = Outlaw { 
             id: object::new(ctx) 
         };
@@ -85,7 +88,7 @@ module outlaw_sky::outlaw_sky {
 
     // This will overwrite the field 'name' in the `Witness` namespace with a new string
     public entry fun rename(outlaw: &mut Outlaw, new_name: String, ctx: &TxContext) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         data::set(Witness {}, &mut outlaw.id, vector[utf8(b"name")], vector[new_name]);
     }
@@ -93,7 +96,7 @@ module outlaw_sky::outlaw_sky {
     // This is a sample of how atomic updates work; the existing value is borrowed and then modified,
     // rather than simply being overwritten. This is safter for concurrently running processes
     public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
@@ -102,16 +105,16 @@ module outlaw_sky::outlaw_sky {
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
             
-        vec_map2::remove_maybe(attributes, &key);
+        vec_map2::remove_maybe(attributes, key);
     }
 
     public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let power_level = data::borrow_mut_fill<Witness, u64>(
             Witness {}, &mut outlaw.id, utf8(b"power_level"), 0);
@@ -159,7 +162,7 @@ module outlaw_sky::outlaw_sky {
     // ==== General Functions ====
 
     // This function is needed until we can use UID's directly in devInspect transactions
-    public fun view_all(outlaw: &Outlaw, namespace: Option<address>): vector<u8> {
+    public fun view_all(outlaw: &Outlaw, namespace: Option<ID>): vector<u8> {
         data::view_all(&outlaw.id, namespace)
     }
 
@@ -168,7 +171,7 @@ module outlaw_sky::outlaw_sky {
     }
 
     public fun uid_mut(outlaw: &mut Outlaw, auth: &TxAuthority): (&mut UID) {
-        assert!(ownership::is_authorized_by_owner(&outlaw.id, auth), ENOT_OWNER);
+        assert!(client::can_borrow_uid_mut(&outlaw.id, auth), ENOT_OWNER);
 
         &mut outlaw.id
     }
