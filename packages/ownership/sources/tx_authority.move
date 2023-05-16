@@ -84,7 +84,7 @@ module ownership::tx_authority {
     // Any agent added by one of these functions will have full ADMIN permissions as themselves.
 
     // This will be more useful once Sui supports multi-party transactions (August 2023)
-    public fun add_signer<T: key>(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
+    public fun add_signer(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
         let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
         vec_map2::set(&mut new_auth.permissions, tx_context::sender(ctx), vector[permissions::admin()]);
 
