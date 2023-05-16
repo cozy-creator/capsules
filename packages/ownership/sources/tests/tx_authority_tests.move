@@ -100,7 +100,7 @@ module ownership::tx_authority_tests {
             let witness = Witness { };
 
             let auth = tx_authority::begin_with_type(&witness);
-            auth = tx_authority::add_signer<TestObject>(ctx, &auth);
+            auth = tx_authority::add_signer(ctx, &auth);
 
             assert!(tx_authority::has_permission<ADMIN>(SENDER, &auth), 0);
             assert!(tx_authority::has_permission<ADMIN>(encode::type_into_address<Witness>(), &auth), 0);

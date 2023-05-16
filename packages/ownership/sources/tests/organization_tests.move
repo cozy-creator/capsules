@@ -334,7 +334,6 @@ module ownership::organizationn_tests {
         test_scenario::end(scenario);
     }
 
-    // This is still failing
     // #[test]
     // fun test_create_single_use_permission() {
     //     let scenario = test_scenario::begin(SENDER);
@@ -347,17 +346,21 @@ module ownership::organizationn_tests {
     //     {
     //         let ctx = test_scenario::ctx(&mut scenario);
     //         let auth = tx_authority::begin(ctx);
-    //         let role = string::utf8(b"Editor");
+    //         let role_1 = string::utf8(b"Editor");
+    //         let role_2 = string::utf8(b"SuperAgent");
 
-    //         organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-    //         organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+    //         organization::grant_permission_to_role<EDITOR>(&mut organization, role_1, &auth);
+    //         organization::grant_permission_to_role<SINGLE_USE>(&mut organization, role_2, &auth);
+
+    //         organization::set_role_for_agent(&mut organization, AGENT, role_1, ctx);
+    //         organization::set_role_for_agent(&mut organization, AGENT, role_2, ctx);
     //     };
 
     //     test_scenario::next_tx(&mut scenario, AGENT);
     //     {
     //         let ctx = test_scenario::ctx(&mut scenario);
     //         let auth = organization::claim_permissions(&organization, ctx);
-
+            
     //         let single_use = organization::create_single_use_permission<EDITOR>(&auth, ctx);
     //         let auth = tx_authority::begin_with_single_use(single_use);
     //         std::debug::print(&auth);
