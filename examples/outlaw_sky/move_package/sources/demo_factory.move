@@ -48,7 +48,7 @@ module outlaw_sky::demo_factory {
         metadata: OutlawMetadata
     }
 
-    const URL_TEMPLATE: vector<u8> = b"https://firebasestorage.googleapis.com/v0/b/capsules-9e30e.appspot.com/o/";
+    const URL_TEMPLATE: vector<u8> = b"https://files.outlaw-sky.com/";
 
     const INVENTORY: vector<vector<vector<u8>>> = vector[
         vector[ b"aqua", b"red", b"teal"], // background
@@ -83,7 +83,7 @@ module outlaw_sky::demo_factory {
 
         let url = string::utf8(URL_TEMPLATE);
         string::append(&mut url, string2::from_id(object::uid_to_inner(&id)));
-        string::append_utf8(&mut url, b".png?alt=media");
+        string::append_utf8(&mut url, b".png");
 
         let metadata = OutlawMetadata { attributes, url };
         dynamic_field::add(&mut id, b"metadata", metadata);

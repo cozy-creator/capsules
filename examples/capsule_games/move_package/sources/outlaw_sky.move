@@ -8,8 +8,7 @@ module games::outlaw_sky {
     use sui::ed25519;
 
     struct Outlaw has key {
-        id: UID,
-        version: u64
+        id: UID
     }
 
     // Pull Info struct; `pull_info` must conform to this shape for a tx to succeed.
@@ -26,8 +25,7 @@ module games::outlaw_sky {
     // permission objects
     struct EDIT {}
 
-
-    const URL_TEMPLATE: vector<u8> = b"https://firebasestorage.googleapis.com/v0/b/capsules-9e30e.appspot.com/o/";
+    const URL_TEMPLATE: vector<u8> = b"https://files.outlaw-sky.com/";
 
     const INVENTORY: vector<vector<vector<u8>>> = vector[
         vector[ b"aqua", b"red", b"teal"], // background
@@ -62,7 +60,7 @@ module games::outlaw_sky {
 
         let url = string::utf8(URL_TEMPLATE);
         string::append(&mut url, string2::from_id(object::uid_to_inner(&id)));
-        string::append_utf8(&mut url, b".png?alt=media");
+        string::append_utf8(&mut url, b".png");
 
         let metadata = OutlawMetadata { attributes, url };
         dynamic_field::add(&mut id, b"metadata", metadata);
