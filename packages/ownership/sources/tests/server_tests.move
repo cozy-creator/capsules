@@ -23,7 +23,7 @@ module ownership::server_tests {
 
     public fun create_organization(scenario: &mut Scenario, receipt: &mut PublishReceipt) {
         let ctx = test_scenario::ctx(scenario);
-        organization::create_from_package(receipt, ctx)
+        organization::create_from_receipt_(receipt, ctx)
     }
 
     #[test]
@@ -41,7 +41,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
@@ -73,7 +73,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
@@ -105,8 +105,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
-
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -138,7 +137,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
@@ -186,7 +185,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
@@ -220,7 +219,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
@@ -252,7 +251,7 @@ module ownership::server_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
 
         };
 
