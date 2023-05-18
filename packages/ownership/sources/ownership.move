@@ -117,11 +117,11 @@ module ownership::ownership {
     public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
-            let owner = get_owner(uid);
-            if (option::is_none(&owner)) true
+            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+            if (option::is_none(ownership.owner)) true
             else {
-                let owner = option::destroy_some(owner);
-                tx_authority::has_permission<Permission>(owner, auth)
+                tx_authority::has_permission_<Permission>(
+                    ownership.owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
     }

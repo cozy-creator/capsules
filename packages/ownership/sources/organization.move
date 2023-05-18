@@ -21,7 +21,7 @@
 // 32 byte value?).
 //
 // If you want to rotate the master-key for a organization, you can simply send the organization to a new
-// address using SimpleTransfer.
+// address using AdminTransfer.
 
 module ownership::organization {
     use std::option;
@@ -42,7 +42,7 @@ module ownership::organization {
     use ownership::permissions::{Self, SingleUsePermission, ADMIN};
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
-    use ownership::simple_transfer::Witness as SimpleTransfer;
+    use ownership::admin_transfer::Witness as AdminTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error enums
@@ -126,7 +126,7 @@ module ownership::organization {
         // Initialize ownership
         let typed_id = typed_id::new(&organization);
         let auth = tx_authority::begin_with_package_witness(Witness { });
-        ownership::as_shared_object<Organization, SimpleTransfer>(&mut organization.id, typed_id, owner, &auth);
+        ownership::as_shared_object<Organization, AdminTransfer>(&mut organization.id, typed_id, owner, &auth);
 
         organization
     }
@@ -175,10 +175,10 @@ module ownership::organization {
     }
 
     // ======== Edit Organizations =====
-    // You must be the owner of a organization to edit it. If you want to change owners, call into SimpleTransfer.
+    // You must be the owner of a organization to edit it. If you want to change owners, call into AdminTransfer.
     // Ownership of organizations created with anything other than a publish_receipt are non-transferable.
 
-    // Aboryd if package_id does not exist within the organization
+    // Abort if package_id does not exist within the organization
     public fun remove_package(
         organization: &mut Organization,
         package_id: ID,
