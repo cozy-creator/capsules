@@ -93,28 +93,38 @@ module ownership::permissions {
         vector2::merge(existing, new);
     }
 
-    // This works because ADMIN replaces all other permissions in this array
+
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
-        if (vector::length(permissions) > 0) {
-            let permission = vector::borrow(permissions, 0);
-            is_admin_permission(permission)
-        } else {
-            false
-        }
+        let i = 0;
+        let admin = encode::type_name<ADMIN>();
+        while (i < vector::length(&permissions)) {
+            let permission = vector::borrow(&permissions, i);
+            if (&permission.inner == &admin) { return true };
+            i = i + 1;
+        };
+
+        // We used to make the assumption that admin / manager replaces all other permissions in
+        // a vector, for efficiency, but I think this assumption is too brittle
+        // if (vector::length(permissions) > 0) {
+        //     let permission = vector::borrow(permissions, 0);
+        //     is_admin_permission(permission)
+        // } else {
+        //     false
+        // }
     }
 
     public fun is_admin_permission(permission: &Permission): bool {
         permission.inner == encode::type_name<ADMIN>()
     }
 
-    // This works because MANAGER replaces all other permissions in this array
     public fun has_manager_permission(permissions: &vector<Permission>): bool {
-        if (vector::length(permissions) > 0) {
-            let permission = vector::borrow(permissions, 0);
-            is_manager_permission(permission)
-        } else {
-            false
-        }
+        let i = 0;
+        let manager = encode::type_name<MANAGER>();
+        while (i < vector::length(&permissions)) {
+            let permission = vector::borrow(&permissions, i);
+            if (&permission.inner == &manager) { return true };
+            i = i + 1;
+        };
     }
 
     public fun is_manager_permission(permission: &Permission): bool {

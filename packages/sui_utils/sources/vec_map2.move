@@ -139,4 +139,19 @@ module sui_utils::vec_map2 {
             };
         };
     }
+
+    // Speciality function created just for struct-tag matching. 
+    public fun match_struct_tag_maybe(self: &VecMap<StructTag, V>, struct_tag: &StructTag): Option<V> {
+        let i = 0;
+        while (i < vec_map::size(self)) {
+            let (key, value) = vec_map::get_entry_by_idx(self, i);
+
+            if (struct_tag::match(struct_tag, key)) { 
+                return option::some(value)
+            };
+            i = i + 1;
+        };
+
+        return option::none()
+    }
 }

@@ -67,7 +67,6 @@ module ownership::organization {
     // Shared, root-level object.
     struct Organization has key {
         id: UID,
-        org_id: UID,
         packages: vector<Package>,
         rbac: RBAC
     }
@@ -114,11 +113,11 @@ module ownership::organization {
 
     fun create_internal(owner: address, ctx: &mut TxContext): Organization {
         let org_id = object::new(ctx);
-        let rbac = rbac::create(object::uid_to_address(&org_id));
+        let rbac = rbac::create(object::uid_to_address(object::new(ctx)));
+        object::delete(org_id);
 
         let organization = Organization { 
             id: object::new(ctx),
-            org_id,
             packages: vector::empty(),
             rbac 
         };
@@ -168,9 +167,8 @@ module ownership::organization {
         assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&organization.packages), EPACKAGES_MUST_BE_EMPTY);
 
-        let Organization { id, org_id, packages, rbac: _ } = organization;
+        let Organization { id, packages, rbac: _ } = organization;
         object::delete(id);
-        object::delete(org_id);
         vector::destroy_empty(packages);
     }
 

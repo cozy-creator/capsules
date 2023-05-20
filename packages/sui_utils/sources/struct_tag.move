@@ -2,6 +2,8 @@
 // parse them out into their 4 components and store them as a StructTag. This saves us the compute cost of
 // having to re-parse them every time in future transactions.
 
+// address: a725e7cd33d5092af4f338c58329641dadf7c7bd471e6fa90cec6a37fe24122d, module: Identifier("my_hero"), name: Identifier("Hero"), type_params: [] } - example struct tag from RPC
+
 module sui_utils::struct_tag {
     use std::string::{Self, String, utf8};
     use std::vector;
@@ -68,7 +70,7 @@ module sui_utils::struct_tag {
 
     // More relaxed comparison; if type1's generic is left undefined, then it's treated as *, meaning it
     // matches any value for type2's generics.
-    public fun is_same_type_(type1: &StructTag, type2: &StructTag): bool {
+    public fun match(type1: &StructTag, type2: &StructTag): bool {
         (type1.package_id == type2.package_id
             && type1.module_name == type2.module_name
             && type1.struct_name == type2.struct_name
