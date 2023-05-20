@@ -10,6 +10,7 @@ module transfer_system::market_account {
     use sui::transfer;
 
     use ownership::ownership;
+    use ownership::permissions::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use sui_utils::typed_id;
@@ -35,7 +36,7 @@ module transfer_system::market_account {
         let typed_id = typed_id::new(&account);
         let auth = tx_authority::begin_with_type(&Witness {});
 
-        ownership::as_shared_object_<MarketAccount>(&mut account.id, typed_id, vector[tx_context::sender(ctx)], vector::empty(), &auth);
+        ownership::as_shared_object_<MarketAccount>(&mut account.id, typed_id, tx_context::sender(ctx), vector::empty(), &auth);
         transfer::share_object(account)
     }
 
@@ -70,7 +71,7 @@ module transfer_system::market_account {
     }
 
     public fun assert_account_ownership(self: &MarketAccount, auth: &TxAuthority) {
-        assert!(ownership::is_authorized_by_owner(&self.id, auth), ENO_OWNER_AUTHORITY)
+        assert!(ownership::has_owner_permission<ADMIN>(&self.id, auth), ENO_OWNER_AUTHORITY)
     }
 
     #[test_only]
