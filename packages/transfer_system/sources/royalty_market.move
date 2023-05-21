@@ -128,22 +128,6 @@ module transfer_system::royalty_market {
 
     // ========== Helper functions ==========
 
-    fun to_royalty_splits(creators: vector<address>, values: vector<u16>): VecMap<address, u16> {
-        assert!(vector::length(&creators) == vector::length(&values), 0);
-        let (total_bps, splits) = (0, vec_map::empty());
-
-        while(!vector::is_empty(&creators)) {
-            let creator = vector::pop_back(&mut creators);
-            let value = vector::pop_back(&mut values);
-
-            vec_map::insert(&mut splits, creator, value);
-            total_bps = total_bps + value;
-        };
-
-        assert!(total_bps == BPS_BASE_VALUE, EINVALID_ROYALTY_SPLITS_TOTAL);
-        splits
-    }
-
     fun assert_valid_item_type<T>(uid: &UID) {
         let type = ownership::get_type(uid);
         assert!(option::is_some(&type), ENO_ITEM_TYPE);
