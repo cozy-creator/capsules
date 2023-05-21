@@ -26,9 +26,9 @@ module transfer_system::royalty_market {
         royalty_splits: VecMap<address, u16>
     }
 
-    struct RoyaltyReceipt<phantom T> {
-        item: ID,
-        price: u64,
+    struct RoyaltyPayment<phantom T> has drop {
+        item_id: ID,
+        item_price: u64,
         royalty_value: u64
     }
 
@@ -40,7 +40,7 @@ module transfer_system::royalty_market {
     const EINVALID_PUBLISH_RECEIPT: u64 = 1;
     const ENO_ITEM_TYPE: u64 = 3;
     const EITEM_TYPE_MISMATCH: u64 = 4;
-    const EITEM_ID_MISMATCH: u64 = 5;
+    const EITEM_RECEIPT_MISMATCH: u64 = 5;
     const EINVALID_ROYALTY_SPLITS_TOTAL: u64 = 6;
     const EINVALID_ROYALTY_PAYMENT: u64 = 7;
 
@@ -92,7 +92,7 @@ module transfer_system::royalty_market {
     public fun transfer<T, C>(
         uid: &mut UID,
         royalty: &mut Royalty<T>,
-        receipt: RoyaltyReceipt<T>,
+        receipt: RoyaltyPayment<T>,
         payment: Coin<C>,
         new_owner: Option<address>,
         ctx: &mut TxContext
@@ -104,18 +104,17 @@ module transfer_system::royalty_market {
     public fun transfer_<T, C>(
         uid: &mut UID,
         royalty: &mut Royalty<T>,
-        receipt: RoyaltyReceipt<T>,
-        payment: Coin<C>,
+        payment: RoyaltyPayment<T>,
+        coin: Coin<C>,
         new_owner: Option<address>,
         auth: &TxAuthority
     ) {
         assert_valid_item_type<T>(uid);
-        assert!(object::uid_to_inner(uid) == receipt.item, EITEM_ID_MISMATCH);
-        assert!(coin::value(&payment) == receipt.royalty_value, EINVALID_ROYALTY_PAYMENT);
+        assert!(object::uid_to_inner(uid) == payment.item_id, EITEM_RECEIPT_MISMATCH);
+        assert!(coin::value(&coin) == payment.royalty_value, EINVALID_ROYALTY_PAYMENT);
 
-        collect_royalty(royalty, payment);
+        collect_royalty(royalty, coin);
         ownership::transfer(uid, new_owner, auth);
-        destroy_receipt(receipt);
     }
 
     public fun calculate_royalty<T>(royalty: &Royalty<T>, value: u64): u64 {
@@ -125,20 +124,15 @@ module transfer_system::royalty_market {
         multiple / (BPS_BASE_VALUE as u64)
     }
 
-    public fun create_receipt<T>(item: &UID, royalty: &Royalty<T>, price: u64): RoyaltyReceipt<T> {
+    public fun create_payment<T>(item: &UID, royalty: &Royalty<T>, item_price: u64): RoyaltyPayment<T> {
         assert_valid_item_type<T>(item);
-        let royalty_value = calculate_royalty(royalty, price);
+        let royalty_value = calculate_royalty(royalty, item_price);
         
-        RoyaltyReceipt {
-            price,
+        RoyaltyPayment {
+            item_price,
             royalty_value,
-            item: object::uid_to_inner(item)
+            item_id: object::uid_to_inner(item)
         }
-    }
-
-    public fun destroy_receipt<T>(self: RoyaltyReceipt<T>): (ID, u64, u64) {
-        let RoyaltyReceipt { item, price, royalty_value } = self;
-        (item, price, royalty_value)
     }
 
     // ========== Getter functions =========
