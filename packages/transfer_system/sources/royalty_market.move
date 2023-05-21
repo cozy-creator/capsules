@@ -90,13 +90,13 @@ module transfer_system::royalty_market {
     public fun transfer<T, C>(
         uid: &mut UID,
         royalty: &mut Royalty<T>,
-        receipt: RoyaltyPayment<T>,
-        payment: Coin<C>,
+        payment: RoyaltyPayment<T>,
+        coin: Coin<C>,
         new_owner: Option<address>,
         ctx: &mut TxContext
     ) {
         let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
-        transfer_(uid, royalty, receipt, payment, new_owner, &auth)
+        transfer_(uid, royalty, payment, coin, new_owner, &auth)
     }
 
     public fun transfer_<T, C>(
@@ -166,7 +166,7 @@ module transfer_system::royalty_market {
         let has_balance = dynamic_field::exists_with_type<Key<C>, Balance<C>>(&mut royalty.id, key);
 
         if(!has_balance) {
-            dynamic_field::add<Key<C>, Balance<C>>(&mut royalty.id, key, coin::into_balance(coin))
+            dynamic_field::add<Key<C>, Balance<C>>(&mut royalty.id, key, coin::into_balance(coin));
         } else {
             let balance = dynamic_field::borrow_mut<Key<C>, Balance<C>>(&mut royalty.id, key);
             balance::join(balance, coin::into_balance(coin));
