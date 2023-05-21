@@ -2,12 +2,10 @@ module transfer_system::royalty_market {
     use std::vector;
     use std::option::{Self, Option};
 
-    use sui::balance::{Self, Balance};
     use sui::vec_map::{Self, VecMap};
     use sui::object::{Self, ID, UID};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
-    use sui::dynamic_field;
     use sui::transfer;
 
     use ownership::ownership;
@@ -20,17 +18,15 @@ module transfer_system::royalty_market {
 
     struct Royalty<phantom T> has key, store {
         id: UID,
-        royalty_bps: u16,
-        royalty_splits: VecMap<address, u16>
+        bps_value: u16,
+        creator: address
     }
 
-    struct RoyaltyPayment<phantom T> has drop {
-        item_id: ID,
-        item_price: u64,
-        royalty_value: u64
+    struct RoyaltyPayment<phantom T> {
+        item: ID,
+        value: u64,
+        creator: address
     }
-
-    struct Key<phantom C> has copy, store, drop { }
 
     // ========== Error constants==========
 
@@ -46,101 +42,88 @@ module transfer_system::royalty_market {
 
     // ========== Royalty functions ==========
 
-    public fun create_royalty_<T>(
-        receipt: &PublishReceipt,
-        royalty_bps: u16,
-        creators: vector<address>,
-        splits: vector<u16>,
-        ctx: &mut TxContext
-    ): Royalty<T> {
-        let royalty_splits = to_royalty_splits(creators, splits);
-        create_royalty_internal<T>(receipt, royalty_bps, royalty_splits, ctx)
-    }
-
     public fun create_royalty<T>(
         receipt: &PublishReceipt,
-        royalty_bps: u16,
-        creator: address,
+        bps_value: u16,
         ctx: &mut TxContext
     ): Royalty<T> {
-        let royalty_splits = vec_map::empty();
-        vec_map::insert(&mut royalty_splits, creator, BPS_BASE_VALUE);
-        create_royalty_internal<T>(receipt, royalty_bps, royalty_splits, ctx)
+        let creator = tx_context::sender(ctx);
+        create_royalty_<T>(receipt, bps_value, creator, ctx)
     }
 
-    public fun return_and_share<T>(royalty: Royalty<T>) {
-        transfer::share_object(royalty)
-    }
-
-    fun create_royalty_internal<T>(
+    fun create_royalty_<T>(
         receipt: &PublishReceipt,
-        royalty_bps: u16,
-        royalty_splits: VecMap<address, u16>,
+        bps_value: u16,
+        creator: address,
         ctx: &mut TxContext
     ):  Royalty<T> {
         assert!(publish_receipt::did_publish<T>(receipt), EINVALID_PUBLISH_RECEIPT);
 
          Royalty {
             id: object::new(ctx),
-            royalty_bps,
-            royalty_splits
+            bps_value,
+            creator
         }
     }
-
+    
     public fun transfer<T, C>(
         uid: &mut UID,
-        royalty: &mut Royalty<T>,
         payment: RoyaltyPayment<T>,
         coin: Coin<C>,
         new_owner: Option<address>,
         ctx: &mut TxContext
     ) {
         let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
-        transfer_(uid, royalty, payment, coin, new_owner, &auth)
+        transfer_(uid, payment, coin, new_owner, &auth)
     }
 
     public fun transfer_<T, C>(
         uid: &mut UID,
-        royalty: &mut Royalty<T>,
         payment: RoyaltyPayment<T>,
         coin: Coin<C>,
         new_owner: Option<address>,
         auth: &TxAuthority
     ) {
         assert_valid_item_type<T>(uid);
-        assert!(object::uid_to_inner(uid) == payment.item_id, EITEM_RECEIPT_MISMATCH);
-        assert!(coin::value(&coin) == payment.royalty_value, EINVALID_ROYALTY_PAYMENT);
 
-        collect_royalty(royalty, coin);
+        let RoyaltyPayment { item, value, creator } = payment;
+        assert!(object::uid_to_inner(uid) == item, EITEM_RECEIPT_MISMATCH);
+        assert!(coin::value(&coin) == value, EINVALID_ROYALTY_PAYMENT);
+
+        transfer::public_transfer(coin, creator);
         ownership::transfer(uid, new_owner, auth);
     }
 
+    public fun return_and_share<T>(royalty: Royalty<T>) {
+        transfer::share_object(royalty)
+    }
+
     public fun calculate_royalty<T>(royalty: &Royalty<T>, value: u64): u64 {
-        let royalty_bps = royalty_bps(royalty);
-        let multiple = (royalty_bps as u64) * value;
+        let bps_value = bps_value(royalty);
+        let multiple = (bps_value as u64) * value;
 
         multiple / (BPS_BASE_VALUE as u64)
     }
 
-    public fun create_payment<T>(item: &UID, royalty: &Royalty<T>, item_price: u64): RoyaltyPayment<T> {
+    public fun create_payment<T>(item: &UID, royalty: &Royalty<T>, price: u64): RoyaltyPayment<T> {
         assert_valid_item_type<T>(item);
-        let royalty_value = calculate_royalty(royalty, item_price);
+        let value = calculate_royalty(royalty, price);
         
         RoyaltyPayment {
-            item_price,
-            royalty_value,
-            item_id: object::uid_to_inner(item)
+            value,
+            creator: royalty.creator,
+            item: object::uid_to_inner(item)
         }
     }
 
     // ========== Getter functions =========
 
-    public fun royalty_bps<T>(royalty: &Royalty<T>): u16 {
-        royalty.royalty_bps
+    public fun bps_value<T>(royalty: &Royalty<T>): u16 {
+        royalty.bps_value
     }
 
-    public fun royalty_splits<T>(royalty: &Royalty<T>): VecMap<address, u16> {
-        royalty.royalty_splits
+    public fun creator<T>(royalty: &Royalty<T>): address {
+        royalty.creator
     }
 
     // ========== Helper functions ==========
@@ -159,18 +142,6 @@ module transfer_system::royalty_market {
 
         assert!(total_bps == BPS_BASE_VALUE, EINVALID_ROYALTY_SPLITS_TOTAL);
         splits
-    }
-
-    fun collect_royalty<T, C>(royalty: &mut Royalty<T>, coin: Coin<C>) {
-        let key = Key { };
-        let has_balance = dynamic_field::exists_with_type<Key<C>, Balance<C>>(&mut royalty.id, key);
-
-        if(!has_balance) {
-            dynamic_field::add<Key<C>, Balance<C>>(&mut royalty.id, key, coin::into_balance(coin));
-        } else {
-            let balance = dynamic_field::borrow_mut<Key<C>, Balance<C>>(&mut royalty.id, key);
-            balance::join(balance, coin::into_balance(coin));
-        }
     }
 
     fun assert_valid_item_type<T>(uid: &UID) {
