@@ -12,10 +12,8 @@ module transfer_system::royalty_market {
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
-
     use ownership::publish_receipt::{Self, PublishReceipt};
 
-    use sui_utils::encode;
     use sui_utils::struct_tag;
 
     struct Witness has drop {}
@@ -80,7 +78,7 @@ module transfer_system::royalty_market {
         royalty_splits: VecMap<address, u16>,
         ctx: &mut TxContext
     ):  Royalty<T> {
-        assert!(encode::package_id<T>() == publish_receipt::into_package_id(receipt), EINVALID_PUBLISH_RECEIPT);
+        assert!(publish_receipt::did_publish<T>(receipt), EINVALID_PUBLISH_RECEIPT);
 
          Royalty {
             id: object::new(ctx),
