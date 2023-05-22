@@ -1,10 +1,13 @@
 module transfer_system::royalty_market {
+    use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
 
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
+
+    use capsule::capsule::Capsule;
 
     use ownership::ownership;
     use ownership::tx_authority;
@@ -15,8 +18,9 @@ module transfer_system::royalty_market {
 
     struct Witness has drop {}
 
-    struct Royalty<phantom T> has key, store {
+    struct Royalty has key, store {
         id: UID,
+        type: TypeName,
         /// The basis point value for the royalty
         bps_value: u16,
         /// The address creator or rights holder associated with the royalty
@@ -24,7 +28,8 @@ module transfer_system::royalty_market {
     }
 
     /// A struct used to capture and store the specific details of a royalty payment associated with an item
-    struct RoyaltyPayment<phantom T> {
+    struct RoyaltyPayment {
+        type: TypeName,
         /// ID of the item associated with the royalty payment
         item: ID,
         /// The amount of the royalty payment
@@ -55,7 +60,7 @@ module transfer_system::royalty_market {
         receipt: &PublishReceipt,
         bps_value: u16,
         ctx: &mut TxContext
-    ): Royalty<T> {
+    ): Royalty {
         let creator = tx_context::sender(ctx);
         create_royalty_<T>(receipt, bps_value, creator, ctx)
     }
@@ -67,11 +72,12 @@ module transfer_system::royalty_market {
         bps_value: u16,
         creator: address,
         ctx: &mut TxContext
-    ):  Royalty<T> {
+    ):  Royalty {
         assert!(publish_receipt::did_publish<T>(receipt), EINVALID_PUBLISH_RECEIPT);
 
          Royalty {
             id: object::new(ctx),
+            type: type_name::get<T>(),
             bps_value,
             creator
         }
@@ -84,15 +90,16 @@ module transfer_system::royalty_market {
     /// 
     /// A `TxAuthority` struct will be constructed using the witness royalty market
     /// The contructed auth will later be used to authorize the item transfer
-    public fun transfer<T, C>(
+    public fun transfer<T: key + store, C>(
         uid: &mut UID,
-        payment: RoyaltyPayment<T>,
+        payment: RoyaltyPayment,
         coin: Coin<C>,
         new_owner: Option<address>
     ) {
-        assert_valid_item_type<T>(uid);
+        assert!(type_name::get<T>() == payment.type, EITEM_TYPE_MISMATCH);
+        if(!is_capsule<T>(uid)) { assert_valid_item_type<T>(uid) };
 
-        let RoyaltyPayment { item, value, creator } = payment;
+        let RoyaltyPayment { item, value, creator, type: _ } = payment;
         assert!(object::uid_to_inner(uid) == item, EITEM_RECEIPT_MISMATCH);
         assert!(coin::value(&coin) == value, EINVALID_ROYALTY_PAYMENT);
         
@@ -103,32 +110,32 @@ module transfer_system::royalty_market {
     }
 
     // Convenience function
-    public fun transfer_to_object<T, C, O: key>(
+    public fun transfer_to_object<T: key + store, C, O: key>(
         uid: &mut UID,
-        payment: RoyaltyPayment<T>,
+        payment: RoyaltyPayment,
         coin: Coin<C>, 
-        obj: &O
+        object: &O
     ) {
-        let addr = object::id_address(obj);
-        transfer(uid, payment, coin, option::some(addr));
+        let addr = object::id_address(object);
+        transfer<T, C>(uid, payment, coin, option::some(addr));
     }
 
     // Convenience function
-    public fun transfer_to_type<T, C, W>(
+    public fun transfer_to_type<T: key + store, C, W>(
         uid: &mut UID,
-        payment: RoyaltyPayment<T>,
+        payment: RoyaltyPayment,
         coin: Coin<C>
     ) {
         let addr = encode::type_into_address<W>();
-        transfer(uid, payment, coin, option::some(addr));
+        transfer<T, C>(uid, payment, coin, option::some(addr));
     }
 
-    public fun return_and_share<T>(royalty: Royalty<T>) {
+    public fun return_and_share(royalty: Royalty) {
         transfer::share_object(royalty)
     }
 
     /// Calculate the royalty value or amount based on the given value and Royalty.
-    public fun calculate_royalty<T>(royalty: &Royalty<T>, value: u64): u64 {
+    public fun calculate_royalty(royalty: &Royalty, value: u64): u64 {
         let bps_value = bps_value(royalty);
         let multiple = (bps_value as u64) * value;
 
@@ -140,12 +147,13 @@ module transfer_system::royalty_market {
     /// 
     /// This function calculates the royalty value or amount based on the given Royalty and item price. 
     /// The result is placed in the constructed `RoyaltyPayment`
-    public fun create_payment<T>(item: &UID, royalty: &Royalty<T>, price: u64): RoyaltyPayment<T> {
+    public fun create_payment<T>(item: &UID, royalty: &Royalty, price: u64): RoyaltyPayment {
         assert_valid_item_type<T>(item);
         let value = calculate_royalty(royalty, price);
         
         RoyaltyPayment {
             value,
+            type: royalty.type,
             creator: royalty.creator,
             item: object::uid_to_inner(item)
         }
@@ -153,11 +161,11 @@ module transfer_system::royalty_market {
 
     // ========== Getter functions =========
 
-    public fun bps_value<T>(royalty: &Royalty<T>): u16 {
+    public fun bps_value(royalty: &Royalty): u16 {
         royalty.bps_value
     }
 
-    public fun creator<T>(royalty: &Royalty<T>): address {
+    public fun creator(royalty: &Royalty): address {
         royalty.creator
     }
 
@@ -167,5 +175,9 @@ module transfer_system::royalty_market {
         let type = ownership::get_type(uid);
         assert!(option::is_some(&type), ENO_ITEM_TYPE);
         assert!(option::destroy_some(type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
+    }
+
+    fun is_capsule<T: key + store>(uid: &UID): bool {
+        option::destroy_some(ownership::get_type(uid)) == struct_tag::get<Capsule<T>>()
     }
 }

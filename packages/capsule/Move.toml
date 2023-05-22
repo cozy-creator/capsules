@@ -9,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-capsule =  ""
+capsule =  "0x0"

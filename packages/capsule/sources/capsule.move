@@ -2,15 +2,19 @@
 // sell an owned object on a market, and then the new owner can turn it back into an owned object.
 
 module capsule::capsule {
+    use std::vector;
     use std::option::{Self, Option};
     
-    use sui::dynamic_field;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::typed_id;
     use sui::tx_context::{TxContext};
+    use sui::object::{Self, UID};
+    // use sui::dynamic_field;
+    use sui::transfer;
+
+    use sui_utils::encode;
+    use sui_utils::typed_id;
 
     use ownership::ownership;
+    use ownership::permissions::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error Constants
@@ -21,7 +25,7 @@ module capsule::capsule {
     // Statically typed Capsule. Shared object
     // In the future we may create versions that are owned as well, to allow module-authority to assert its control over
     // `key + store` objects.
-    struct Capsule<T: store> has key {
+    struct Capsule<T: key + store> has key {
         id: UID,
         contents: Option<T>
     }
@@ -29,54 +33,48 @@ module capsule::capsule {
     struct Key has store, copy, drop {}
     struct Witness has drop {}
 
-    // Helper function
-    public entry fun create<T: store, Transfer>(
-        obj: T,
-        module_auth: vector<address>,
-        owner: vector<address>,
+    public entry fun create<T: key + store, Transfer>(
+        object: T,
+        owner: address,
         ctx: &mut TxContext
     ) {
-        let transfer_auth = tx_authority::type_into_address<Transfer>();
-        let capsule = create_(obj, module_auth, owner, vector[transfer_auth], ctx);
-        transfer::share_object(capsule);
+        let transfer_auth = encode::type_into_address<Transfer>();
+        let capsule = create_(object, owner, vector::singleton(transfer_auth), ctx);
+
+        transfer::share_object(capsule)
     }
 
-    public fun create_<T: store>(
-        obj: T,
-        module_auth: vector<address>,
-        owner: vector<address>,
+    public fun create_<T: key + store>(
+        object: T,
+        owner: address,
         transfer_auth: vector<address>,
         ctx: &mut TxContext
     ): Capsule<T> {
         let capsule = Capsule {
             id: object::new(ctx),
-            contents: option::some(obj)
+            contents: option::some(object)
         };
 
-        let auth = tx_authority::begin_with_type(&Witness {});
         let typed_id = typed_id::new(&capsule);
-
-        ownership::initialize(&mut capsule.id, typed_id, module_auth, &auth);
-        ownership::as_shared_object_(&mut capsule.id, owner, transfer_auth, &auth);
+        let auth = tx_authority::begin_with_package_witness(Witness {});
+        ownership::as_shared_object_(&mut capsule.id, typed_id, owner, transfer_auth, &auth);
 
         capsule        
     }
 
-    // We are able to return capsule to another transaction, knowing that they will have to return it and have it shared here
-    // because Capsule does not have `store`.
-    public fun return_and_share<T: store>(capsule: Capsule<T>) {
+    public fun return_and_share<T: key + store>(capsule: Capsule<T>) {
         transfer::share_object(capsule);
     }
 
-    public fun borrow<T: store>(capsule: &Capsule<T>, auth: &TxAuthority): &T {
-        assert!(ownership::is_authorized_by_owner(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+    public fun borrow<T: key + store>(capsule: &Capsule<T>, auth: &TxAuthority): &T {
+        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         option::borrow(&capsule.contents)
     }
 
-    public fun borrow_mut<T: store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut T {
-        assert!(ownership::is_authorized_by_owner(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+    public fun borrow_mut<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut T {
+        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         option::borrow_mut(&mut capsule.contents)
@@ -84,24 +82,33 @@ module capsule::capsule {
 
     // Unfortunately we cannot delete shared objects In Sui, which would be ideal. This means that this capsule, as a shared object,
     // will persist in memory forever despite being useless. This is why we need the Option<T> wrapper for contents.
-    public fun extract<T: store>(capsule: &mut Capsule<T>, auth: &TxAuthority): T {
-        assert!(ownership::is_authorized_by_transfer(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
+    public fun extract<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): T {
+        assert!(ownership::has_transfer_permission<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         // Set the owner to none, so it doesn't get picked by an indexer as owned by anyone
-        ownership::transfer(&mut capsule.id, vector[], auth);
+        ownership::transfer(&mut capsule.id, option::none(), auth);
         option::extract(&mut capsule.contents)
     }
 
-    public fun extend<T: store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut UID {
-        assert!(ownership::is_authorized_by_owner(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+    public fun destroy<T: key + store>(capsule: Capsule<T>, auth: &TxAuthority): T {
+        assert!(ownership::has_transfer_permission<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
+        let Capsule { id, contents } = capsule;
+
+        object::delete(id);
+        option::destroy_some(contents)
+    }
+
+    public fun extend<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut UID {
+        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut capsule.id
     }
 
-    // ========== Getter Functions ==========
+    // // ========== Getter Functions ==========
 
-    public fun is_empty<T: store>(capsule: &Capsule<T>): bool {
+    public fun is_empty<T: key + store>(capsule: &Capsule<T>): bool {
         option::is_some(&capsule.contents)
     }
 
@@ -112,13 +119,13 @@ module capsule::capsule {
     // more complex (all of the keys and such). It might be best to give this an entirely different API from the static capsule.
 
     // Dynamic capsule; stores contents in a dynamic field
-    struct Capsule_ has key {
-        id: UID
-    }
+    // struct Capsule_ has key {
+    //     id: UID
+    // }
 
-    public fun create_dynamic<T: store>(obj: T, ctx: &mut TxContext): Capsule_ {
-        let capsule = Capsule_ { id: object::new(ctx) };
-        dynamic_field::add(&mut capsule.id, Key {}, obj);
-        capsule
-    }
+    // public fun create_dynamic<T: key + store>(obj: T, ctx: &mut TxContext): Capsule_ {
+    //     let capsule = Capsule_ { id: object::new(ctx) };
+    //     dynamic_field::add(&mut capsule.id, Key {}, obj);
+    //     capsule
+    // }
 }
