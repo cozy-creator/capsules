@@ -20,22 +20,20 @@ module auction::auction {
 
     struct Auction<phantom T, phantom C> has key {
         id: UID,
-        // The auctioned item
-        item_id: ID,
-        // The top bid submitted in the auction
+        /// The minimum bid amount for the auction
+        starting_bid: u64,
+        /// The time when the auction begins
+        start_time: u64,
+        /// The time when the auction ends
+        end_time: u64,
+        /// Table to store bids made by addresses with their respective amounts
+        bids: Table<address, u64>,
+        /// The highest bid amount for the auction
         highest_bid: Balance<C>,
-        // The bidder with the highest bid in the auction
+        // The address of the highest bidder
         highest_bidder: Option<address>,
-        // The minimum bid allowed in the auction
-        minimum_bid: u64,
-        // The starting date of the auction
-        starts_at: u64,
-        // The ending date of the auction.
-        ends_at: u64,
-        // Indicates whether the auction has been canceled or not
-        is_canceled: bool,
-        // Identifies the market module address
-        market_address: address
+        /// Status of the auction (0 for active, 2 for cancelled, 3 for ended)
+        status: u8
     }
 
     struct Witness has drop {}
