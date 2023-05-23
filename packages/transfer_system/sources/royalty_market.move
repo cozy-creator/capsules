@@ -20,6 +20,7 @@ module transfer_system::royalty_market {
 
     struct Royalty has key, store {
         id: UID,
+        /// The type name of the object associated with the royalty
         type: TypeName,
         /// The basis point value for the royalty
         bps_value: u16,
@@ -29,6 +30,7 @@ module transfer_system::royalty_market {
 
     /// A struct used to capture and store the specific details of a royalty payment associated with an item
     struct RoyaltyPayment {
+        /// The type name of the object associated with the royalty
         type: TypeName,
         /// ID of the item associated with the royalty payment
         item: ID,
@@ -130,10 +132,6 @@ module transfer_system::royalty_market {
         transfer<T, C>(uid, payment, coin, option::some(addr));
     }
 
-    public fun return_and_share(royalty: Royalty) {
-        transfer::share_object(royalty)
-    }
-
     /// Calculate the royalty value or amount based on the given value and Royalty.
     public fun calculate_royalty(royalty: &Royalty, value: u64): u64 {
         let bps_value = bps_value(royalty);
@@ -157,6 +155,10 @@ module transfer_system::royalty_market {
             creator: royalty.creator,
             item: object::uid_to_inner(item)
         }
+    }
+
+    public fun return_and_share(royalty: Royalty) {
+        transfer::share_object(royalty)
     }
 
     // ========== Getter functions =========
