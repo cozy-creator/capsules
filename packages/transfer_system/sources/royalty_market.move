@@ -169,6 +169,10 @@ module transfer_system::royalty_market {
         royalty.creator
     }
 
+    public fun value(payment: &RoyaltyPayment): u64 {
+        payment.value
+    }
+
     // ========== Helper functions ==========
 
     fun assert_valid_item_type<T>(uid: &UID) {
