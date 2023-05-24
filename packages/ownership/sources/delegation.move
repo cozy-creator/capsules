@@ -23,6 +23,7 @@
 // The server now has `EDIT as Owner`.
 // We call this sort of A -> B -> C indirect delegation "delegation chaining" and it is a powerful
 // primitive.
+// Chaining even works for objects! Not just 'general'
 
 // We currently restrict adding ADMIN or MANAGER permissions in delegation generally, as this would be
 // too dangerous and would allow phishers to take over another person's entire account. HOWEVER we do
@@ -90,7 +91,9 @@ module ownership::delegation {
         agent: address,
         auth: &TxAuthority
     ) {
-        assert!(is_valid_delegation<Permission>(store, auth), EINVALID_DELEGATION);
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        assert!(!permissions::is_admin_permission<Permission>() &&
+            !permissions::is_manager_permission<Permission>(), EINVALID_DELEGATION);
 
         let general = permission_set::general(permission_set_mut(store, agent));
         vector2::push_back_unique(general, permissions::new<Permission>());
@@ -101,7 +104,8 @@ module ownership::delegation {
         agent: address,
         auth: &TxAuthority
     ) {
-
+        let types = vector[struct_tag::get<ObjectType>()];
+        add_permission_for_types<Permission>(store, agent, types, auth);
     }
 
     // Using struct-tag allows for us to match entire classes of types; adding an abstract type without
@@ -117,7 +121,16 @@ module ownership::delegation {
         types: vector<StructTag>,
         auth: &TxAuthority
     ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
 
+        let permission = permissions::new<Permission>();
+        let types_map = permission_set::types(permission_set_mut(store, agent));
+
+        while (vector::length(&types) > 0) {
+            let type = vector::pop_back(&mut types, i);
+            let type_permissions = vec_map::borrow_mut_fill(types_map, type, vector[]);
+            vector2::push_back_unique(&mut type_permissions, permission);
+        };
     }
 
     public fun add_permission_for_objects<Permission>(
@@ -130,46 +143,45 @@ module ownership::delegation {
 
         let permission = permissions::new<Permission>();
         let objects_map = permission_set::objects(permission_set_mut(store, agent));
-        let i = 0;
-        while (i < vector::length(&objects)) {
-            let object_id = *vector::borrow(&objects, i);
+
+        while (vector::length(&objects) > 0) {
+            let object_id = vector::pop_back(&mut objects, i);
             let object_permissions = vec_map::borrow_mut_fill(objects_map, object_id, vector[]);
             vector2::push_back_unique(&mut object_permissions, permission);
-            i = i + 1;
         };
     }
 
     // ======= Remove Agent Permissions =======
 
-    public fun revoke_permission<Permission>() {
+    public fun remove_general_permission_from_agent<Permission>() {
 
     }
 
-    public fun revoke_all_general_permissions() {
+    public fun remove_all_general_permissions_from_agent() {
 
     }
 
-    public fun revoke_permission_for_type<ObjectType, Permission>() {
+    public fun remove_permission_for_type_from_agent<ObjectType, Permission>() {
 
     }
 
-    public fun revoke_permission_for_types<Permission>() {
+    public fun remove_permission_for_types_from_agent<Permission>(types: vector<StructTag>) {
 
     }
 
-    public fun revoke_all_permissions_for_type<ObjectType>() {
+    public fun remove_type_from_agent<ObjectType>() {
 
     }
 
-    public fun revoke_all_permissions_for_types() {
+    public fun remove_types_from_agent(types: vector<StructTag>) {
 
     }
 
-    public fun revoke_permission_for_objects<Permission>() {
+    public fun remove_permission_for_objects_from_agent<Permission>(objects: vector<ID>) {
 
     }
 
-    public fun revoke_all_permissions_for_objects() {
+    public fun remove_objects_from_agent(objects: vector<ID>) {
 
     }
 
@@ -193,13 +205,7 @@ module ownership::delegation {
         tx_authority::merge_permission_set_internal(store.principal, set, auth)
     }
 
-    // ======= Helper Functions =======
-
-    public fun is_valid_delegation<Permission>(store: &DelegationStore,auth: &TxAuthority): bool {
-        tx_authority::has_permission<ADMIN>(store.principal, auth) &&
-            !permissions::is_admin_permission<Permission>() && 
-            !permissions::is_manager_permission<Permission>();
-    }
+    // ======= Internal Helper Functions =======
 
     fun permission_set_mut(store: &mut DelegationStore, agent: address): &mut PermissionSet {
         let fallback = tx_authority::new_permission_set_empty();

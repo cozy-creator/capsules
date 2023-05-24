@@ -79,6 +79,20 @@ module sui_utils::vector2 {
         };
     }
 
+    public fun merge_<T: drop>(destination: &vector<T>, source: &vector<T>): vector<T> {
+        let i = 0;
+        let response = copy destination;
+        while (i < vector::length(source)) {
+            let item = vector::borrow(source, i);
+            if (!vector::contains(destination, item)) {
+                vector::push_back(&mut response, copy item);
+            };
+            i = i + 1;
+        };
+
+        response
+    }
+
     public fun remove_maybe<T>(vec: &mut vector<T>, item: &T): Option<T> {
         let (exists, i) = vector::index_of(vec, item);
         if (exists) {

@@ -348,7 +348,8 @@ module ownership::tx_authority {
         // Delegation cannot expand the permissions that an agent already has; it can merely extend a
         // subset of its existing permissions to a new principal
         let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, agent, fallback);
-        let filtered_permissions = permissions::intersection(&new_permissions, &agent_permissions.general);
+        let filtered_permissions = permissions::intersection(
+            &new_permissions, permission_set::general(&agent_permissions));
 
         let principal_permissions = vec_map2::borrow_mut_fill(
             &mut new_auth.agent_permissions, principal, fallback);
@@ -362,14 +363,18 @@ module ownership::tx_authority {
 
     public(friend) fun merge_permission_set_internal(
         principal: address,
+        agent: address,
         new_set: PermissionSet,
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = copy_(auth);
         let fallback = permission_set::new(vector[]);
 
-        let old_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, principal, fallback);
-        permission_set::merge(old_set, new_set);
+        let agent_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, agent, fallback);
+        let filtered_set = permission_set::intersection(&new_set, agent_set);
+
+        let principal_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, principal, fallback);
+        permission_set::merge(principal_set, filtered_set);
 
         new_auth
     }

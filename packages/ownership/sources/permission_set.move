@@ -36,11 +36,22 @@ module ownership::permission_set {
         };
     }
 
+    public(friend) fun intersection(self: &PermissionSet, filter: &PermissionSet): PermissionSet {
+        let general = permissions::intersection(&self.general, &filter.general);
+        let on_types = permissions::vec_map_intersection(
+            &self.on_types, &filter.general, &filter.on_types);
+        let on_objects = permissions::vec_map_intersection(
+            &self.on_objects, &filter.general, &filter.on_objects);
+        
+        PermissionSet { general, on_types, on_objects }
+    }
+
+    // This ensures that permissions are not improperly overwritten
     public(friend) fun merge(self: &mut PermissionSet, new: PermissionSet) {
         let PermissionSet { general, on_types, on_objects } = new;
-        vector2::merge(self.general, &general);
-        vec_map2::merge(self.on_types, &on_types);
-        vec_map2::merge(self.on_objects, &on_objects);
+        permissions::add(&mut self.general, general);
+        permissions::vec_map_add(&mut self.on_types, on_types);
+        permissions::vec_map_add(&mut self.on_objects, on_objects);
     }
 
     // ======== Field Accessors ========

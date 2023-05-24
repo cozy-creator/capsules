@@ -10,6 +10,7 @@ module ownership::permissions {
 
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
+    use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
     use sui_utils::vector2;
@@ -17,6 +18,7 @@ module ownership::permissions {
     friend ownership::rbac;
     friend ownership::tx_authority;
     friend ownership::organization;
+    friend ownership::permission_set;
 
     // These are special system-level permissions.
     // If the principal gives an agent the MANAGER role, then they can act as
@@ -74,6 +76,33 @@ module ownership::permissions {
         vector2::intersection(permissions, filter)
     }
 
+    public(friend) fun vec_map_intersection<T: copy + drop>(
+        self: &VecMap<T, vector<Permission>>, 
+        general_filter: &vector<Permission>,
+        specific_filter: &VecMap<T, vector<Permission>>
+    ): VecMap<T, vector<Permission>> {
+        let i = 0;
+        let filtered = vec_map::empty<T, vector<Permission>>();
+        while (i < vec_map::size(self)) {
+            let (key, value) = vec_map::get_entry_by_idx(self, i);
+
+            let specific_filter_maybe = vec_map::try_get(specific_filter, key);
+            let filtered_value = if (option::is_some(&specific_filter_maybe)) {
+                let this_specific_filter = option::destroy_some(specific_filter_maybe);
+                let this_filter = add_(general_filter, this_specific_filter);
+                intersection(value, this_filter)
+            } else {
+                intersection(value, general_filter);
+            }
+
+            vec_map::insert(&mut filtered, copy key, filtered_value);
+
+            i = i + 1;
+        };
+
+        filtered
+    }
+
     public(friend) fun add(existing: &mut vector<Permission>, new: vector<Permission>) {
         let (admin, manager) = (admin(), manager());
 
@@ -93,6 +122,35 @@ module ownership::permissions {
         vector2::merge(existing, new);
     }
 
+    // Doesn't modify the existing vectors
+    public(friend) fun add_(existing: &vector<Permission>, new: &vector<Permission>): vector<Permission> {
+        let (admin, manager) = (admin(), manager());
+
+        // This prevents accidental permission downgrades
+        if (has_admin_permission(existing)) { return copy existing };
+
+        // These superseed and replace all existing permissions
+        if (vector::contains(&new, &admin)) {
+            return vector[admin]
+        };
+        if (vector::contains(&new, &manager)) { 
+            return vector[manager]
+        };
+
+        vector2::merge_(existing, new)
+    }
+
+    public(friend) fun vec_map_add(
+        &mut existing: VecMap<T, vector<Permission>>,
+        new: VecMap<T, vector<Permission>>
+    ) {
+        let i = 0;
+        while (vec_map::size(&new) > 0) {
+            let (key, value) = vec_map::pop(&mut new);
+            let self = vec_map2::borrow_mut_fill(existing, key, vector[]);
+            add(self, value);
+       };
+    }
 
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
         let i = 0;
