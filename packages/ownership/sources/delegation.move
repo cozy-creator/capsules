@@ -30,6 +30,8 @@
 // allow it for specific types and objects.
 
 module ownership::delegation {
+    use std::vector;
+
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
@@ -43,6 +45,7 @@ module ownership::delegation {
     const ENO_ADMIN_AUTHORITY: u64 = 0;
     const EINSUFFICIENT_AUTHORITY_FOR_AGENT: u64 = 1;
     const EINVALID_DELEGATION: u64 = 2;
+    const EPERMISSION_NOT_FOUND: u64 = 3;
 
     // Root-level, shared object. The owner is the principle, and is immutable (non-transferable).
     // This serves a purpose similar to RBAC, in that it stores permissions
@@ -153,40 +156,135 @@ module ownership::delegation {
 
     // ======= Remove Agent Permissions =======
 
-    public fun remove_general_permission_from_agent<Permission>() {
-
+    public fun remove_general_permission_from_agent<Permission>(
+        store: &mut DelegationStore,
+        agent: address,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let general = permission_set::general(permission_set_mut(store, agent));
+        vector2::remove_maybe(general, permission::new<Permission>());
     }
 
-    public fun remove_all_general_permissions_from_agent() {
-
+    public fun remove_all_general_permissions_from_agent(
+        store: &mut DelegationStore,
+        agent: address,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let general = permission_set::general(permission_set_mut(store, agent));
+        
+        while(!vector::is_empty(general)) {
+            vector::pop_back(general)
+        }
     }
 
-    public fun remove_permission_for_type_from_agent<ObjectType, Permission>() {
+    public fun remove_permission_for_type_from_agent<ObjectType, Permission>(
+        store: &mut DelegationStore,
+        agent: address,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let types_map = permission_set::types(permission_set_mut(store, agent));
 
+        let type_key = struct_tag::get<ObjectType>();
+        let permissions_maybe = vec_map2::get_maybe(types_map, &type_key);
+
+        if(option::is_some(&permissions_maybe)) {
+            let permissions = option::destroy_some(permissions_maybe);
+            vector2::remove_maybe(permissions, permission::new<Permission>());
+        }
     }
 
-    public fun remove_permission_for_types_from_agent<Permission>(types: vector<StructTag>) {
+    public fun remove_permission_for_types_from_agent<Permission>(
+        store: &mut DelegationStore,
+        agent: address,
+        types: vector<StructTag>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let types_map = permission_set::types(permission_set_mut(store, agent));
 
+        while(vector::is_empty(&types)) {
+            let type_key = vector::pop_back(&mut types);
+            let permissions_maybe = vec_map2::get_maybe(types_map, &type_key);
+
+            if(option::is_some(&permissions_maybe)) {
+                let permissions = option::destroy_some(permissions_maybe);
+                vector2::remove_maybe(permissions, permission::new<Permission>());
+            }
+        }
     }
 
-    public fun remove_type_from_agent<ObjectType>() {
+    public fun remove_type_from_agent<ObjectType>(
+        store: &mut DelegationStore,
+        agent: address,
+        auth: &TxAuthority
+    ) {
+       assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let types_map = permission_set::types(permission_set_mut(store, agent));
+        let type_key = struct_tag::get<ObjectType>();
 
+        vec_map2::remove_maybe(types_map, &type_key);
     }
 
-    public fun remove_types_from_agent(types: vector<StructTag>) {
+    public fun remove_types_from_agent(
+        store: &mut DelegationStore,
+        agent: address,
+        types: vector<StructTag>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let types_map = permission_set::types(permission_set_mut(store, agent));
 
+        while(vector::is_empty(&types)) {
+            let type_key = vector::pop_back(&mut types);
+            vec_map2::remove_maybe(types_map, &type_key)
+        }
     }
 
-    public fun remove_permission_for_objects_from_agent<Permission>(objects: vector<ID>) {
+    public fun remove_permission_for_objects_from_agent<Permission>(
+        store: &mut DelegationStore,
+        agent: address,
+        objects: vector<ID>,
+        auth: &TxAuthority,
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let objects_map = permission_set::objects(permission_set_mut(store, agent));
 
+        while(vector::is_empty(&objects)) {
+            let object_key = vector::pop_back(&mut objects);
+            let permissions_maybe = vec_map2::get_maybe(objects_map, &object_key);
+
+            if(option::is_some(&permissions_maybe)) {
+                let permissions = option::destroy_some(permissions_maybe);
+                vector2::remove_maybe(permissions, permission::new<Permission>());
+            }
+        }
     }
 
-    public fun remove_objects_from_agent(objects: vector<ID>) {
+    public fun remove_objects_from_agent(
+        store: &mut DelegationStore,
+        agent: address,
+        objects: vector<ID>,
+        auth: &TxAuthority,
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        let objects_map = permission_set::objects(permission_set_mut(store, agent));
 
+        while(vector::is_empty(&objects)) {
+            let object_key = vector::pop_back(&mut objects);
+            vec_map2::remove_maybe(objects_map, &object_key)
+        }
     }
 
-    public fun remove_agent() {
-
+    public fun remove_agent(
+        store: &mut DelegationStore,
+        agent: address,
+        auth: &TxAuthority,
+    ) {
+        assert!(tx_authority::has_permission<ADMIN>(store.principal, auth), ENO_ADMIN_AUTHORITY);
+        dynamic_field2::drop_(&mut store.id, agent);
     }
 
     // ======= For Agents =======
