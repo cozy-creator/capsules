@@ -90,7 +90,7 @@ module ownership::organization {
     // Permission types
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
-    struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
+    // struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
 
     // Authority object
     struct Witness has drop {}
@@ -306,28 +306,30 @@ module ownership::organization {
     // (1) have (organization, Permission); the agent already has this permission (or higher), and
     // (2) have (organization, SINGLE_USE); the agent was granted the authority to issue single-use permissions 
     // (or is an admin; the manager role is not sufficient)
-    public fun create_single_use_permission<Permission>(
-        auth: &TxAuthority,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
+    // public fun create_single_use_permission<Permission>(
+    //     auth: &TxAuthority,
+    //     ctx: &mut TxContext
+    // ): SingleUsePermission {
+    //     let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
 
-        assert!(tx_authority::has_org_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
-        assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
+    //     assert!(
+    //         tx_authority::has_package_permission_excluding_manager<Permission, SINGLE_USE>(auth),
+    //         ENO_OWNER_AUTHORITY);
+    //     assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
 
-        permissions::create_single_use<Permission>(principal, ctx)
-    }
+    //     permissions::create_single_use<Permission>(principal, ctx)
+    // }
 
     // This is a module-witness pattern; this is equivalent to a storable Witness
-    public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
-        _witness: Witness,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
-        assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
+    // public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
+    //     _witness: Witness,
+    //     ctx: &mut TxContext
+    // ): SingleUsePermission {
+    //     // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
+    //     assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
 
-        permissions::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
-    }
+    //     permissions::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
+    // }
 
     // ======== Getter Functions ========
 

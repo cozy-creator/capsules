@@ -33,11 +33,11 @@ module ownership::permissions {
         inner: String
     }
 
-    struct SingleUsePermission has key, store {
-        id: UID,
-        principal: address,
-        permission: Permission
-    }
+    // struct SingleUsePermission has key, store {
+    //     id: UID,
+    //     principal: address,
+    //     permission: Permission
+    // }
 
     public(friend) fun admin(): Permission {
         Permission { inner: encode::type_name<ADMIN>() }
@@ -113,7 +113,11 @@ module ownership::permissions {
         // }
     }
 
-    public fun is_admin_permission(permission: &Permission): bool {
+    public fun is_admin_permission<Permission>(): bool {
+        encode::type_name<Permission>() == encode::type_name<ADMIN>()
+    }
+
+    public fun is_admin_permission_(permission: &Permission): bool {
         permission.inner == encode::type_name<ADMIN>()
     }
 
@@ -127,7 +131,11 @@ module ownership::permissions {
         };
     }
 
-    public fun is_manager_permission(permission: &Permission): bool {
+    public fun is_manager_permission<Permission>(): bool {
+        encode::type_name<Permission>() == encode::type_name<MANAGER>()
+    }
+
+    public fun is_manager_permission_(permission: &Permission): bool {
         permission.inner == encode::type_name<MANAGER>()
     }
 
@@ -157,27 +165,27 @@ module ownership::permissions {
     // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
     // half of the transaction into a single-use permission, and then have the second party complete it
 
-    public(friend) fun create_single_use<P>(
-        principal: address,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        SingleUsePermission {
-            id: object::new(ctx),
-            principal,
-            permission: new<P>()
-        }
-    }
+    // public(friend) fun create_single_use<P>(
+    //     principal: address,
+    //     ctx: &mut TxContext
+    // ): SingleUsePermission {
+    //     SingleUsePermission {
+    //         id: object::new(ctx),
+    //         principal,
+    //         permission: new<P>()
+    //     }
+    // }
 
-    public(friend) fun consume_single_use(permission: SingleUsePermission): (address, Permission) {
-        let SingleUsePermission { id, principal, permission } = permission;
-        object::delete(id);
-        (principal, permission)
-    }
+    // public(friend) fun consume_single_use(permission: SingleUsePermission): (address, Permission) {
+    //     let SingleUsePermission { id, principal, permission } = permission;
+    //     object::delete(id);
+    //     (principal, permission)
+    // }
 
-    public fun destroy_single_use(permission: SingleUsePermission) {
-        let SingleUsePermission { id, principal: _, permission: _ } = permission;
-        object::delete(id);
-    }
+    // public fun destroy_single_use(permission: SingleUsePermission) {
+    //     let SingleUsePermission { id, principal: _, permission: _ } = permission;
+    //     object::delete(id);
+    // }
 }
 
     // Can be stored, but not copied. Used as a template to produce Permission structs

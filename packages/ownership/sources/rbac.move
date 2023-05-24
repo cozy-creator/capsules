@@ -95,7 +95,7 @@ module ownership::rbac {
 
     public(friend) fun grant_permission_to_role<Permission>(rbac: &mut RBAC, role: String) {
         let permission = permissions::new<Permission>();
-        if (permissions::is_admin_permission(&permission) || permissions::is_manager_permission(&permission)) {
+        if (permissions::is_admin_permission_(&permission) || permissions::is_manager_permission_(&permission)) {
             // Admin and Manager permissions overwrite all other existing permissions
             vec_map2::set(&mut rbac.role_permissions, role, vector[permission]);
         } else {

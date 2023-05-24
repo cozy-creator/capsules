@@ -107,9 +107,22 @@ module sui_utils::vec_map2 {
         };
     }
 
+    public fun merge<K: copy + drop, V: copy + drop>(
+        self: &mut VecMap<K, vector<V>>,
+        other: &VecMap<K, vector<V>>
+    ) {
+        let i = 0;
+        while (i < vec_map::size(other)) {
+            let (key, value) = vec_map::get_entry_by_idx(other, i);
+            let vec = borrow_mut_fill(self, key, vector[]);
+            vector2::merge(vec, value);
+            i = i + 1;
+        };
+    }
+
     // This only works if the values are vectors; the new value is merged into this vector (duplicates
     // are not added).
-    public fun merge<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, vector<V>>, key: K, value: V) {
+    public fun merge_value<K: copy + drop, V: copy + drop>(self: &mut VecMap<K, vector<V>>, key: K, value: V) {
         let vec = borrow_mut_fill(self, key, vector[]);
         vector2::merge(vec, vector[value]);
     }
