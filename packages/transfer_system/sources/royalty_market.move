@@ -10,11 +10,13 @@ module transfer_system::royalty_market {
     use capsule::capsule::Capsule;
 
     use ownership::ownership;
-    use ownership::tx_authority;
+    use ownership::tx_authority::{Self, TxAuthority};
     use ownership::publish_receipt::{Self, PublishReceipt};
 
     use sui_utils::encode;
     use sui_utils::struct_tag;
+
+    use transfer_system::transfer_freezer;
 
     struct Witness has drop {}
 
@@ -155,6 +157,48 @@ module transfer_system::royalty_market {
             creator: royalty.creator,
             item: object::uid_to_inner(item)
         }
+    }
+
+    // Convenience function
+    public fun freeze_with_signer(
+        uid: &mut UID,
+        ctx: &mut TxContext,
+        auth: &TxAuthority
+    ) {
+        let freezer = tx_context::sender(ctx);
+        freeze_transfer(uid, freezer, auth)
+    }
+
+    // Convenience function
+    public fun freeze_with_type<T>(
+        _: &T,
+        uid: &mut UID,
+        auth: &TxAuthority
+    ) {
+        let freezer = encode::type_into_address<T>();
+        freeze_transfer(uid, freezer, auth)
+    }
+
+    // Convenience function
+    public fun freeze_with_package_witness<T: drop>(
+        _: T,
+        uid: &mut UID,
+        auth: &TxAuthority
+    ) {
+        let freezer = object::id_to_address(&encode::package_id<T>());
+        freeze_transfer(uid, freezer, auth)
+    }
+
+    public fun freeze_transfer(
+        uid: &mut UID,
+        freezer: address,
+        auth: &TxAuthority
+    ) {
+        transfer_freezer::freeze_transfer(uid, freezer, auth)
+    }
+
+    public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+        transfer_freezer::unfreeze_transfer(uid, auth)
     }
 
     public fun return_and_share(royalty: Royalty) {
