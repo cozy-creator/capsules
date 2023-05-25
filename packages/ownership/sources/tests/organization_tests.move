@@ -11,6 +11,8 @@ module ownership::organizationn_tests {
     use ownership::organization::{Self, Organization};
     use ownership::publish_receipt::{Self, PublishReceipt};
 
+    use sui_utils::encode;
+
     struct Witness has drop {}
 
     struct EDITOR {}
@@ -21,7 +23,7 @@ module ownership::organizationn_tests {
 
     public fun create_organization(scenario: &mut Scenario, receipt: &mut PublishReceipt) {
         let ctx = test_scenario::ctx(scenario);
-        organization::create_from_receipt_(receipt, ctx)
+        organization::create_from_package(receipt, ctx)
     }
 
     #[test]
@@ -35,7 +37,10 @@ module ownership::organizationn_tests {
 
         {
             let organization = test_scenario::take_shared<Organization>(&scenario);
+
+            assert!(organization::principal(&organization) == object::id_to_address(&package_id), 0);
             assert!(organization::packages(&organization) == vector::singleton(package_id), 0);
+
             organization::return_and_share(organization);
         };
 
@@ -51,7 +56,7 @@ module ownership::organizationn_tests {
 
         {
             let ctx = test_scenario::ctx(&mut scenario);
-            let organization = organization::create_from_receipt(&mut receipt, SENDER, ctx);
+            let organization = organization::create_from_package_(&mut receipt, SENDER, ctx);
 
             organization::remove_package_(&mut organization, package_id, SENDER, ctx);
             organization::destroy(organization, &tx_authority::begin(ctx));
@@ -75,7 +80,7 @@ module ownership::organizationn_tests {
             let ctx = test_scenario::ctx(&mut scenario);
             let auth = tx_authority::begin(ctx);
 
-            let stored_package = organization::remove_package(&mut organization, package_id, &auth);
+            let stored_package = organization::remove_package(&mut organization, package_id, &auth, ctx);
             organization::add_package_from_stored(&mut organization, stored_package, &auth);
 
             assert!(organization::packages(&organization) == vector::singleton(package_id), 0);
@@ -99,7 +104,7 @@ module ownership::organizationn_tests {
             let ctx = test_scenario::ctx(&mut scenario);
             let role = string::utf8(b"Editor");
 
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
 
             organization::return_and_share(organization);
         };
@@ -122,7 +127,7 @@ module ownership::organizationn_tests {
             let auth = tx_authority::begin(ctx);
             // let role = string::utf8(b"Editor");
 
-            // organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            // organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
             organization::delete_agent(&mut organization, AGENT, &auth);
             organization::return_and_share(organization);
         };
@@ -218,7 +223,7 @@ module ownership::organizationn_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -249,7 +254,7 @@ module ownership::organizationn_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -281,7 +286,7 @@ module ownership::organizationn_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -312,7 +317,7 @@ module ownership::organizationn_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -347,8 +352,8 @@ module ownership::organizationn_tests {
     //         organization::grant_permission_to_role<EDITOR>(&mut organization, role_1, &auth);
     //         organization::grant_permission_to_role<SINGLE_USE>(&mut organization, role_2, &auth);
 
-    //         organization::set_role_for_agent_(&mut organization, AGENT, role_1, ctx);
-    //         organization::set_role_for_agent_(&mut organization, AGENT, role_2, ctx);
+    //         organization::set_role_for_agent(&mut organization, AGENT, role_1, ctx);
+    //         organization::set_role_for_agent(&mut organization, AGENT, role_2, ctx);
     //     };
 
     //     test_scenario::next_tx(&mut scenario, AGENT);
@@ -405,6 +410,38 @@ module ownership::organizationn_tests {
     }
 
     #[test]
+    fun test_create_single_use_permission_from_witness() {
+        let scenario = test_scenario::begin(SENDER);
+        let receipt = publish_receipt_tests::create_receipt(&mut scenario);
+
+        create_organization(&mut scenario, &mut receipt);
+        test_scenario::next_tx(&mut scenario, SENDER);
+
+        let organization = test_scenario::take_shared<Organization>(&scenario);
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let auth = tx_authority::begin(ctx);
+            let role = string::utf8(b"Editor");
+
+            organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
+        };
+
+        {
+            let ctx = test_scenario::ctx(&mut scenario);
+            let type_address = encode::type_into_address<Witness>();
+            let single_use = organization::create_single_use_permission_from_witness<Witness, EDITOR>(Witness { }, ctx);
+            let auth = tx_authority::begin_with_single_use(single_use);
+
+            assert!(tx_authority::has_permission<EDITOR>(type_address, &auth), 0);
+        };
+
+        organization::return_and_share(organization);
+        publish_receipt_tests::destroy_receipt(receipt);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
     #[expected_failure(abort_code=ownership::organization::ENO_OWNER_AUTHORITY)]
     fun create_organization_from_package_and_destroy_invalid_owner() {
         let scenario = test_scenario::begin(SENDER);
@@ -412,7 +449,7 @@ module ownership::organizationn_tests {
         let package_id = publish_receipt::into_package_id(&receipt);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        let organization = organization::create_from_receipt(&mut receipt, SENDER, ctx);
+        let organization = organization::create_from_package_(&mut receipt, SENDER, ctx);
         organization::remove_package_(&mut organization, package_id, SENDER, ctx);
         test_scenario::next_tx(&mut scenario, AGENT);
 
@@ -433,7 +470,7 @@ module ownership::organizationn_tests {
 
         {
             let ctx = test_scenario::ctx(&mut scenario);
-            let organization = organization::create_from_receipt(&mut receipt, SENDER, ctx);
+            let organization = organization::create_from_package_(&mut receipt, SENDER, ctx);
 
             organization::destroy(organization, &tx_authority::begin(ctx));
         };
@@ -450,7 +487,7 @@ module ownership::organizationn_tests {
         let package_id = publish_receipt::into_package_id(&receipt);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        let organization = organization::create_from_receipt(&mut receipt, SENDER, ctx);
+        let organization = organization::create_from_package_(&mut receipt, SENDER, ctx);
 
         test_scenario::next_tx(&mut scenario, AGENT);
         {
@@ -477,7 +514,7 @@ module ownership::organizationn_tests {
             let ctx = test_scenario::ctx(&mut scenario);
             let auth = tx_authority::begin(ctx);
 
-            organization::add_package(&mut receipt, &mut organization, &auth, ctx);
+            organization::add_package(&mut receipt, &mut organization, &auth);
             organization::return_and_share(organization);
         };
 
@@ -499,7 +536,7 @@ module ownership::organizationn_tests {
             let ctx = test_scenario::ctx(&mut scenario);
             let auth = tx_authority::begin(ctx);
 
-            organization::add_package(&mut receipt, &mut organization, &auth, ctx);
+            organization::add_package(&mut receipt, &mut organization, &auth);
             organization::return_and_share(organization);
         };
 
@@ -523,7 +560,7 @@ module ownership::organizationn_tests {
         {
             let ctx = test_scenario::ctx(&mut scenario);
             let auth = tx_authority::begin(ctx);
-            stored_package = organization::remove_package(&mut organization, package_id, &auth);
+            stored_package = organization::remove_package(&mut organization, package_id, &auth, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);
@@ -552,7 +589,7 @@ module ownership::organizationn_tests {
             let ctx = test_scenario::ctx(&mut scenario);
             let role = string::utf8(b"Editor");
 
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
 
             organization::return_and_share(organization);
         };
@@ -669,7 +706,7 @@ module ownership::organizationn_tests {
             let role = string::utf8(b"Editor");
 
             organization::grant_permission_to_role<EDITOR>(&mut organization, role, &auth);
-            organization::set_role_for_agent_(&mut organization, AGENT, role, ctx);
+            organization::set_role_for_agent(&mut organization, AGENT, role, ctx);
         };
 
         test_scenario::next_tx(&mut scenario, AGENT);

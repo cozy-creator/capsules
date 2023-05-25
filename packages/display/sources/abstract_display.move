@@ -157,7 +157,7 @@ module display::abstract_display {
         while (i < len) {
             vec_map2::set(
                 &mut self.resolvers,
-                vector::borrow(&keys, i),
+                *vector::borrow(&keys, i),
                 *vector::borrow(&resolver_strings, i)
             );
             i = i + 1;

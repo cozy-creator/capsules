@@ -307,10 +307,3 @@ $300 for a 10k collection
 
 - Clutchy Keepsake minting: 26.8 milliSUI
 - Owned object, 'Origin Byte Kiosk'
-
-- Clutchy Keepsake Cosmocadia minting: 28.6 milliSUI
-- Listing an item for sale on Clutchy: 16.3 milliSUI
-- Listing an item for sale on Clutchy: 12.5 milliSUI
-
-- Admin creating pre-made NFTs (50): 474.7 milliSUI
-- Admin creating pre-made NFTs (60): 769.6 milliSUI

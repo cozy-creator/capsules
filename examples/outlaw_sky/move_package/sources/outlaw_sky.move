@@ -101,7 +101,7 @@ module outlaw_sky::outlaw_sky {
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
 
-        vec_map2::set(attributes, &key, value);
+        vec_map2::set(attributes, key, value);
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
@@ -110,7 +110,7 @@ module outlaw_sky::outlaw_sky {
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
             
-        vec_map2::remove_maybe(attributes, &key);
+        vec_map2::remove_maybe(attributes, key);
     }
 
     public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {

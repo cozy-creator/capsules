@@ -63,12 +63,6 @@ module sui_utils::vector2 {
         vector::borrow_mut(vec, (index as u64))
     }
 
-    public fun push_back_unique<T: drop>(self: &mut vector<T>, item: T) {
-        if (!vector::contains(self, &item)) {
-            vector::push_back(self, item);
-        };
-    }
-
     // Merges the source-vector into the destination-vector without duplicating values
     public fun merge<T: drop>(destination: &mut vector<T>, source: vector<T>) {
         while (vector::length(&source) > 0) {
@@ -77,20 +71,6 @@ module sui_utils::vector2 {
                 vector::push_back(destination, item);
             };
         };
-    }
-
-    public fun merge_<T: copy>(destination: &vector<T>, source: &vector<T>): vector<T> {
-        let i = 0;
-        let response = *destination;
-        while (i < vector::length(source)) {
-            let item = vector::borrow(source, i);
-            if (!vector::contains(destination, item)) {
-                vector::push_back(&mut response, *item);
-            };
-            i = i + 1;
-        };
-
-        response
     }
 
     public fun remove_maybe<T>(vec: &mut vector<T>, item: &T): Option<T> {
