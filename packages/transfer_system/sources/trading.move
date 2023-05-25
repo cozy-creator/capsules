@@ -220,5 +220,4 @@ module transfer_system::trading {
             item_id
         });
     }
-
 }
