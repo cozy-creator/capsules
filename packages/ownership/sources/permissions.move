@@ -4,24 +4,19 @@
 // to store, as vectors do not support heterogenous types. sui::Bag / sui::Table would work,
 // but they're not droppable, so they'd have to explicitly be destroyed at the end of every tx.
 
-module ownership::permission {
-    use std::option;
+module ownership::permissions {
     use std::string::String;
     use std::vector;
 
-    // use sui::object::{Self, UID};
-    // use sui::tx_context::TxContext;
-    use sui::vec_map::{Self, VecMap};
+    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
 
     use sui_utils::encode;
     use sui_utils::vector2;
-    use sui_utils::vec_map2;
 
-    friend ownership::delegation;
-    friend ownership::organization;
-    friend ownership::permission_set;
     friend ownership::rbac;
     friend ownership::tx_authority;
+    friend ownership::organization;
 
     // These are special system-level permissions.
     // If the principal gives an agent the MANAGER role, then they can act as
@@ -38,11 +33,11 @@ module ownership::permission {
         inner: String
     }
 
-    // struct SingleUsePermission has key, store {
-    //     id: UID,
-    //     principal: address,
-    //     permission: Permission
-    // }
+    struct SingleUsePermission has key, store {
+        id: UID,
+        principal: address,
+        permission: Permission
+    }
 
     public(friend) fun admin(): Permission {
         Permission { inner: encode::type_name<ADMIN>() }
@@ -79,33 +74,6 @@ module ownership::permission {
         vector2::intersection(permissions, filter)
     }
 
-    public(friend) fun vec_map_intersection<T: copy + drop>(
-        self: &VecMap<T, vector<Permission>>, 
-        general_filter: &vector<Permission>,
-        specific_filter: &VecMap<T, vector<Permission>>
-    ): VecMap<T, vector<Permission>> {
-        let i = 0;
-        let filtered = vec_map::empty<T, vector<Permission>>();
-        while (i < vec_map::size(self)) {
-            let (key, value) = vec_map::get_entry_by_idx(self, i);
-
-            let specific_filter_maybe = vec_map::try_get(specific_filter, key);
-            let filtered_value = if (option::is_some(&specific_filter_maybe)) {
-                let this_specific_filter = option::destroy_some(specific_filter_maybe);
-                let this_filter = add_(general_filter, this_specific_filter);
-                intersection(value, &this_filter)
-            } else {
-                intersection(value, general_filter)
-            };
-
-            vec_map::insert(&mut filtered, *key, filtered_value);
-
-            i = i + 1;
-        };
-
-        filtered
-    }
-
     public(friend) fun add(existing: &mut vector<Permission>, new: vector<Permission>) {
         let (admin, manager) = (admin(), manager());
 
@@ -125,56 +93,31 @@ module ownership::permission {
         vector2::merge(existing, new);
     }
 
-    // Doesn't modify the existing vectors
-    public(friend) fun add_(existing: &vector<Permission>, new: vector<Permission>): vector<Permission> {
-        let (admin, manager) = (admin(), manager());
-
-        // This prevents accidental permission downgrades
-        if (has_admin_permission(existing)) { return *existing };
-
-        // These superseed and replace all existing permissions
-        if (vector::contains(&new, &admin)) {
-            return vector[admin]
-        };
-        if (vector::contains(&new, &manager)) { 
-            return vector[manager]
-        };
-
-        vector2::merge_(existing, &new)
-    }
-
-    public(friend) fun vec_map_add<K: copy + drop>(
-        existing: &mut VecMap<K, vector<Permission>>,
-        new: VecMap<K, vector<Permission>>
-    ) {
-        while (vec_map::size(&new) > 0) {
-            let (key, value) = vec_map::pop(&mut new);
-            let self = vec_map2::borrow_mut_fill(existing, &key, vector[]);
-            add(self, value);
-       };
-    }
-
+    // This works because ADMIN replaces all other permissions in this array
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
-        vector::contains(permissions, &admin())
+        if (vector::length(permissions) > 0) {
+            let permission = vector::borrow(permissions, 0);
+            is_admin_permission(permission)
+        } else {
+            false
+        }
     }
 
-    public fun is_admin_permission<Permission>(): bool {
-        encode::type_name<Permission>() == encode::type_name<ADMIN>()
-    }
-
-    public fun is_admin_permission_(permission: &Permission): bool {
+    public fun is_admin_permission(permission: &Permission): bool {
         permission.inner == encode::type_name<ADMIN>()
     }
 
+    // This works because MANAGER replaces all other permissions in this array
     public fun has_manager_permission(permissions: &vector<Permission>): bool {
-        vector::contains(permissions, &manager())
+        if (vector::length(permissions) > 0) {
+            let permission = vector::borrow(permissions, 0);
+            is_manager_permission(permission)
+        } else {
+            false
+        }
     }
 
-    public fun is_manager_permission<Permission>(): bool {
-        encode::type_name<Permission>() == encode::type_name<MANAGER>()
-    }
-
-    public fun is_manager_permission_(permission: &Permission): bool {
+    public fun is_manager_permission(permission: &Permission): bool {
         permission.inner == encode::type_name<MANAGER>()
     }
 
@@ -204,27 +147,27 @@ module ownership::permission {
     // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
     // half of the transaction into a single-use permission, and then have the second party complete it
 
-    // public(friend) fun create_single_use<P>(
-    //     principal: address,
-    //     ctx: &mut TxContext
-    // ): SingleUsePermission {
-    //     SingleUsePermission {
-    //         id: object::new(ctx),
-    //         principal,
-    //         permission: new<P>()
-    //     }
-    // }
+    public(friend) fun create_single_use<P>(
+        principal: address,
+        ctx: &mut TxContext
+    ): SingleUsePermission {
+        SingleUsePermission {
+            id: object::new(ctx),
+            principal,
+            permission: new<P>()
+        }
+    }
 
-    // public(friend) fun consume_single_use(permission: SingleUsePermission): (address, Permission) {
-    //     let SingleUsePermission { id, principal, permission } = permission;
-    //     object::delete(id);
-    //     (principal, permission)
-    // }
+    public(friend) fun consume_single_use(permission: SingleUsePermission): (address, Permission) {
+        let SingleUsePermission { id, principal, permission } = permission;
+        object::delete(id);
+        (principal, permission)
+    }
 
-    // public fun destroy_single_use(permission: SingleUsePermission) {
-    //     let SingleUsePermission { id, principal: _, permission: _ } = permission;
-    //     object::delete(id);
-    // }
+    public fun destroy_single_use(permission: SingleUsePermission) {
+        let SingleUsePermission { id, principal: _, permission: _ } = permission;
+        object::delete(id);
+    }
 }
 
     // Can be stored, but not copied. Used as a template to produce Permission structs

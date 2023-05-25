@@ -10,6 +10,7 @@
 
 module ownership::ownership {
     use std::option::{Self, Option};
+    use std::vector;
 
     use sui::object::{Self, UID, ID};
     use sui::dynamic_field;
@@ -19,7 +20,7 @@ module ownership::ownership {
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::permission::MANAGER;
+    use ownership::permissions::MANAGER;
 
     // error enums
     const ENO_MODULE_AUTHORITY: u64 = 0;
@@ -37,7 +38,7 @@ module ownership::ownership {
     // see if it's possible.
     struct Ownership has store, copy, drop {
         owner: Option<address>,
-        transfer_auth: Option<address>,
+        transfer_auth: vector<address>,
         type: StructTag
     }
 
@@ -64,7 +65,7 @@ module ownership::ownership {
 
         let ownership = Ownership {
             owner: option::none(),
-            transfer_auth: option::none(),
+            transfer_auth: vector::empty(),
             type: struct_tag::get<T>()
         };
 
@@ -79,21 +80,21 @@ module ownership::ownership {
         auth: &TxAuthority
     ) {
         let transfer = encode::type_into_address<Transfer>();
-        as_shared_object_(uid, typed_id, owner, transfer, auth);
+        as_shared_object_(uid, typed_id, owner, vector[transfer], auth);
     }
 
     public fun as_shared_object_<T: key>(
         uid: &mut UID,
         typed_id: TypedID<T>,
         owner: address,
-        transfer_auth: address,
+        transfer_auth: vector<address>,
         auth: &TxAuthority
     ) {
         assert_valid_initialization(uid, typed_id, auth);
 
         let ownership = Ownership {
             owner: option::some(owner),
-            transfer_auth: option::some(transfer_auth),
+            transfer_auth,
             type: struct_tag::get<T>()
         };
 
@@ -116,25 +117,22 @@ module ownership::ownership {
     public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (option::is_none(&ownership.owner)) true
+            let owner = get_owner(uid);
+            if (option::is_none(&owner)) true
             else {
-                let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_object_permission<Permission>(
-                    owner, &ownership.type, object::uid_as_inner(uid), auth)
+                let owner = option::destroy_some(owner);
+                tx_authority::has_permission<Permission>(owner, auth)
             }
         }
     }
 
-    // If this is initialized, package authority always exists and is always the native module (the module
-    // declaring the object's type). I.e., the package-id corresponding to `0x599::my_module::Witness`.
+    // If this is initialized, module authority exists and is always the native module (the module
+    // declaring the object's type). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
     public fun has_package_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            let package_id = struct_tag::package_id(&ownership.type);
-            tx_authority::has_object_package_permission_<Permission>(
-                package_id, &ownership.type, object::uid_as_inner(uid), auth)
+            let package_id = option::destroy_some(get_package_authority(uid));
+            tx_authority::has_package_permission_<Permission>(package_id, auth)
         }
     }
 
@@ -142,12 +140,10 @@ module ownership::ownership {
     public fun has_transfer_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
-            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
-            if (option::is_none(&ownership.transfer_auth)) false
+            let transfer = get_transfer_authority(uid);
+            if (vector::is_empty(&transfer)) false
             else {
-                let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::has_object_permission<Permission>(
-                    transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
+                tx_authority::has_k_or_more_agents_with_permission<Permission>(transfer, 1, auth)
             }
         }
     }
@@ -184,8 +180,8 @@ module ownership::ownership {
     //     option::some(addr)
     // }
 
-    public fun get_transfer_authority(uid: &UID): Option<address> {
-        if (!is_initialized(uid)) { return option::none() };
+    public fun get_transfer_authority(uid: &UID): vector<address> {
+        if (!is_initialized(uid)) { return vector::empty() };
 
         let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
         ownership.transfer_auth
@@ -216,18 +212,18 @@ module ownership::ownership {
     // This is a difficult operation to do!
     // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
     // allow for unilateral changes by the module-authority.
-    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auth: Option<address>, auth: &TxAuthority) {
+    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auths: vector<address>, auth: &TxAuthority) {
         assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_TRANSFER_AUTHORITY);
         assert!(has_package_permission<MIGRATE>(uid, auth), ENO_MODULE_AUTHORITY);
         assert!(has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.transfer_auth = new_transfer_auth;
+        ownership.transfer_auth = new_transfer_auths;
     }
 
     // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
     // changed again.
     public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
-        migrate_transfer_auth(uid, option::none(), auth);
+        migrate_transfer_auth(uid, vector::empty(), auth);
     }
 }

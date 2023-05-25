@@ -1,239 +1,328 @@
 module transfer_system::royalty_market {
-    use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
+    use std::type_name::{Self, TypeName};
 
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
+    use sui::dynamic_field;
+    use sui::event::emit;
     use sui::transfer;
-
-    use capsule::capsule::Capsule;
+    use sui::pay;
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
+
     use ownership::publish_receipt::{Self, PublishReceipt};
 
     use sui_utils::encode;
     use sui_utils::struct_tag;
 
-    use transfer_system::transfer_freezer;
+    use transfer_system::market_account::{Self, MarketAccount};
+
 
     struct Witness has drop {}
 
-    struct Royalty has key, store {
+    struct Royalty<phantom T> has key, store {
         id: UID,
-        /// The type name of the object associated with the royalty
-        type: TypeName,
-        /// The basis point value for the royalty
-        bps_value: u16,
-        /// The address creator or rights holder associated with the royalty
-        creator: address
+        config: RoyaltyConfig
     }
 
-    /// A struct used to capture and store the specific details of a royalty payment associated with an item
-    struct RoyaltyPayment {
-        /// The type name of the object associated with the royalty
-        type: TypeName,
-        /// ID of the item associated with the royalty payment
-        item: ID,
-        /// The amount of the royalty payment
-        value: u64,
-        /// The address of the creator or rights holder who is receiving the royalty payment
-        creator: address
+    struct RoyaltyConfig has store, copy, drop {
+        royalty_bps: u16,
+        recipient: address,
+        marketplace_fee_bps: u16
     }
+
+    struct Offer<phantom T, phantom C> has store, drop {
+        price: u64,
+        user: address,
+        creator_royalty: u64
+    }
+
+
+    // ========== Dynamic fields key structs ==========
+
+    /// Key used to store a buy or sell offer for an item
+    struct Key has store, copy, drop { type: u8, user: Option<address> }
+
+
+    // ========== Event structs ==========
+
+    struct OfferCreated has copy, drop {
+        price: u64,
+        user: address,
+        item_id: ID,
+        coin_type: TypeName,
+        item_type: TypeName
+    }
+
+    struct OfferCancelled has copy, drop {
+        item_id: ID
+    }
+
 
     // ========== Error constants==========
 
     const ENO_OWNER_AUTHORITY: u64 = 0;
     const EINVALID_PUBLISH_RECEIPT: u64 = 1;
-    const ENO_ITEM_TYPE: u64 = 3;
-    const EITEM_TYPE_MISMATCH: u64 = 4;
-    const EITEM_RECEIPT_MISMATCH: u64 = 5;
-    const EINVALID_ROYALTY_SPLITS_TOTAL: u64 = 6;
-    const EINVALID_ROYALTY_PAYMENT: u64 = 7;
-    const ETRANSFER_FREEZED: u64 = 8;
+    const EOFFER_NOT_AVAILABLE: u64 = 2;
+    const EOFFER_ALREADY_EXIST: u64 = 3;
+    const EINSUFFICIENT_PAYMENT: u64 = 4;
+    const EINSUFFICIENT_BALANCE: u64 = 5;
+    const EOFFER_ITEM_MISMATCH: u64 = 6;
+    const EOFFER_NOT_OPEN: u64 = 7;
+    const ENO_ITEM_TYPE: u64 = 8;
+    const EITEM_TYPE_MISMATCH: u64 = 9;
+    const EOFFER_DOES_NOT_EXIST: u64 = 10;
 
-    const BPS_BASE_VALUE: u16 = 10_000;
+
+    // ========== Other contants ==========
+
+    const BPS_BASE: u16 = 10_000;
+
+    const BUY_OFFER_TYPE: u8 = 0;
+    const SELL_OFFER_TYPE: u8 = 0;
+
 
     // ========== Royalty functions ==========
 
-    /// Create a new royalty object for type `T` and returns it
-    /// Performs checks to ensure that the `PublishReceipt` originates from the same package as the type `T`
-    /// 
-    /// The creator or rights holder associated with the created royalty is set to the transaction sender
     public fun create_royalty<T>(
         receipt: &PublishReceipt,
-        bps_value: u16,
+        recipient: address,
+        royalty_bps: u16,
+        marketplace_fee_bps: u16,
         ctx: &mut TxContext
-    ): Royalty {
-        let creator = tx_context::sender(ctx);
-        create_royalty_<T>(receipt, bps_value, creator, ctx)
-    }
-
-    /// Create a new royalty object for type `T` and returns it
-    /// Performs checks to ensure that the `PublishReceipt` originates from the same package as the type `T`
-    public fun create_royalty_<T>(
-        receipt: &PublishReceipt,
-        bps_value: u16,
-        creator: address,
-        ctx: &mut TxContext
-    ):  Royalty {
-        assert!(publish_receipt::did_publish<T>(receipt), EINVALID_PUBLISH_RECEIPT);
-
-         Royalty {
-            id: object::new(ctx),
-            type: type_name::get<T>(),
-            bps_value,
-            creator
-        }
-    }
-
-    /// Transfer an item of the type `T` to a new owner
-    /// Performs a check to ensure that the item being transferred is really of the type `T`
-    /// Performs a check to ensure that the `RoyaltyPayment` corresponds to the item being transferred
-    /// Performs a check to ensure that the exact royalty amount specified in the given `RoyaltyPayment` is being paid
-    /// 
-    /// A `TxAuthority` struct will be constructed using the witness royalty market
-    /// The contructed auth will later be used to authorize the item transfer
-    public fun transfer<T: key + store, C>(
-        uid: &mut UID,
-        payment: RoyaltyPayment,
-        coin: Coin<C>,
-        new_owner: Option<address>
     ) {
-        assert!(!transfer_freezer::is_transfer_freezed(uid), ETRANSFER_FREEZED);
-        assert!(type_name::get<T>() == payment.type, EITEM_TYPE_MISMATCH);
-        if(!is_capsule<T>(uid)) { assert_valid_item_type<T>(uid) };
-
-        let RoyaltyPayment { item, value, creator, type: _ } = payment;
-        assert!(object::uid_to_inner(uid) == item, EITEM_RECEIPT_MISMATCH);
-        assert!(coin::value(&coin) == value, EINVALID_ROYALTY_PAYMENT);
-        
-        let auth = tx_authority::begin_with_type(&Witness {});
-
-        transfer::public_transfer(coin, creator);
-        ownership::transfer(uid, new_owner, &auth);
-    }
-
-    // Convenience function
-    public fun transfer_to_object<T: key + store, C, O: key>(
-        uid: &mut UID,
-        payment: RoyaltyPayment,
-        coin: Coin<C>, 
-        object: &O
-    ) {
-        let addr = object::id_address(object);
-        transfer<T, C>(uid, payment, coin, option::some(addr));
-    }
-
-    // Convenience function
-    public fun transfer_to_type<T: key + store, C, W>(
-        uid: &mut UID,
-        payment: RoyaltyPayment,
-        coin: Coin<C>
-    ) {
-        let addr = encode::type_into_address<W>();
-        transfer<T, C>(uid, payment, coin, option::some(addr));
-    }
-
-    /// Calculate the royalty value or amount based on the given value and Royalty.
-    public fun calculate_royalty(royalty: &Royalty, value: u64): u64 {
-        let bps_value = bps_value(royalty);
-        let multiple = (bps_value as u64) * value;
-
-        multiple / (BPS_BASE_VALUE as u64)
-    }
-
-    /// Create a `RoyaltyPayment` for an item of type `T`
-    /// Performs a check to ensure that the item is of the type `T`
-    /// 
-    /// This function calculates the royalty value or amount based on the given Royalty and item price. 
-    /// The result is placed in the constructed `RoyaltyPayment`
-    public fun create_payment<T>(item: &UID, royalty: &Royalty, price: u64): RoyaltyPayment {
-        assert_valid_item_type<T>(item);
-        let value = calculate_royalty(royalty, price);
-        
-        RoyaltyPayment {
-            value,
-            type: royalty.type,
-            creator: royalty.creator,
-            item: object::uid_to_inner(item)
-        }
-    }
-
-    // Convenience function
-    public fun freeze_with_signer(
-        uid: &mut UID,
-        ctx: &mut TxContext,
-        auth: &TxAuthority
-    ) {
-        let freezer = tx_context::sender(ctx);
-        freeze_transfer(uid, freezer, auth)
-    }
-
-    // Convenience function
-    public fun freeze_with_type<T>(
-        _: &T,
-        uid: &mut UID,
-        auth: &TxAuthority
-    ) {
-        let freezer = encode::type_into_address<T>();
-        freeze_transfer(uid, freezer, auth)
-    }
-
-    // Convenience function
-    public fun freeze_with_package_witness<T: drop>(
-        _: T,
-        uid: &mut UID,
-        auth: &TxAuthority
-    ) {
-        let freezer = object::id_to_address(&encode::package_id<T>());
-        freeze_transfer(uid, freezer, auth)
-    }
-
-    public fun freeze_transfer(
-        uid: &mut UID,
-        freezer: address,
-        auth: &TxAuthority
-    ) {
-        transfer_freezer::freeze_transfer(uid, freezer, auth)
-    }
-
-    public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
-        transfer_freezer::unfreeze_transfer(uid, auth)
-    }
-
-    public fun return_and_share(royalty: Royalty) {
+        let royalty = create_royalty_<T>(receipt, recipient, royalty_bps, marketplace_fee_bps, ctx);
         transfer::share_object(royalty)
     }
 
-    // ========== Getter functions =========
+    public fun create_royalty_<T>(
+        receipt: &PublishReceipt,
+        recipient: address,
+        royalty_bps: u16,
+        marketplace_fee_bps: u16,
+        ctx: &mut TxContext
+    ):  Royalty<T> {
+        assert!(encode::package_id<T>() == publish_receipt::into_package_id(receipt), EINVALID_PUBLISH_RECEIPT);
 
-    public fun bps_value(royalty: &Royalty): u16 {
-        royalty.bps_value
+         Royalty {
+            id: object::new(ctx),
+            config: RoyaltyConfig {
+                recipient,
+                royalty_bps,
+                marketplace_fee_bps
+            }
+        }
     }
 
-    public fun creator(royalty: &Royalty): address {
-        royalty.creator
+    // ========== Offer functions ==========
+
+    public fun create_sell_offer<T, C>(uid: &mut UID, royalty: &Royalty<T>, seller: address, price: u64, auth: &TxAuthority) {
+        // Ensures that the item being offered for sale belongs to the seller
+        assert!(ownership::is_authorized_by_owner(uid, auth), ENO_OWNER_AUTHORITY);
+        // Ensures the item type is the same as `T`
+        assert_valid_item_type<T>(uid);
+
+        let key = Key { user: option::none(), type: SELL_OFFER_TYPE };
+        assert!(!dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
+
+        let Royalty { id: _, config } = royalty;
+        let creator_royalty = bps_value(price, config.royalty_bps);
+        let offer = create_offer<T, C>(seller, price, creator_royalty);
+
+        emit_offer_created(object::uid_to_inner(uid),  &offer);
+        dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
-    public fun payment_value(payment: &RoyaltyPayment): u64 {
-        payment.value
+    public fun create_buy_offer<T, C>(
+        uid: &mut UID,
+        account: &mut MarketAccount,
+        royalty: &Royalty<T>,
+        buyer: address,
+        price: u64,
+        auth: &TxAuthority
+    ) {        
+        // Ensure that the buyer owns the account
+        market_account::assert_account_ownership(account, auth);
+        // Ensure the item type is valid
+        assert_valid_item_type<T>(uid);
+
+        let key = Key { user: option::some(buyer), type: BUY_OFFER_TYPE };
+        assert!(!dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_ALREADY_EXIST);
+
+        let Royalty { id: _, config } = royalty;
+        let creator_royalty = bps_value(price, config.royalty_bps);
+        assert!(market_account::balance<C>(account) >= price + (creator_royalty / 2), EINSUFFICIENT_BALANCE);
+
+        let offer = create_offer<T, C>(buyer, price, creator_royalty);
+
+        emit_offer_created(object::uid_to_inner(uid),  &offer);
+        dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
-    // ========== Helper functions ==========
+    public fun fill_sell_offer<T, C>(
+        uid: &mut UID,
+        buyer: address,
+        royalty: &Royalty<T>,
+        coin: Coin<C>,
+        marketplace: address,
+        ctx: &mut TxContext
+    ) {
+        let key = Key { user: option::none(), type: SELL_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
-    public fun assert_valid_item_type<T>(uid: &UID) {
+        let offer = dynamic_field::borrow<Key, Offer<T, C>>(uid, key);
+        let Royalty { id: _, config } = royalty;   
+     
+        // ensure that the coin provided is sufficient for the offer price and buyer's royalty payment
+        let total_royalty = bps_value(offer.price, config.royalty_bps);
+        let payment_value =  offer.price + (total_royalty / 2);
+        assert!(coin::value(&coin) >= payment_value, EINSUFFICIENT_PAYMENT);
+
+        let payment = coin::split(&mut coin, payment_value, ctx);
+
+        // keep the extra coin payment or destroy it if empty
+        keep_or_destroy_coin(coin, ctx);
+
+        // take and transfer the royalty value to the beneficiary
+        collect_from_coin(royalty, offer, &mut payment, ctx);
+
+        // calculate and transfer marketplace fee
+        let marketplace_fee = bps_value(offer.price, config.marketplace_fee_bps);
+        transfer_coin_value(&mut payment, marketplace_fee, marketplace, ctx);
+
+        // transfer the remaining amount to the seller
+        transfer::public_transfer(payment, offer.user);
+
+        // transfer item to the buyer
+        transfer_item(uid, vector[buyer], ctx);
+
+        // remove and drop item offer
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
+
+    public fun fill_buy_offer<T, C>(
+        uid: &mut UID,
+        account: &mut MarketAccount,
+        buyer: address,
+        royalty: &Royalty<T>,
+        marketplace: address,
+        ctx: &mut TxContext
+    ) {
+        // Ensures that only the asset owner can fill the buy offer
+        let auth = tx_authority::begin(ctx);
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
+
+        let key = Key { user: option::some(buyer), type: BUY_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+
+        let Royalty { id: _, config } = royalty;
+        let offer = dynamic_field::borrow<Key, Offer<T, C>>(uid, key);
+        let total_royalty = bps_value(offer.price, config.royalty_bps);
+        let payment_value = offer.price + (total_royalty / 2);
+
+        assert!(market_account::balance<C>(account) >= payment_value, EINSUFFICIENT_BALANCE);
+        let payment = market_account::take<C>(account, payment_value, ctx);
+
+        // take and transfer the royalty value to the beneficiary
+        collect_from_coin(royalty, offer, &mut payment, ctx);
+
+        // calculate and transfer marketplace fee
+        let marketplace_fee = bps_value(offer.price, config.marketplace_fee_bps);
+        transfer_coin_value(&mut payment, marketplace_fee, marketplace, ctx);
+
+        // transfer remaining payment to the seller
+        transfer::public_transfer(payment, tx_context::sender(ctx));
+
+        // transfer item to the buyer
+        transfer_item(uid, vector[offer.user], ctx);
+
+        // remove and drop item offer
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
+    
+    public fun cancel_sell_offer<T, C>(uid: &mut UID, ctx: &TxContext) {
+        let auth = tx_authority::begin(ctx);
+        assert!(ownership::is_authorized_by_owner(uid, &auth), ENO_OWNER_AUTHORITY);
+
+        let user = tx_context::sender(ctx);
+        let key = Key { user: option::some(user), type: SELL_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+
+        emit_offer_cancelled(object::uid_to_inner(uid));
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
+
+    public fun cancel_buy_offer<T, C>(uid: &mut UID, ctx: &TxContext) {
+        let user = tx_context::sender(ctx);
+        let key = Key { user: option::some(user), type: BUY_OFFER_TYPE };
+        assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
+
+        emit_offer_cancelled(object::uid_to_inner(uid));
+        dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+    }
+
+
+    // ==================== Helper functions ====================
+
+    fun create_offer<T, C>(user: address, price: u64, creator_royalty: u64): Offer<T, C> {
+        Offer { 
+            user,
+            price,
+            creator_royalty
+        }
+    }
+
+    fun transfer_item(uid: &mut UID, new_owner: vector<address>, ctx: &mut TxContext) {
+        let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
+        ownership::transfer(uid, new_owner, &auth);
+    }
+
+    fun bps_value(value: u64, bps: u16): u64 {
+        ((bps as u64) * value) / (BPS_BASE as u64)
+    }
+
+    /// Collects royalty value from coin `Coin` of type `C` and transfers it to the royalty recipient
+    fun collect_from_coin<T, C>(royalty: &Royalty<T>, offer: &Offer<T, C>, source: &mut Coin<C>, ctx: &mut TxContext) {
+        let Royalty { id: _, config } = royalty;
+        let royalty_value = bps_value(offer.price, config.royalty_bps);
+
+        transfer_coin_value(source, royalty_value, config.recipient, ctx)
+    }
+
+    fun transfer_coin_value<C>(coin: &mut Coin<C>, value: u64, recipient: address, ctx: &mut TxContext) {
+        transfer::public_transfer(coin::split(coin, value, ctx), recipient)
+    }
+
+    fun keep_or_destroy_coin<C>(coin: Coin<C>, ctx: &TxContext) {
+        if(coin::value(&coin) == 0) {
+            coin::destroy_zero(coin)
+        } else {
+            pay::keep(coin, ctx)
+        };
+    }
+
+    fun assert_valid_item_type<T>(uid: &UID) {
         let type = ownership::get_type(uid);
         assert!(option::is_some(&type), ENO_ITEM_TYPE);
         assert!(option::destroy_some(type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
     }
 
-    public fun assert_royalty_type<T>(royalty: &Royalty) {
-        assert!(type_name::get<T>() == royalty.type, EITEM_TYPE_MISMATCH);
+    // ===== Event helper functions =====
+
+    fun emit_offer_created<T, C>(item_id: ID, offer: &Offer<T, C>) {
+        emit(OfferCreated {
+            item_id,
+            user: offer.user,
+            price: offer.price,
+            coin_type: type_name::get<C>(),
+            item_type: type_name::get<T>(),
+        });
     }
 
-    public fun is_capsule<T: key + store>(uid: &UID): bool {
-        option::destroy_some(ownership::get_type(uid)) == struct_tag::get<Capsule<T>>()
+    fun emit_offer_cancelled(item_id: ID) {
+        emit(OfferCancelled { item_id });
     }
 }
