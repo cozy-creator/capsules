@@ -129,6 +129,7 @@ module transfer_system::trading {
         let royalty_coin = coin::split(&mut sale_coin, royalty_value, ctx);
 
         // transfer item to the buyer
+        transfer_freezer::unfreeze_transfer(uid, &tx_authority::begin_with_type(&Witness {}));
         royalty_market::transfer<T, C>(uid, royalty_payment, royalty_coin, option::some(buyer));
         // transfer the sale amount to the seller
         transfer::public_transfer(sale_coin, offer.user);
