@@ -215,19 +215,23 @@ module transfer_system::royalty_market {
         royalty.creator
     }
 
-    public fun value(payment: &RoyaltyPayment): u64 {
+    public fun payment_value(payment: &RoyaltyPayment): u64 {
         payment.value
     }
 
     // ========== Helper functions ==========
 
-    fun assert_valid_item_type<T>(uid: &UID) {
+    public fun assert_valid_item_type<T>(uid: &UID) {
         let type = ownership::get_type(uid);
         assert!(option::is_some(&type), ENO_ITEM_TYPE);
         assert!(option::destroy_some(type) == struct_tag::get<T>(), EITEM_TYPE_MISMATCH);
     }
 
-    fun is_capsule<T: key + store>(uid: &UID): bool {
+    public fun assert_royalty_type<T>(royalty: &Royalty) {
+        assert!(type_name::get<T>() == royalty.type, EITEM_TYPE_MISMATCH);
+    }
+
+    public fun is_capsule<T: key + store>(uid: &UID): bool {
         option::destroy_some(ownership::get_type(uid)) == struct_tag::get<Capsule<T>>()
     }
 }

@@ -1,4 +1,5 @@
 module transfer_system::market_account {
+    use std::option;
     use std::vector;
     use std::type_name::{Self, TypeName};
 
@@ -15,7 +16,7 @@ module transfer_system::market_account {
 
     use sui_utils::typed_id;
 
-    friend transfer_system::royalty_market;
+    friend transfer_system::item_trading;
 
     struct MarketAccount has key {
         id: UID,
@@ -57,14 +58,14 @@ module transfer_system::market_account {
         }
     }
 
-    public(friend) fun take<C>(self: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
+    public(friend) fun withdraw<C>(self: &mut MarketAccount, amount: u64, ctx: &mut TxContext): Coin<C> {
         let balance_type = type_name::get<C>();
         assert!(bag::contains<TypeName>(&self.balances, balance_type), ENO_COIN_BALANCE);
         
         let balance = bag::borrow_mut<TypeName, Balance<C>>(&mut self.balances, balance_type);
 
-        let take_balance = balance::split(balance, amount);
-        coin::from_balance(take_balance, ctx)
+        let withdrawal = balance::split(balance, amount);
+        coin::from_balance(withdrawal, ctx)
     }
 
     public fun balance<C>(self: &MarketAccount): u64 {
@@ -73,6 +74,10 @@ module transfer_system::market_account {
 
         let balance = bag::borrow<TypeName, Balance<C>>(&self.balances, balance_type);
         balance::value(balance)
+    }
+
+    public fun owner(self: &MarketAccount): address {
+        option::destroy_some(ownership::get_owner(&self.id))
     }
 
     public fun assert_account_ownership(self: &MarketAccount, auth: &TxAuthority) {
