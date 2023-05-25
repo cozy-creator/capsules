@@ -76,9 +76,9 @@ module transfer_system::trading {
         let royalty_id = object::id(royalty);
         let offer = create_offer<T, C>(seller, price, royalty_id);
 
-        emit_offer_created(object::uid_to_inner(uid), SELL_OFFER_TYPE, &offer);
-
         transfer_freezer::freeze_transfer(uid, encode::type_into_address<Witness>(), auth);
+
+        emit_offer_created(object::uid_to_inner(uid), SELL_OFFER_TYPE, &offer);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
