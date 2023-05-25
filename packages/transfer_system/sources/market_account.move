@@ -28,15 +28,20 @@ module transfer_system::market_account {
     const ENO_COIN_BALANCE: u64 = 1;
 
     public fun create(ctx: &mut TxContext) {
+        let owner = tx_context::sender(ctx);
+        create_(owner, ctx)
+    }
+
+    public fun create_(owner: address, ctx: &mut TxContext) {
         let account = MarketAccount {
             id: object::new(ctx),
             balances: bag::new(ctx)
         };
 
-        let typed_id = typed_id::new(&account);
-        let auth = tx_authority::begin_with_type(&Witness {});
+        let tid = typed_id::new(&account);
+        let auth = tx_authority::begin_with_package_witness(Witness {});
 
-        ownership::as_shared_object_<MarketAccount>(&mut account.id, typed_id, tx_context::sender(ctx), vector::empty(), &auth);
+        ownership::as_shared_object_(&mut account.id, tid, owner, vector::empty(), &auth);
         transfer::share_object(account)
     }
 
