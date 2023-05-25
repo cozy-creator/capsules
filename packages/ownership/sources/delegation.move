@@ -202,7 +202,7 @@ module ownership::delegation {
         let types_map = permission_set::types_mut(agent_permissions_mut(store, agent));
         let permission = permission::new<Permission>();
 
-        while (vector::is_empty(&types)) {
+        while (!vector::is_empty(&types)) {
             let type_key = vector::pop_back(&mut types);
             let index_maybe = vec_map::get_idx_opt(types_map, &type_key);
             if (option::is_some(&index_maybe)) {
@@ -235,7 +235,7 @@ module ownership::delegation {
 
         let types_map = permission_set::types_mut(agent_permissions_mut(store, agent));
 
-        while(vector::is_empty(&types)) {
+        while(!vector::is_empty(&types)) {
             let type_key = vector::pop_back(&mut types);
             vec_map2::remove_maybe(types_map, &type_key);
         };
@@ -252,7 +252,7 @@ module ownership::delegation {
         let objects_map = permission_set::objects_mut(agent_permissions_mut(store, agent));
         let permission = permission::new<Permission>();
 
-        while(vector::is_empty(&objects)) {
+        while(!vector::is_empty(&objects)) {
             let object_key = vector::pop_back(&mut objects);
             let index_maybe = vec_map::get_idx_opt(objects_map, &object_key);
             if (option::is_some(&index_maybe)) {
