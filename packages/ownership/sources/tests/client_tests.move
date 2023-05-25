@@ -7,7 +7,7 @@ module ownership::client_tests {
     use ownership::client;
     use ownership::ownership;
     use ownership::tx_authority;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
 
     use sui_utils::encode;
     use sui_utils::typed_id;
@@ -21,7 +21,7 @@ module ownership::client_tests {
         id: UID
     }
 
-    fun create_test_object(owner: address, tf: vector<address>, ctx: &mut TxContext): TestObject {
+    fun create_test_object(owner: address, tf: address, ctx: &mut TxContext): TestObject {
         let object = TestObject { id: object::new(ctx) };
         let typed_id = typed_id::new(&object);
         let auth = tx_authority::begin_with_package_witness(Witness { });
@@ -39,7 +39,7 @@ module ownership::client_tests {
     fun test_has_owner_permission() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         let auth = tx_authority::begin(ctx);
         assert!(client::has_owner_permission<ADMIN>(&object.id, &auth), 0);
@@ -53,10 +53,10 @@ module ownership::client_tests {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
 
-        let tf_auth = vector[SENDER, encode::type_into_address<Witness>()];
+        let tf_auth = encode::type_into_address<Witness>();
         let object = create_test_object(SENDER, tf_auth, ctx);
 
-        let auth = tx_authority::begin(ctx);
+        let auth = tx_authority::begin_with_type(&Witness {});
         assert!(client::has_transfer_permission<ADMIN>(&object.id, &auth), 0);
 
         let auth = tx_authority::begin_with_type(&Witness {});
@@ -70,7 +70,7 @@ module ownership::client_tests {
     fun test_has_package_permission() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         let auth = tx_authority::begin_with_package_witness(Witness {});
         assert!(client::has_package_permission<ADMIN>(&object.id, &auth), 0);
@@ -84,7 +84,7 @@ module ownership::client_tests {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
 
-        let tf_auth = vector[SENDER, encode::type_into_address<Witness>()];
+        let tf_auth = encode::type_into_address<Witness>();
         let object = create_test_object(SENDER, tf_auth, ctx);
 
         let auth = tx_authority::begin(ctx);
@@ -104,7 +104,7 @@ module ownership::client_tests {
     fun test_provision_namespace() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         test_scenario::next_tx(&mut scenario, NAMESPACE);
         {
@@ -123,7 +123,7 @@ module ownership::client_tests {
     fun test_deprovision_namespace() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         test_scenario::next_tx(&mut scenario, NAMESPACE);
         {
@@ -145,7 +145,7 @@ module ownership::client_tests {
     fun test_can_borrow_uid_mut_with_namespace() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         test_scenario::next_tx(&mut scenario, NAMESPACE);
         {
@@ -164,7 +164,7 @@ module ownership::client_tests {
     fun test_cannot_borrow_uid_mut() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         test_scenario::next_tx(&mut scenario, @0xCADE);
         {
@@ -183,7 +183,7 @@ module ownership::client_tests {
     fun test_provision_with_invalid_auth() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         {
             let auth = tx_authority::begin(ctx);
@@ -200,7 +200,7 @@ module ownership::client_tests {
     fun test_deprovision_with_invalid_auth() {
         let scenario = test_scenario::begin(SENDER);
         let ctx = test_scenario::ctx(&mut scenario);
-        let object = create_test_object(SENDER, vector[], ctx);
+        let object = create_test_object(SENDER, @0x0, ctx);
 
         test_scenario::next_tx(&mut scenario, NAMESPACE);
         {
