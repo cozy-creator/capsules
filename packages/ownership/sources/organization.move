@@ -24,7 +24,6 @@
 // address using AdminTransfer.
 
 module ownership::organization {
-    use std::option;
     use std::string::String;
     use std::vector;
 
@@ -33,13 +32,12 @@ module ownership::organization {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use sui_utils::encode;
     use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
 
     use ownership::client;
     use ownership::ownership;
-    use ownership::permissions::{Self, SingleUsePermission, ADMIN};
+    use ownership::permission::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
     use ownership::admin_transfer::Witness as AdminTransfer;
@@ -112,9 +110,9 @@ module ownership::organization {
     }
 
     fun create_internal(owner: address, ctx: &mut TxContext): Organization {
-        let org_id = object::new(ctx);
-        let rbac = rbac::create(object::uid_to_address(object::new(ctx)));
-        object::delete(org_id);
+        let org_uid = object::new(ctx);
+        let rbac = rbac::create(object::uid_to_address(&org_uid));
+        object::delete(org_uid); // org_id is not stored
 
         let organization = Organization { 
             id: object::new(ctx),
@@ -317,7 +315,7 @@ module ownership::organization {
     //         ENO_OWNER_AUTHORITY);
     //     assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
 
-    //     permissions::create_single_use<Permission>(principal, ctx)
+    //     permission::create_single_use<Permission>(principal, ctx)
     // }
 
     // This is a module-witness pattern; this is equivalent to a storable Witness
@@ -328,7 +326,7 @@ module ownership::organization {
     //     // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
     //     assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
 
-    //     permissions::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
+    //     permission::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
     // }
 
     // ======== Getter Functions ========

@@ -4,21 +4,24 @@
 // to store, as vectors do not support heterogenous types. sui::Bag / sui::Table would work,
 // but they're not droppable, so they'd have to explicitly be destroyed at the end of every tx.
 
-module ownership::permissions {
+module ownership::permission {
+    use std::option;
     use std::string::String;
     use std::vector;
 
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
+    // use sui::object::{Self, UID};
+    // use sui::tx_context::TxContext;
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
     use sui_utils::vector2;
+    use sui_utils::vec_map2;
 
-    friend ownership::rbac;
-    friend ownership::tx_authority;
+    friend ownership::delegation;
     friend ownership::organization;
     friend ownership::permission_set;
+    friend ownership::rbac;
+    friend ownership::tx_authority;
 
     // These are special system-level permissions.
     // If the principal gives an agent the MANAGER role, then they can act as
@@ -90,12 +93,12 @@ module ownership::permissions {
             let filtered_value = if (option::is_some(&specific_filter_maybe)) {
                 let this_specific_filter = option::destroy_some(specific_filter_maybe);
                 let this_filter = add_(general_filter, this_specific_filter);
-                intersection(value, this_filter)
+                intersection(value, &this_filter)
             } else {
-                intersection(value, general_filter);
-            }
+                intersection(value, general_filter)
+            };
 
-            vec_map::insert(&mut filtered, copy key, filtered_value);
+            vec_map::insert(&mut filtered, *key, filtered_value);
 
             i = i + 1;
         };
@@ -123,11 +126,11 @@ module ownership::permissions {
     }
 
     // Doesn't modify the existing vectors
-    public(friend) fun add_(existing: &vector<Permission>, new: &vector<Permission>): vector<Permission> {
+    public(friend) fun add_(existing: &vector<Permission>, new: vector<Permission>): vector<Permission> {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental permission downgrades
-        if (has_admin_permission(existing)) { return copy existing };
+        if (has_admin_permission(existing)) { return *existing };
 
         // These superseed and replace all existing permissions
         if (vector::contains(&new, &admin)) {
@@ -137,38 +140,22 @@ module ownership::permissions {
             return vector[manager]
         };
 
-        vector2::merge_(existing, new)
+        vector2::merge_(existing, &new)
     }
 
-    public(friend) fun vec_map_add(
-        &mut existing: VecMap<T, vector<Permission>>,
-        new: VecMap<T, vector<Permission>>
+    public(friend) fun vec_map_add<K: copy + drop>(
+        existing: &mut VecMap<K, vector<Permission>>,
+        new: VecMap<K, vector<Permission>>
     ) {
-        let i = 0;
         while (vec_map::size(&new) > 0) {
             let (key, value) = vec_map::pop(&mut new);
-            let self = vec_map2::borrow_mut_fill(existing, key, vector[]);
+            let self = vec_map2::borrow_mut_fill(existing, &key, vector[]);
             add(self, value);
        };
     }
 
     public fun has_admin_permission(permissions: &vector<Permission>): bool {
-        let i = 0;
-        let admin = encode::type_name<ADMIN>();
-        while (i < vector::length(&permissions)) {
-            let permission = vector::borrow(&permissions, i);
-            if (&permission.inner == &admin) { return true };
-            i = i + 1;
-        };
-
-        // We used to make the assumption that admin / manager replaces all other permissions in
-        // a vector, for efficiency, but I think this assumption is too brittle
-        // if (vector::length(permissions) > 0) {
-        //     let permission = vector::borrow(permissions, 0);
-        //     is_admin_permission(permission)
-        // } else {
-        //     false
-        // }
+        vector::contains(permissions, &admin())
     }
 
     public fun is_admin_permission<Permission>(): bool {
@@ -180,13 +167,7 @@ module ownership::permissions {
     }
 
     public fun has_manager_permission(permissions: &vector<Permission>): bool {
-        let i = 0;
-        let manager = encode::type_name<MANAGER>();
-        while (i < vector::length(&permissions)) {
-            let permission = vector::borrow(&permissions, i);
-            if (&permission.inner == &manager) { return true };
-            i = i + 1;
-        };
+        vector::contains(permissions, &manager())
     }
 
     public fun is_manager_permission<Permission>(): bool {

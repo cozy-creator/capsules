@@ -41,7 +41,7 @@ module ownership::server {
 
     // `T` is any type from the package whose permission we're checking for
     public fun has_package_permission_excluding_manager<T, Permission>(auth: &TxAuthority): bool {
-        tx_authority::has_package_permission_excluding_manager<T, Permission>(auth)
+        has_package_permission_excluding_manager<T, Permission>(auth)
     }
 
     // Defaults to `true` if package is unspecified

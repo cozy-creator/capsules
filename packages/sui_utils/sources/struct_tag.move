@@ -92,7 +92,7 @@ module sui_utils::struct_tag {
     public fun contains(types: &vector<StructTag>, type: &StructTag): bool {
         let i = 0;
         while (i < vector::length(types)) {
-            if (is_same_type_(vector::borrow(types, i), type)) {
+            if (match(vector::borrow(types, i), type)) {
                 return true
             };
             i = i + 1;

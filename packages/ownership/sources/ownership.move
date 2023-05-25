@@ -10,7 +10,6 @@
 
 module ownership::ownership {
     use std::option::{Self, Option};
-    use std::vector;
 
     use sui::object::{Self, UID, ID};
     use sui::dynamic_field;
@@ -20,7 +19,7 @@ module ownership::ownership {
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::permissions::MANAGER;
+    use ownership::permission::MANAGER;
 
     // error enums
     const ENO_MODULE_AUTHORITY: u64 = 0;
@@ -121,7 +120,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.owner)) true
             else {
                 let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_object_permission_<Permission>(
+                tx_authority::has_object_permission<Permission>(
                     owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -147,7 +146,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.transfer_auth)) false
             else {
                 let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::has_object_permission_<Permission>(
+                tx_authority::has_object_permission<Permission>(
                     transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }

@@ -79,13 +79,13 @@ module sui_utils::vector2 {
         };
     }
 
-    public fun merge_<T: drop>(destination: &vector<T>, source: &vector<T>): vector<T> {
+    public fun merge_<T: copy>(destination: &vector<T>, source: &vector<T>): vector<T> {
         let i = 0;
-        let response = copy destination;
+        let response = *destination;
         while (i < vector::length(source)) {
             let item = vector::borrow(source, i);
             if (!vector::contains(destination, item)) {
-                vector::push_back(&mut response, copy item);
+                vector::push_back(&mut response, *item);
             };
             i = i + 1;
         };
