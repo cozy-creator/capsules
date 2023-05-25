@@ -7,28 +7,26 @@ module ownership::tx_authority {
     use std::string::{Self, String};
     use std::vector;
 
-    // use sui::bcs;
-    // use sui::hash;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID};
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
-    // use sui_utils::string2;
-    // use sui_utils::struct_tag::{Self, StructTag};
-    // use sui_utils::vector2;
+    use sui_utils::struct_tag::StructTag;
     use sui_utils::vec_map2;
 
-    use ownership::permissions::{Self, Permission, SingleUsePermission};
+    use ownership::permission_set::{Self, PermissionSet};
+    use ownership::permission::{Self, Permission};
 
     const WITNESS_STRUCT: vector<u8> = b"Witness";
 
-    // agents: [ addresses that have given full authority to this transaction ]
-    // permissions: (principle => Permission" functions that are allowed to be called on behalf of the principal)
-    // organizations: (package ID => principal for that package, i.e., the ID (address) found in its organization object)
+    // agent_permissions: (principle => Permission types)
+    // package_org: (package ID => organization-id (as an address) that controls that package)
+    // We are keeping agent_permissions internal, because otherwise someone could duplicate and store one of
+    // the `Permission` structs, although I don't think they'd be able to use it anywhere.
     struct TxAuthority has drop {
-        permissions: VecMap<address, vector<Permission>>,
-        organizations: VecMap<ID, address>
+        agent_permissions: VecMap<address, PermissionSet>,
+        package_org: VecMap<ID, address>
     }
 
     // ========= Begin =========
@@ -36,48 +34,39 @@ module ownership::tx_authority {
 
     // Begins with a transaction-context object
     public fun begin(ctx: &TxContext): TxAuthority {
-        TxAuthority {
-            permissions: vec_map2::new(tx_context::sender(ctx), vector[permissions::admin()]), 
-            organizations: vec_map::empty() 
-        }
+        new_internal(tx_context::sender(ctx))
     }
 
     // Begins with a capability-id
     public fun begin_with_id<T: key>(cap: &T): TxAuthority {
-        TxAuthority {
-            permissions: vec_map2::new(object::id_address(cap), vector[permissions::admin()]), 
-            organizations: vec_map::empty() 
-        }
+        new_internal(object::id_address(cap))
     }
 
     // Begins with a capability-type
     public fun begin_with_type<T>(_cap: &T): TxAuthority {
-        TxAuthority {
-            permissions: vec_map2::new(encode::type_into_address<T>(), vector[permissions::admin()]), 
-            organizations: vec_map::empty() 
-        }
+        new_internal(encode::type_into_address<T>())
     }
 
-    public fun begin_with_single_use(single_use: SingleUsePermission): TxAuthority {
-        let (principal, permission) = permissions::consume_single_use(single_use);
+    // public fun begin_with_single_use(single_use: SingleUsePermission): TxAuthority {
+    //     let (principal, permission) = permission::consume_single_use(single_use);
 
-        TxAuthority {
-            permissions: vec_map2::new(principal, vector[permission]), 
-            organizations: vec_map::empty() 
-        }
-    }
+    //     TxAuthority {
+    //         agent_permissions: vec_map2::new(principal, vector[permission]),
+    //         agent_type_constraints: vec_map::empty(),
+    //         agent_object_constraints: vec_map::empty(),
+    //         package_org: vec_map::empty() 
+    //     }
+    // }
 
     public fun begin_with_package_witness<Witness: drop>(_witness: Witness): TxAuthority {
-        let package_addr = object::id_to_address(&encode::package_id<Witness>());
-
-        TxAuthority {
-            permissions: vec_map2::new(package_addr, vector[permissions::admin()]), 
-            organizations: vec_map::empty()
-        }
+        new_internal(object::id_to_address(&encode::package_id<Witness>()))
     }
 
     public fun empty(): TxAuthority {
-        TxAuthority { permissions: vec_map::empty(), organizations: vec_map::empty() }
+        TxAuthority { 
+            agent_permissions: vec_map::empty(),
+            package_org: vec_map::empty() 
+        }
     }
 
     // ========= Add Agents =========
@@ -85,120 +74,87 @@ module ownership::tx_authority {
 
     // This will be more useful once Sui supports multi-party transactions (August 2023)
     public fun add_signer(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
-        vec_map2::set(&mut new_auth.permissions, tx_context::sender(ctx), vector[permissions::admin()]);
+        let new_auth = copy_(auth);
+        let permissions = permission_set::new(vector[permission::admin()]);
+
+        vec_map2::set(&mut new_auth.agent_permissions, &tx_context::sender(ctx), permissions);
 
         new_auth
     }
 
     public fun add_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
-        vec_map2::set(&mut new_auth.permissions, object::id_address(cap), vector[permissions::admin()]);
+        let new_auth = copy_(auth);
+        let permissions = permission_set::new(vector[permission::admin()]);
+
+        vec_map2::set(&mut new_auth.agent_permissions, &object::id_address(cap), permissions);
 
         new_auth
     }
 
     public fun add_type<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
-        vec_map2::set(&mut new_auth.permissions, encode::type_into_address<T>(), vector[permissions::admin()]);
+        let new_auth = copy_(auth);
+        let permissions = permission_set::new(vector[permission::admin()]);
+
+        vec_map2::set(&mut new_auth.agent_permissions, &encode::type_into_address<T>(), permissions);
 
         new_auth
     }
 
-    public fun add_single_use(single_use: SingleUsePermission, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
+    // public fun add_single_use(single_use: SingleUsePermission, auth: &TxAuthority): TxAuthority {
+    //     let new_auth = copy_(auth);
+    //     let fallback = permission_set::new(vector[]);
 
-        let (principal, permission) = permissions::consume_single_use(single_use);
-        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
-        permissions::add(existing, vector[permission]);
+    //     let (principal, permission) = permission::consume_single_use(single_use);
+    //     let existing = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &principal, fallback);
+    //     permission::add(&mut permission_set::general_mut(existing), vector[permission]);
 
-        new_auth
-    }
+    //     new_auth
+    // }
 
     public fun add_package_witness<Witness: drop>(_witness: Witness, auth: &TxAuthority): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
+        let new_auth = copy_(auth);
         let package_addr = object::id_to_address(&encode::package_id<Witness>());
+        let permissions = permission_set::new(vector[permission::admin()]);
 
-        vec_map2::set(&mut new_auth.permissions, package_addr, vector[permissions::admin()]);
+        vec_map2::set(&mut new_auth.agent_permissions, &package_addr, permissions);
 
         new_auth
     }
 
     public fun copy_(auth: &TxAuthority): TxAuthority {
-        TxAuthority { permissions: auth.permissions, organizations: auth.organizations }
+        TxAuthority { 
+            agent_permissions: auth.agent_permissions,
+            package_org: auth.package_org
+        }
     }
-
-    // ========= Admin Validity Checkers =========
-    // Admin is the highest level of permission an agent can have
-    // Use these checkers when doing sensitive operations, like granting permissions to other agents
-
-    // public fun has_admin_permission(principal: address, auth: &TxAuthority): bool {
-    //     let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
-    //     if (option::is_none(&permissions_maybe)) { return false };
-    //     let permissions = option::destroy_some(permissions_maybe);
-
-    //     permissions::has_admin_permission(permissions)
-    // }
-
-    // // Defaults to `true` if the principal does not exist (option::none)
-    // public fun has_admin_permission_opt(principal_maybe: Option<address>, auth: &TxAuthority): bool {
-    //     if (option::is_none(&principal_maybe)) return true;
-    //     has_admin_permission(option::destroy_some(principal_maybe), auth)
-    // }
-
-    // // True if and only if TxAuthority had the Witness of T's module added
-    // public fun has_module_admin_permission<T>(auth: &TxAuthority): bool {
-    //     has_admin_permission(witness_addr<T>(), auth)
-    // }
-
-    // // type can be any type belonging to the module, such as 0x599::my_module::StructName
-    // public fun has_module_admin_permission_(type: String, auth: &TxAuthority): bool {
-    //     has_admin_permission(witness_addr_(type), auth)
-    // }
-
-    // public fun has_object_admin_permission<T: key>(id: ID, auth: &TxAuthority): bool {
-    //     has_admin_permission(object::id_to_address(&id), auth)
-    // }
-
-    // public fun has_type_admin_permission<T>(auth: &TxAuthority): bool {
-    //     has_admin_permission(encode::type_into_address<T>(), auth)
-    // }
 
     // ========= Permission Validity Checkers =========
 
     public fun has_permission<Permission>(principal: address, auth: &TxAuthority): bool {
-        let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
-        if (option::is_none(&permissions_maybe)) { return false };
-        let permissions = option::destroy_some(permissions_maybe);
+        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        if (option::is_none(&set_maybe)) { return false };
+        let set = option::destroy_some(set_maybe);
 
-        permissions::has_permission<Permission>(&permissions)
+        permission::has_permission<Permission>(permission_set::general(&set))
     }
 
-    // The principal is optional and defaults to true if `option::none`
-    // public fun has_permission_opt<Permission>(principal_maybe: Option<address>, auth: &TxAuthority): bool {
-    //     if (option::is_none(&principal_maybe)) { return true };
-    //     let principal = option::destroy_some(principal_maybe);
-
-    //     has_permission_<Permission>(principal, auth)
-    // }
-
-    // `T` can be any type belong to the package
+    // `T` can be any type belong to the package, such as 0x599::my_module::StructName
     public fun has_package_permission<T, Permission>(auth: &TxAuthority): bool {
         let package_id = encode::package_id<T>();
-        if (has_permission<Permission>(object::id_to_address(&package_id), auth)) {
-            return true
-        };
-
-        has_org_permission_for_package<Permission>(package_id, auth)
+        has_package_permission_<Permission>(package_id, auth)
     }
 
-    // `type` can be any type belonging to the package, such as 0x599::my_module::StructName
     public fun has_package_permission_<Permission>(package_id: ID, auth: &TxAuthority): bool {
+        // Checks if this package directly added `Permission` to `auth``
         if (has_permission<Permission>(object::id_to_address(&package_id), auth)) {
             return true
         };
 
-        has_org_permission_for_package<Permission>(package_id, auth)
+        // Checks if the organization controlling this package added `Permission` to `auth`
+        let principal_maybe = lookup_organization_for_package_(package_id, auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+        has_permission<Permission>(principal, auth)
     }
 
     public fun has_id_permission<T: key, Permission>(obj: &T, auth: &TxAuthority): bool {
@@ -212,6 +168,105 @@ module ownership::tx_authority {
     public fun has_type_permission<T, Permission>(auth: &TxAuthority): bool {
         has_permission<Permission>(encode::type_into_address<T>(), auth)
     }
+
+    // ========= Exclude MANAGER Permission =========
+    // Note: If you are doing a sensitive edit, such as assigning new delegations or roles, it's
+    // recommended that you check for <ADMIN> permission, or at least define a special permission
+    // such as <ASSIGN_ROLE> and then exclude managers, which will automatically have all
+    // permissions other than admin. You can do this by doing something like:
+    // `assert!(tx_authority::has_permission<ASSIGN_ROLE>(package_id, auth), ENO_AUTHORITY)`;
+    // `assert!(!tx_authority::is_manager(principal, auth), ENO_AUTHORITY)`;
+
+    public fun is_manager(principal: address, auth: &TxAuthority): bool {
+        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        if (option::is_none(&set_maybe)) { return false };
+        let set = option::destroy_some(set_maybe);
+
+        permission::has_manager_permission(permission_set::general(&set))
+    }
+
+    public fun has_package_permission_excluding_manager<T, Permission>(auth: &TxAuthority): bool {
+        let package_id = encode::package_id<T>();
+        has_package_permission_excluding_manager_<Permission>(package_id, auth)
+    }
+
+    public fun has_package_permission_excluding_manager_<Permission>(package_id: ID, auth: &TxAuthority): bool {
+        // Checks if this package directly added `Permission` to `auth``
+        let package_addr = object::id_to_address(&package_id);
+        if (has_permission<Permission>(package_addr, auth) && !is_manager(package_addr, auth)) {
+            return true
+        };
+
+        // Checks if the organization controlling this package added `Permission` to `auth`
+        let principal_maybe = lookup_organization_for_package_(package_id, auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+        has_permission<Permission>(principal, auth) && !is_manager(principal, auth)
+    }
+
+    // ========= Validity Checkers with Object Ownership =========
+    // Ownership calls into these; they use types and object-ids in addition to general permissions,
+    // which makes it more advanced and allows for delegation
+
+        // Same as above, except it checks against the type and object_id constraints as well
+    public fun has_object_permission<Permission>(
+        principal: address,
+        struct_tag: &StructTag,
+        object_id: &ID,
+        auth: &TxAuthority
+    ): bool {
+        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        if (option::is_none(&set_maybe)) { return false };
+        let set = option::destroy_some(set_maybe);
+
+        // Check against general permissions
+        if (permission::has_permission<Permission>(permission_set::general(&set))) { return true };
+
+        // Check against type permissions
+        let type_permissions_maybe = vec_map2::match_struct_tag_maybe(permission_set::types(&set), struct_tag);
+        if (option::is_some(&type_permissions_maybe)) {
+            let type_permissions = option::destroy_some(type_permissions_maybe);
+            if (permission::has_permission<Permission>(&type_permissions)) { return true };
+        };
+
+        // Check against object permissions
+        let object_permissions_maybe = vec_map2::get_maybe(permission_set::objects(&set), object_id);
+        if (option::is_some(&object_permissions_maybe)) {
+            let object_permissions = option::destroy_some(object_permissions_maybe);
+            if (permission::has_permission<Permission>(&object_permissions)) { return true };
+        };
+
+        false
+    }
+
+    public fun has_object_package_permission<T, Permission>(
+        struct_tag: &StructTag,
+        object_id: &ID,
+        auth: &TxAuthority
+    ): bool {
+        let package_id = encode::package_id<T>();
+        has_object_package_permission_<Permission>(package_id, struct_tag, object_id, auth)
+    }
+
+    public fun has_object_package_permission_<Permission>(
+        package_id: ID,
+        struct_tag: &StructTag,
+        object_id: &ID,
+        auth: &TxAuthority
+    ): bool {
+        // Checks if this package directly added `Permission` to `auth``
+        if (has_object_permission<Permission>(
+            object::id_to_address(&package_id), struct_tag, object_id, auth)) {
+            return true
+        };
+
+        // Checks if the organization controlling this package added `Permission` to `auth`
+        let principal_maybe = lookup_organization_for_package_(package_id, auth);
+        if (option::is_none(&principal_maybe)) { return false };
+        let principal = option::destroy_some(principal_maybe);
+        has_object_permission<Permission>(principal, struct_tag, object_id, auth)
+    }
+
 
     // ========= Check Against Lists of Agents =========
 
@@ -241,115 +296,23 @@ module ownership::tx_authority {
         total
     }
 
-    // public fun has_k_or_more_admin_agents(
-    //     principals: vector<address>,
-    //     k: u64,
-    //     auth: &TxAuthority
-    // ): bool {
-    //     if (k == 0) return true;
-    //     let total = 0;
-    //     while (!vector::is_empty(&principals)) {
-    //         let principal = vector::pop_back(&mut principals);
-    //         if (has_admin_permission(principal, auth)) { total = total + 1; };
-    //         if (total >= k) return true;
-    //     };
-
-    //     false
-    // }
-
-    // public fun tally_admin_agents(principals: vector<address>, auth: &TxAuthority): u64 {
-    //     let total = 0;
-    //     while (!vector::is_empty(&principals)) {
-    //         let principal = vector::pop_back(&mut principals);
-    //         if (has_admin_permission(principal, auth)) { total = total + 1; };
-    //     };
-
-    //     total
-    // }
-
-    // ========= Organization Validity Checkers =========
-
-    // public fun has_organization_admin_permission<OrganizationType>(auth: &TxAuthority): bool {
-    //     let principal_maybe = lookup_organization_for_package<OrganizationType>(auth);
-    //     if (option::is_none(&principal_maybe)) { return false };
-    //     let principal = option::destroy_some(principal_maybe);
-
-    //    has_admin_permission(principal, auth)
-    // }
-
-    // Convenience function. Permission and Organization are the same module, so this is checking if
-    // the same module authorized this operation as the module that declared this permission type.
-    public fun has_org_permission<Permission>(auth: &TxAuthority): bool {
-        has_org_permission_<Permission, Permission>(auth)
-    }
-
-    // `OrganizationType` can be literally any type declared in any package belonging to that Organization;
-    // we merely use this type to figure out the package-id, so that we can lookup the Organization that
-    // owns that type (assuming it has been added to TxAuthority already).
-    // In this case, Organization is the principal.
-    public fun has_org_permission_<OrganizationType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = lookup_organization_for_package<OrganizationType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-       has_permission<Permission>(principal, auth)
-    }
-
-    // Finds the organization that controls the corresponding package ID, and checks to see if the
-    // corresponding permission is found.
-    public fun has_org_permission_for_package<Permission>(package: ID, auth: &TxAuthority): bool {
-        let principal_maybe = lookup_organization_for_package_(package, auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-        has_permission<Permission>(principal, auth)
-    }
-
-    // This is best used for sensitive operations, where you want the agent to either explicitly have
-    // the permission, or be an admin. We do not want to automatically grant this permission by default
-    // by being a manager.
-    public fun has_org_permission_excluding_manager<OrganizationType, Permission>(auth: &TxAuthority): bool {
-        let principal_maybe = lookup_organization_for_package<OrganizationType>(auth);
-        if (option::is_none(&principal_maybe)) { return false };
-        let principal = option::destroy_some(principal_maybe);
-
-        has_org_permission_excluding_manager_<Permission>(principal, auth)
-    }
-
-    // Special-case function where we want to assign sensitive permissions to agents, but not grant them to
-    // managers automatically (they are still granted to admins automatically)
-    public fun has_org_permission_excluding_manager_<Permission>(
-        principal: address,
-        auth: &TxAuthority
-    ): bool {
-        let permissions_maybe = vec_map2::get_maybe(&auth.permissions, principal);
-        if (option::is_none(&permissions_maybe)) { return false };
-        let permissions = option::destroy_some(permissions_maybe);
-
-        permissions::has_permission_excluding_manager<Permission>(&permissions)
-    }
-
     // ========= Getter Functions =========
 
     public fun agents(auth: &TxAuthority): vector<address> {
-        vec_map::keys(&auth.permissions)
-    }
-
-    public fun permissions(auth: &TxAuthority): VecMap<address, vector<Permission>> {
-        auth.permissions
+        vec_map::keys(&auth.agent_permissions)
     }
 
     public fun organizations(auth: &TxAuthority): VecMap<ID, address> {
-        auth.organizations
+        auth.package_org
     }
 
     // May return option::none if the organization hasn't been added to this TxAuthority object
     public fun lookup_organization_for_package<P>(auth: &TxAuthority): Option<address> {
-        vec_map2::get_maybe(&auth.organizations, encode::package_id<P>())
+        vec_map2::get_maybe(&auth.package_org, &encode::package_id<P>())
     }
 
     public fun lookup_organization_for_package_(package_id: ID, auth: &TxAuthority): Option<address> {
-        vec_map2::get_maybe(&auth.organizations, package_id)
+        vec_map2::get_maybe(&auth.package_org, &package_id)
     }
 
     // True if the package-id, and module-name of Witness and T map, and Witness' struct name is 'Witness'
@@ -359,39 +322,22 @@ module ownership::tx_authority {
 
     // ========= Witness for Module Authority =========
 
-    // public fun witness_addr<T>(): address {
-    //     let witness_type = witness_string<T>();
-    //     encode::type_string_into_address(witness_type)
-    // }
-
-    // public fun witness_addr_(type: String): address {
-    //     let witness_type = witness_string_(type);
-    //     encode::type_string_into_address(witness_type)
-    // }
-
-    // public fun witness_addr_from_struct_tag(tag: &StructTag): address {
-    //     let witness_type = string2::empty();
-    //     string::append(&mut witness_type, string2::from_id(struct_tag::package_id(tag)));
-    //     string::append(&mut witness_type, utf8(b"::"));
-    //     string::append(&mut witness_type, struct_tag::module_name(tag));
-    //     string::append(&mut witness_type, utf8(b"::"));
-    //     string::append(&mut witness_type, utf8(WITNESS_STRUCT));
-
-    //     encode::type_string_into_address(witness_type)
-    // }
-
     public fun witness_string<T>(): String {
         encode::append_struct_name<T>(string::utf8(WITNESS_STRUCT))
     }
 
-    // public fun witness_string_(type: String): String {
-    //     let module_addr = encode::package_id_and_module_name_(type);
-    //     encode::append_struct_name_(module_addr, string::utf8(WITNESS_STRUCT))
-    // }
-
     // ========= Internal Functions =========
-    // Only callable within the `ownership::organization` module
 
+    fun new_internal(principal: address): TxAuthority {
+        TxAuthority {
+            agent_permissions: vec_map2::new(principal, permission_set::new(vector[permission::admin()])),
+            package_org: vec_map::empty()
+        }
+    }
+
+    // ========= Private Friend Functions =========
+
+    // Only callable within the `ownership::organization` module
     friend ownership::organization;
 
     public(friend) fun add_organization_internal(
@@ -399,10 +345,10 @@ module ownership::tx_authority {
         principal: address,
         auth: &TxAuthority
     ): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
+        let new_auth = copy_(auth);
         while (!vector::is_empty(&packages)) {
             let package = vector::pop_back(&mut packages);
-            vec_map2::insert_maybe(&mut new_auth.organizations, package, principal);
+            vec_map2::insert_maybe(&mut new_auth.package_org, package, principal);
         };
 
         new_auth
@@ -414,16 +360,41 @@ module ownership::tx_authority {
         new_permissions: vector<Permission>,
         auth: &TxAuthority
     ): TxAuthority {
-        let new_auth = TxAuthority { permissions: auth.permissions, organizations: auth.organizations };
+        let new_auth = copy_(auth);
+        let fallback = permission_set::new(vector[]);
 
         // Delegation cannot expand the permissions that an agent already has; it can merely extend a
         // subset of its existing permissions to a new principal
-        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.permissions, agent, vector[]);
-        let permissions = permissions::intersection(&new_permissions, agent_permissions);
+        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &agent, fallback);
+        let filtered_permissions = permission::intersection(
+            &new_permissions, permission_set::general(agent_permissions));
 
-        let existing = vec_map2::borrow_mut_fill(&mut new_auth.permissions, principal, vector[]);
-        permissions::add(existing, permissions);
+        let principal_permissions = vec_map2::borrow_mut_fill(
+            &mut new_auth.agent_permissions, &principal, fallback);
+        permission::add(permission_set::general_mut(principal_permissions), filtered_permissions);
 
         new_auth
     }
+
+    // Only callable by the ownership::delegation module
+    friend ownership::delegation;
+
+    public(friend) fun merge_permission_set_internal(
+        principal: address,
+        agent: address,
+        new_set: PermissionSet,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = copy_(auth);
+        let fallback = permission_set::new(vector[]);
+
+        let agent_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &agent, fallback);
+        let filtered_set = permission_set::intersection(&new_set, agent_set);
+
+        let principal_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &principal, fallback);
+        permission_set::merge(principal_set, filtered_set);
+
+        new_auth
+    }
+
 }

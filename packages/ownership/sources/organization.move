@@ -21,10 +21,9 @@
 // 32 byte value?).
 //
 // If you want to rotate the master-key for a organization, you can simply send the organization to a new
-// address using SimpleTransfer.
+// address using AdminTransfer.
 
 module ownership::organization {
-    use std::option;
     use std::string::String;
     use std::vector;
 
@@ -33,16 +32,15 @@ module ownership::organization {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use sui_utils::encode;
     use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
 
     use ownership::client;
     use ownership::ownership;
-    use ownership::permissions::{Self, SingleUsePermission, ADMIN};
+    use ownership::permission::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
-    use ownership::simple_transfer::Witness as SimpleTransfer;
+    use ownership::admin_transfer::Witness as AdminTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error enums
@@ -67,7 +65,6 @@ module ownership::organization {
     // Shared, root-level object.
     struct Organization has key {
         id: UID,
-        org_id: UID,
         packages: vector<Package>,
         rbac: RBAC
     }
@@ -91,7 +88,7 @@ module ownership::organization {
     // Permission types
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
-    struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
+    // struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
 
     // Authority object
     struct Witness has drop {}
@@ -113,12 +110,12 @@ module ownership::organization {
     }
 
     fun create_internal(owner: address, ctx: &mut TxContext): Organization {
-        let org_id = object::new(ctx);
-        let rbac = rbac::create(object::uid_to_address(&org_id));
+        let org_uid = object::new(ctx);
+        let rbac = rbac::create(object::uid_to_address(&org_uid));
+        object::delete(org_uid); // org_id is not stored
 
         let organization = Organization { 
             id: object::new(ctx),
-            org_id,
             packages: vector::empty(),
             rbac 
         };
@@ -126,7 +123,7 @@ module ownership::organization {
         // Initialize ownership
         let typed_id = typed_id::new(&organization);
         let auth = tx_authority::begin_with_package_witness(Witness { });
-        ownership::as_shared_object<Organization, SimpleTransfer>(&mut organization.id, typed_id, owner, &auth);
+        ownership::as_shared_object<Organization, AdminTransfer>(&mut organization.id, typed_id, owner, &auth);
 
         organization
     }
@@ -168,17 +165,16 @@ module ownership::organization {
         assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&organization.packages), EPACKAGES_MUST_BE_EMPTY);
 
-        let Organization { id, org_id, packages, rbac: _ } = organization;
+        let Organization { id, packages, rbac: _ } = organization;
         object::delete(id);
-        object::delete(org_id);
         vector::destroy_empty(packages);
     }
 
     // ======== Edit Organizations =====
-    // You must be the owner of a organization to edit it. If you want to change owners, call into SimpleTransfer.
+    // You must be the owner of a organization to edit it. If you want to change owners, call into AdminTransfer.
     // Ownership of organizations created with anything other than a publish_receipt are non-transferable.
 
-    // Aboryd if package_id does not exist within the organization
+    // Abort if package_id does not exist within the organization
     public fun remove_package(
         organization: &mut Organization,
         package_id: ID,
@@ -308,28 +304,30 @@ module ownership::organization {
     // (1) have (organization, Permission); the agent already has this permission (or higher), and
     // (2) have (organization, SINGLE_USE); the agent was granted the authority to issue single-use permissions 
     // (or is an admin; the manager role is not sufficient)
-    public fun create_single_use_permission<Permission>(
-        auth: &TxAuthority,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
+    // public fun create_single_use_permission<Permission>(
+    //     auth: &TxAuthority,
+    //     ctx: &mut TxContext
+    // ): SingleUsePermission {
+    //     let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
 
-        assert!(tx_authority::has_org_permission_excluding_manager<Permission, SINGLE_USE>(auth), ENO_OWNER_AUTHORITY);
-        assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
+    //     assert!(
+    //         tx_authority::has_package_permission_excluding_manager<Permission, SINGLE_USE>(auth),
+    //         ENO_OWNER_AUTHORITY);
+    //     assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
 
-        permissions::create_single_use<Permission>(principal, ctx)
-    }
+    //     permission::create_single_use<Permission>(principal, ctx)
+    // }
 
     // This is a module-witness pattern; this is equivalent to a storable Witness
-    public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
-        _witness: Witness,
-        ctx: &mut TxContext
-    ): SingleUsePermission {
-        // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
-        assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
+    // public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
+    //     _witness: Witness,
+    //     ctx: &mut TxContext
+    // ): SingleUsePermission {
+    //     // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
+    //     assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
 
-        permissions::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
-    }
+    //     permission::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
+    // }
 
     // ======== Getter Functions ========
 

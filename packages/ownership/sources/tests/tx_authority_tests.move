@@ -1,12 +1,14 @@
 #[test_only]
 module ownership::tx_authority_tests {
+    use std::vector;
+
     use sui::vec_map;
     use sui::test_scenario;
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     use ownership::tx_authority;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
     use sui_utils::encode;
 
     const SENDER: address = @0xFACE;
@@ -35,7 +37,7 @@ module ownership::tx_authority_tests {
         {
             let auth = tx_authority::empty();
 
-            assert!(vec_map::is_empty(&tx_authority::permissions(&auth)), 0);
+            assert!(vector::is_empty(&tx_authority::agents(&auth)), 0);
             assert!(vec_map::is_empty(&tx_authority::organizations(&auth)), 0);
         };
 
@@ -266,27 +268,27 @@ module ownership::tx_authority_tests {
         test_scenario::end(scenario);
     }
 
-    #[test]
-    #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
-    public fun has_org_permission_excluding_manager_no_org() {
-        let scenario = test_scenario::begin(SENDER);
-        let ctx = test_scenario::ctx(&mut scenario);
-        let auth = tx_authority::begin(ctx);
+    // #[test]
+    // #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
+    // public fun has_org_permission_excluding_manager_no_org() {
+    //     let scenario = test_scenario::begin(SENDER);
+    //     let ctx = test_scenario::ctx(&mut scenario);
+    //     let auth = tx_authority::begin(ctx);
 
-        assert!(tx_authority::has_org_permission_excluding_manager<Witness, ADMIN>(&auth), 0);
-        test_scenario::end(scenario);
-    }
+    //     assert!(tx_authority::has_org_permission_excluding_manager<Witness, ADMIN>(&auth), 0);
+    //     test_scenario::end(scenario);
+    // }
 
-    #[test]
-    #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
-    public fun has_org_permission_excluding_manager_no_principal() {
-        let scenario = test_scenario::begin(SENDER);
-        let ctx = test_scenario::ctx(&mut scenario);
-        let auth = tx_authority::begin(ctx);
+    // #[test]
+    // #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]
+    // public fun has_org_permission_excluding_manager_no_principal() {
+    //     let scenario = test_scenario::begin(SENDER);
+    //     let ctx = test_scenario::ctx(&mut scenario);
+    //     let auth = tx_authority::begin(ctx);
 
-        assert!(tx_authority::has_org_permission_excluding_manager_<ADMIN>(@0xFADE, &auth), 0);
-        test_scenario::end(scenario);
-    }
+    //     assert!(tx_authority::has_org_permission_excluding_manager_<ADMIN>(@0xFADE, &auth), 0);
+    //     test_scenario::end(scenario);
+    // }
 
     #[test]
     #[expected_failure(abort_code=0,location=ownership::tx_authority_tests)]

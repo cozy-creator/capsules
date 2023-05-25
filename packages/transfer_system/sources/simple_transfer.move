@@ -1,7 +1,7 @@
 // Simple transfer module that allows an owner to transfer ownership to anyone else arbitrarily
 // This is the simplest possible transfer-module (outside of non-transferable ownership)
 
-module ownership::simple_transfer {
+module transfer_system::simple_transfer {
     use std::option;
 
     use sui::object::{Self, UID};

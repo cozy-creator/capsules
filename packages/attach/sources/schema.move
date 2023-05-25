@@ -62,7 +62,7 @@ module attach::schema {
         let (i, old_types_to_drop) = (0, vector::empty<String>());
         while (i < vector::length(&fields)) {
             let (key, type) = parse_field(*vector::borrow(&fields, i));
-            let old_type_maybe = vec_map2::set(schema, key, type);
+            let old_type_maybe = vec_map2::set(schema, &key, type);
 
             // TO DO: make sure this line doesn't abort
             if (option::is_some(&old_type_maybe) && *option::borrow(&old_type_maybe) != type) {
@@ -99,7 +99,7 @@ module attach::schema {
 
         let (i, types) = (0, vector::empty<String>());
         while (i < vector::length(&keys)) {
-            let type_maybe = vec_map2::remove_maybe(schema, *vector::borrow(&keys, i));
+            let type_maybe = vec_map2::remove_maybe(schema, vector::borrow(&keys, i));
             if (option::is_some(&type_maybe)) {
                 vector::push_back(&mut types, option::destroy_some(type_maybe));
             } else {
@@ -170,7 +170,7 @@ module attach::schema {
     public fun get_type(uid: &UID, namespace: Option<ID>, key: String): Option<String> {
         if (!exists_(uid, namespace)) { return option::none() };
         let schema = borrow(uid, namespace);
-        vec_map2::get_maybe(schema, key)
+        vec_map2::get_maybe(schema, &key)
     }
 
     // ==== Utility Functions ====

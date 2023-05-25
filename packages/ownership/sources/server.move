@@ -25,31 +25,30 @@ module ownership::server {
         organization::assert_login_<Permission>(organization, auth)
     }
 
-    // Convenience function.
-    public fun has_org_permission<Permission>(auth: &TxAuthority): bool {
-        tx_authority::has_org_permission_<Permission, Permission>(auth)
+    // Eliminates the need to specify `T` because the package is assumed to be from `Permission`
+    public fun has_own_package_permission<Permission>(auth: &TxAuthority): bool {
+        tx_authority::has_package_permission<Permission, Permission>(auth)
     }
 
-    public fun has_org_permission_<OrganizationType, Permission>(auth: &TxAuthority): bool {
-        tx_authority::has_org_permission_<OrganizationType, Permission>(auth)
+    // `T` is any type from the package whose permission we're checking for
+    public fun has_package_permission<T, Permission>(auth: &TxAuthority): bool {
+        tx_authority::has_package_permission<T, Permission>(auth)
     }
 
-    public fun has_org_permission_excluding_manager<OrganizationType, Permission>(auth: &TxAuthority): bool {
-        tx_authority::has_org_permission_excluding_manager<OrganizationType, Permission>(auth)
+    public fun has_package_permission_<Permission>(package: ID, auth: &TxAuthority): bool {
+        tx_authority::has_package_permission_<Permission>(package, auth)
     }
 
-    public fun has_package_permission_opt<Permission>(
-        package: Option<ID>,
-        auth: &TxAuthority
-    ): bool {
+    // `T` is any type from the package whose permission we're checking for
+    public fun has_package_permission_excluding_manager<T, Permission>(auth: &TxAuthority): bool {
+        has_package_permission_excluding_manager<T, Permission>(auth)
+    }
+
+    // Defaults to `true` if package is unspecified
+    public fun has_package_permission_opt<Permission>(package: Option<ID>, auth: &TxAuthority): bool {
         if (option::is_none(&package)) { return true };
         tx_authority::has_package_permission_<Permission>(option::destroy_some(package), auth)
     }
 
-    public fun has_package_permission<Permission>(
-        package: ID,
-        auth: &TxAuthority
-    ): bool {
-        tx_authority::has_package_permission_<Permission>(package, auth)
-    }
+
 }

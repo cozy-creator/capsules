@@ -2,6 +2,8 @@
 // parse them out into their 4 components and store them as a StructTag. This saves us the compute cost of
 // having to re-parse them every time in future transactions.
 
+// address: a725e7cd33d5092af4f338c58329641dadf7c7bd471e6fa90cec6a37fe24122d, module: Identifier("my_hero"), name: Identifier("Hero"), type_params: [] } - example struct tag from RPC
+
 module sui_utils::struct_tag {
     use std::string::{Self, String, utf8};
     use std::vector;
@@ -14,11 +16,14 @@ module sui_utils::struct_tag {
     // Error enums
     const ESUPPLIED_TYPE_CANNOT_BE_ABSTRACT: u64 = 0;
 
+    // Move does not allow for generic struct definitions, meaning we have to use Strings rather than
+    // StructTags for 'generics'. We use the term `generics` here, but the term `type-params` is also used
+    // in Sui.
     struct StructTag has store, copy, drop {
         package_id: ID,
         module_name: String,
         struct_name: String,
-        generics: vector<String>, // we have to use Strings rather than recursive StructTags
+        generics: vector<String>, 
     }
 
     public fun get<T>(): StructTag {
@@ -63,6 +68,15 @@ module sui_utils::struct_tag {
             && type1.generics == type2.generics)
     }
 
+    // More relaxed comparison; if type1's generic is left undefined, then it's treated as *, meaning it
+    // matches any value for type2's generics.
+    public fun match(type1: &StructTag, type2: &StructTag): bool {
+        (type1.package_id == type2.package_id
+            && type1.module_name == type2.module_name
+            && type1.struct_name == type2.struct_name
+            && (type1.struct_name == type2.struct_name || vector::length(&type1.generics) == 0))
+    }
+
     public fun is_same_abstract_type(type1: &StructTag, type2: &StructTag): bool {
         (type1.package_id == type2.package_id
             && type1.module_name == type2.module_name
@@ -72,6 +86,19 @@ module sui_utils::struct_tag {
     public fun is_same_module(type1: &StructTag, type2: &StructTag): bool {
         (type1.package_id == type2.package_id
             && type1.module_name == type2.module_name)
+    }
+
+    // Uses a relaxed comparison that allows for * generics
+    public fun contains(types: &vector<StructTag>, type: &StructTag): bool {
+        let i = 0;
+        while (i < vector::length(types)) {
+            if (match(vector::borrow(types, i), type)) {
+                return true
+            };
+            i = i + 1;
+        };
+
+        false
     }
 
     // Turns a StructTag back into its original String type name.
