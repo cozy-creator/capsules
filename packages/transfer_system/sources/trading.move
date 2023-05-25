@@ -9,7 +9,7 @@ module transfer_system::trading {
     use sui::tx_context::{Self, TxContext};
 
     use ownership::ownership;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use transfer_system::transfer_freezer;

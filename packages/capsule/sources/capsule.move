@@ -2,7 +2,6 @@
 // sell an owned object on a market, and then the new owner can turn it back into an owned object.
 
 module capsule::capsule {
-    use std::vector;
     use std::option::{Self, Option};
     
     use sui::tx_context::{TxContext};
@@ -14,7 +13,7 @@ module capsule::capsule {
     use sui_utils::typed_id;
 
     use ownership::ownership;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error Constants
@@ -39,7 +38,7 @@ module capsule::capsule {
         ctx: &mut TxContext
     ) {
         let transfer_auth = encode::type_into_address<Transfer>();
-        let capsule = create_(object, owner, vector::singleton(transfer_auth), ctx);
+        let capsule = create_(object, owner, transfer_auth, ctx);
 
         transfer::share_object(capsule)
     }
@@ -47,7 +46,7 @@ module capsule::capsule {
     public fun create_<T: key + store>(
         object: T,
         owner: address,
-        transfer_auth: vector<address>,
+        transfer_auth: address,
         ctx: &mut TxContext
     ): Capsule<T> {
         let capsule = Capsule {

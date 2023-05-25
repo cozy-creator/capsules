@@ -1,6 +1,5 @@
 module transfer_system::market_account {
     use std::option;
-    use std::vector;
     use std::type_name::{Self, TypeName};
 
     use sui::object::{Self, UID};
@@ -11,7 +10,7 @@ module transfer_system::market_account {
     use sui::transfer;
 
     use ownership::ownership;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use sui_utils::typed_id;
@@ -42,7 +41,7 @@ module transfer_system::market_account {
         let tid = typed_id::new(&account);
         let auth = tx_authority::begin_with_package_witness(Witness {});
 
-        ownership::as_shared_object_(&mut account.id, tid, owner, vector::empty(), &auth);
+        ownership::as_shared_object_(&mut account.id, tid, owner, owner, &auth);
         transfer::share_object(account)
     }
 

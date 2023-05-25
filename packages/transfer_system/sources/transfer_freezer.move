@@ -3,7 +3,7 @@ module transfer_system::transfer_freezer {
     use sui::dynamic_field;
 
     use ownership::ownership;
-    use ownership::permissions::ADMIN;
+    use ownership::permission::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
     struct Freeze has copy, store, drop {
