@@ -6,8 +6,6 @@ module transfer_system::transfer_freezer {
     use ownership::permissions::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
-    friend transfer_system::royalty_market;
-
     struct Freeze has copy, store, drop {
         freezer: address
     }
@@ -20,7 +18,6 @@ module transfer_system::transfer_freezer {
     const EINVALID_FREEZER_AUTHORITY: u64 = 3;
 
     /// Freezes the transfer of an object, restricting ownership transfers.
-    /// Only a friend of this module can call this function.
     /// 
     /// Arguments:
     /// - `uid`: Mutable reference to the UID of the object.
@@ -37,7 +34,7 @@ module transfer_system::transfer_freezer {
     /// Errors:
     /// - EOWNER_UNAUTHORIZED: The caller does not have the necessary owner permission.
     /// - ETRANSFER_ALREADY_FREEZED: The transfer of the object is already frozen.
-    public(friend) fun freeze_transfer(uid: &mut UID, freezer: address, auth: &TxAuthority) {
+    public fun freeze_transfer(uid: &mut UID, freezer: address, auth: &TxAuthority) {
         assert!(ownership::has_owner_permission<ADMIN>(uid, auth), EOWNER_UNAUTHORIZED);
         assert!(!is_transfer_freezed(uid), ETRANSFER_ALREADY_FREEZED);
 
@@ -45,7 +42,6 @@ module transfer_system::transfer_freezer {
     }
 
     /// Unfreezes the transfer of an object, allowing ownership transfers.
-    /// Only a friend of the contract can call this function.
     /// 
     /// Arguments:
     /// - `uid`: Mutable reference to the UID of the object.
@@ -60,7 +56,7 @@ module transfer_system::transfer_freezer {
     /// Errors:
     /// - ETRANSFER_NOT_FREEZED: The transfer of the object is not currently frozen.
     /// - EINVALID_FREEZER_AUTHORITY: The authority of the original freezer is invalid.
-    public(friend) fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+    public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
         assert!(is_transfer_freezed(uid), ETRANSFER_NOT_FREEZED);
 
         let Freeze { freezer } = dynamic_field::remove<Key, Freeze>(uid, Key { });

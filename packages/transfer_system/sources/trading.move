@@ -12,8 +12,11 @@ module transfer_system::trading {
     use ownership::permissions::ADMIN;
     use ownership::tx_authority::{Self, TxAuthority};
 
+    use transfer_system::transfer_freezer;
     use transfer_system::royalty_market::{Self, Royalty};
     use transfer_system::market_account::{Self, MarketAccount};
+
+    use sui_utils::encode;
 
     const ENO_OWNER_AUTHORITY: u64 = 0;
     const EOFFER_ALREADY_EXIST: u64 = 1;
@@ -51,6 +54,7 @@ module transfer_system::trading {
     // ========== Dynamic fields key structs ==========
     struct Key has store, copy, drop { type: u8, user: Option<address> }
 
+    struct Witness has drop { }
 
     // ========== Offer functions ==========
 
@@ -73,6 +77,8 @@ module transfer_system::trading {
         let offer = create_offer<T, C>(seller, price, royalty_id);
 
         emit_offer_created(object::uid_to_inner(uid), SELL_OFFER_TYPE, &offer);
+
+        transfer_freezer::freeze_transfer(uid, encode::type_into_address<Witness>(), auth);
         dynamic_field::add<Key, Offer<T, C>>(uid, key, offer)
     }
 
@@ -172,16 +178,17 @@ module transfer_system::trading {
         let key = Key { user: option::none(), type: SELL_OFFER_TYPE };
         assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
-        emit_offer_cancelled(object::uid_to_inner(uid), SELL_OFFER_TYPE);
         dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+        transfer_freezer::unfreeze_transfer(uid, &tx_authority::begin_with_type(&Witness {}));
+        emit_offer_cancelled(object::uid_to_inner(uid), SELL_OFFER_TYPE)
     }
 
     public fun cancel_buy_offer<T, C>(uid: &mut UID, ctx: &TxContext) {
         let key = Key { user: option::some(tx_context::sender(ctx)), type: BUY_OFFER_TYPE };
         assert!(dynamic_field::exists_with_type<Key, Offer<T, C>>(uid, key), EOFFER_DOES_NOT_EXIST);
 
-        emit_offer_cancelled(object::uid_to_inner(uid), BUY_OFFER_TYPE);
         dynamic_field::remove<Key, Offer<T, C>>(uid, key);
+        emit_offer_cancelled(object::uid_to_inner(uid), BUY_OFFER_TYPE)
     }
 
 

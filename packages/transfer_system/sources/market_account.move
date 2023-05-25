@@ -16,7 +16,7 @@ module transfer_system::market_account {
 
     use sui_utils::typed_id;
 
-    friend transfer_system::item_trading;
+    friend transfer_system::trading;
 
     struct MarketAccount has key {
         id: UID,

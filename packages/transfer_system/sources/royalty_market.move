@@ -51,6 +51,7 @@ module transfer_system::royalty_market {
     const EITEM_RECEIPT_MISMATCH: u64 = 5;
     const EINVALID_ROYALTY_SPLITS_TOTAL: u64 = 6;
     const EINVALID_ROYALTY_PAYMENT: u64 = 7;
+    const ETRANSFER_FREEZED: u64 = 8;
 
     const BPS_BASE_VALUE: u16 = 10_000;
 
@@ -100,6 +101,7 @@ module transfer_system::royalty_market {
         coin: Coin<C>,
         new_owner: Option<address>
     ) {
+        assert!(!transfer_freezer::is_transfer_freezed(uid), ETRANSFER_FREEZED);
         assert!(type_name::get<T>() == payment.type, EITEM_TYPE_MISMATCH);
         if(!is_capsule<T>(uid)) { assert_valid_item_type<T>(uid) };
 
