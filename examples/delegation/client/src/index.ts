@@ -1,6 +1,12 @@
 import { TransactionBlock } from "@mysten/sui.js";
 import { agentSigner, ownerSigner, packageId } from "./config";
 
+interface EditBaybyInput {
+  newName: string;
+  delegationStoreId: string;
+  babyId: string;
+}
+
 async function crateDelegationStore() {
   const txb = new TransactionBlock();
   txb.moveCall({
@@ -32,13 +38,10 @@ async function createCapsuleBaby(name: string) {
 
 async function delegateCapsuleBaby(baby: string, store: string) {
   const txb = new TransactionBlock();
+  const agentAddress = await agentSigner.getAddress();
 
   txb.moveCall({
-    arguments: [
-      txb.object(baby),
-      txb.object(store),
-      txb.pure("0x785ac476958ad86a9210ef55dadd5c5181c1d23813b4dd7d8cfa0a3aa48b7b3c"),
-    ],
+    arguments: [txb.object(baby), txb.object(store), txb.pure(agentAddress)],
     target: `${packageId}::capsule_baby::delegate_baby`,
     typeArguments: [],
   });
@@ -46,11 +49,11 @@ async function delegateCapsuleBaby(baby: string, store: string) {
   return await ownerSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
 }
 
-async function editCapsuleBabyName(newName: string, baby: string, store: string) {
+async function editCapsuleBabyName(input: EditBaybyInput) {
   const txb = new TransactionBlock();
 
   txb.moveCall({
-    arguments: [txb.object(baby), txb.object(store), txb.pure(newName)],
+    arguments: [txb.object(input.babyId), txb.object(input.delegationStoreId), txb.pure(input.newName)],
     target: `${packageId}::capsule_baby::edit_baby_name`,
     typeArguments: [],
   });
