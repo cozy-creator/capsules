@@ -49,6 +49,19 @@ async function delegateCapsuleBaby(baby: string, store: string) {
   return await ownerSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
 }
 
+async function undelegateCapsuleBaby(baby: string, store: string) {
+  const txb = new TransactionBlock();
+  const agentAddress = await agentSigner.getAddress();
+
+  txb.moveCall({
+    arguments: [txb.object(baby), txb.object(store), txb.pure(agentAddress)],
+    target: `${packageId}::capsule_baby::undelegate_baby`,
+    typeArguments: [],
+  });
+
+  return await ownerSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
+}
+
 async function editCapsuleBabyName(input: EditBaybyInput) {
   const txb = new TransactionBlock();
 
