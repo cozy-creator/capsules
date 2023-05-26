@@ -273,7 +273,7 @@ module ownership::delegation {
 
         let objects_map = permission_set::objects_mut(agent_permissions_mut(store, agent));
 
-        while (vector::is_empty(&objects)) {
+        while (!vector::is_empty(&objects)) {
             let object_key = vector::pop_back(&mut objects);
             vec_map2::remove_maybe(objects_map, &object_key);
         };
@@ -323,6 +323,11 @@ module ownership::delegation {
     }
 
     // ======= Getters =======
+
+    public fun agent_permissions(store: &DelegationStore, agent: address): PermissionSet {
+        let fallback = permission_set::empty();
+        dynamic_field2::get_with_default(&store.id, agent, fallback)
+    }
 
     // ======= Extend Pattern =======
 

@@ -199,6 +199,11 @@ module ownership::permission {
         has_permission<P>(permissions)
     }
 
+    #[test_only]
+    public fun new_for_testing<P>(): Permission {
+        new<P>()
+    }
+
     // =========== Single-use permissions ===========
     // Created by ownership::organization, destroyed by ownership::tx_authority to be added to TxAuthority
     // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
