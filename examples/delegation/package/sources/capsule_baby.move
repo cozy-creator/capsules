@@ -6,6 +6,7 @@ module package::capsule_baby {
     use sui::transfer;
 
     use ownership::ownership;
+    use ownership::publish_receipt;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
@@ -17,11 +18,17 @@ module package::capsule_baby {
         name: String
     }
 
+    struct CAPSULE_BABY has drop {}
     struct EDITOR {}
 
     struct Witness has drop {}
 
     const ENO_OWNER_AUTH: u64 = 0;
+
+    fun init(genesis: CAPSULE_BABY, ctx: &mut TxContext) {
+        let reciept = publish_receipt::claim(&genesis, ctx);
+        transfer::public_transfer(reciept, tx_context::sender(ctx))
+    }
 
     public fun create_baby(
         name: String,
@@ -61,20 +68,3 @@ module package::capsule_baby {
         baby.name = new_name;
     }
 }
-
-    // public fun edit_baby_name(
-    //     baby: &mut CapsuleBaby,
-    //     store: &DelegationStore,
-    //     new_name: String,
-    //     ctx: &mut TxContext
-    // ) {
-    //     let auth = tx_authority::begin(ctx);
-    //     if(ownership::has_owner_permission<ADMIN>(&baby.id, &auth)) {
-    //         baby.name = new_name;
-    //     } else {
-    //         let auth = delegation::claim_delegation(store, ctx);
-    //         assert!(ownership::has_owner_permission<EDITOR>(&baby.id, &auth), ENO_OWNER_AUTH);
-
-    //         baby.name = new_name;
-    //     }
-    // }

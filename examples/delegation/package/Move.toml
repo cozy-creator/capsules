@@ -9,4 +9,4 @@ TransferSystem = { local = "../../../packages/transfer_system" }
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
 
 [addresses]
-package = "0xa47f4c1c218585c898588fd3d0282b085280157660a308d88f33c2557b10fa3f"
+package = "0x49c188fe25ccfc23d19dddc826b20eab28be5b76e05ec0e8efab7ce92a874e23"
