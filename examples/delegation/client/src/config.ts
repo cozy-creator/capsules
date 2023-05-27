@@ -10,7 +10,7 @@ export const provider = new JsonRpcProvider(new Connection({ fullnode: "http://1
 export const ownerSigner = new RawSigner(ownerKeypair, provider);
 export const agentSigner = new RawSigner(agentKeypair, provider);
 
-export const basGasBudget = 100_000_000;
-export const babyPackageId = "0xd8323074a866156aaec301d447a90b0ae0322555828ab36deeb3b8e9f1cc1bab";
-export const publishReceiptId = "0x0c016d00fea437e4b119f7a8cd162abaf55a7c1d21e447d6466748308b151fdf";
+export const baseGasBudget = 100_000_000;
+export const babyPackageId = "0x91231246a8243011cc8fe76bc0bfccd11c080f982e96011d18ce59f12620db8e";
+export const publishReceiptId = "0x2b45d6129cb589acd89e9bc56e6784274c0dba00f23f7a3bbeb87486a31dd67f";
 export const ownershipPackageId = "0x67ddd36c005d4ab7f2b5062143f2c33fa8b88e745a9e5d805dd764a06d7675df";

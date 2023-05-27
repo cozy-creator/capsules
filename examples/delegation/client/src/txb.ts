@@ -31,6 +31,11 @@ interface RemoveOrganizationPackageOptions {
   organization: TransactionArgument | string;
 }
 
+interface OrganizationEndorsementOptions {
+  address: string;
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
+}
 export function createDelegationStore(txb: TransactionBlock) {
   return txb.moveCall({
     arguments: [],
@@ -147,6 +152,28 @@ export function returnAndShareOrganization(txb: TransactionBlock, organization: 
   return txb.moveCall({
     arguments: [organization],
     target: `${ownershipPackageId}::organization::return_and_share`,
+    typeArguments: [],
+  });
+}
+
+export function endorseOrganization(
+  txb: TransactionBlock,
+  { address, auth, organization }: OrganizationEndorsementOptions
+) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(address), auth],
+    target: `${ownershipPackageId}::organization::add_endorsement`,
+    typeArguments: [],
+  });
+}
+
+export function unendorseOrganization(
+  txb: TransactionBlock,
+  { address, auth, organization }: OrganizationEndorsementOptions
+) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(address), auth],
+    target: `${ownershipPackageId}::organization::remove_endorsement`,
     typeArguments: [],
   });
 }
