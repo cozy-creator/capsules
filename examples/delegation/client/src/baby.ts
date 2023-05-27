@@ -39,6 +39,21 @@ async function getBabyIdAndStoreIdfromTxResponse(response: SuiTransactionBlockRe
   return [];
 }
 
+async function createAndShareCapsuleBaby(name: string) {
+  const txb = new TransactionBlock();
+  const [baby] = createCapsuleBaby(txb, name);
+  const [store] = createDelegationStore(txb);
+
+  returnAndShareCapsuleBaby(txb, baby);
+  txb.setGasBudget(baseGasBudget);
+
+  const response = await ownerSigner.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+  });
+
+  console.log(response);
+}
+
 async function createAndEditByOwner(initialName: string, editName: string) {
   const txb = new TransactionBlock();
   const [baby] = createCapsuleBaby(txb, initialName);
@@ -134,6 +149,7 @@ async function createAndEditBabyByAgentWithDelegation(initialName: string, editN
   }
 }
 
+// createAndShareCapsuleBaby("Ayo");
 // createAndEditByOwner("Ayo", "Mide");
 // createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
 // createAndEditByAgentWithoutDelegation("Ayo", "Max");
