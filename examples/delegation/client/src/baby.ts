@@ -39,13 +39,13 @@ async function getBabyIdAndStoreIdfromTxResponse(response: SuiTransactionBlockRe
   return [];
 }
 
-async function createAndEditByOwner() {
+async function createAndEditByOwner(initialName: string, editName: string) {
   const txb = new TransactionBlock();
-  const [baby] = createCapsuleBaby(txb, "SomeR");
+  const [baby] = createCapsuleBaby(txb, initialName);
   const [store] = createDelegationStore(txb);
   const [auth] = beginTxAuth(txb);
 
-  editCapsuleBabyName(txb, { newName: "Heyyey", auth, baby });
+  editCapsuleBabyName(txb, { newName: editName, auth, baby });
   returnAndShareCapsuleBaby(txb, baby);
   returnAndShareDelegationStore(txb, store);
   txb.setGasBudget(baseGasBudget);
@@ -54,9 +54,9 @@ async function createAndEditByOwner() {
   console.log(response);
 }
 
-async function createAndEditByAgentWithoutDelegation() {
+async function createAndEditByAgentWithoutDelegation(initialName: string, editName: string) {
   const txb = new TransactionBlock();
-  const [baby] = createCapsuleBaby(txb, "SomeR");
+  const [baby] = createCapsuleBaby(txb, initialName);
   const [store] = createDelegationStore(txb);
 
   returnAndShareCapsuleBaby(txb, baby);
@@ -75,7 +75,7 @@ async function createAndEditByAgentWithoutDelegation() {
   {
     const txb = new TransactionBlock();
     const [auth] = claimDelegation(txb, storeId);
-    editCapsuleBabyName(txb, { baby: babyId, auth, newName: "Hahh" });
+    editCapsuleBabyName(txb, { baby: babyId, auth, newName: editName });
     txb.setGasBudget(baseGasBudget);
 
     const response = await agentSigner.signAndExecuteTransactionBlock({
@@ -91,9 +91,9 @@ async function createAndEditByAgentWithoutDelegation() {
   }
 }
 
-async function createAndEditBabyByAgentWithDelegation() {
+async function createAndEditBabyByAgentWithDelegation(initialName: string, editName: string) {
   const txb = new TransactionBlock();
-  const [baby] = createCapsuleBaby(txb, "SomeR");
+  const [baby] = createCapsuleBaby(txb, initialName);
   const [store] = createDelegationStore(txb);
 
   returnAndShareCapsuleBaby(txb, baby);
@@ -123,7 +123,7 @@ async function createAndEditBabyByAgentWithDelegation() {
   {
     const txb = new TransactionBlock();
     const [auth] = claimDelegation(txb, storeId);
-    editCapsuleBabyName(txb, { baby: babyId, auth, newName: "Hahh" });
+    editCapsuleBabyName(txb, { baby: babyId, auth, newName: editName });
     txb.setGasBudget(baseGasBudget);
 
     const response = await agentSigner.signAndExecuteTransactionBlock({
@@ -134,4 +134,6 @@ async function createAndEditBabyByAgentWithDelegation() {
   }
 }
 
-createAndEditByAgentWithoutDelegation();
+// createAndEditByOwner("Ayo", "Mide");
+// createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
+// createAndEditByAgentWithoutDelegation("Ayo", "Max");
