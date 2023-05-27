@@ -1,5 +1,5 @@
 import { TransactionArgument, TransactionBlock } from "@mysten/sui.js";
-import { babyPackageId, ownershipPackageId } from "./config";
+import { babyPackageId, ownerKeypair, ownerSigner, ownershipPackageId } from "./config";
 
 interface EditBabyNameOptions {
   baby: TransactionArgument | string;
@@ -12,6 +12,23 @@ interface BabyDelegationOptions {
   auth: TransactionArgument;
   babyId: string;
   agent: string;
+}
+
+interface AddOrganizationPackageOptions {
+  receipt: string;
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
+}
+
+interface DestroyOrganizationOptions {
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
+}
+
+interface RemoveOrganizationPackageOptions {
+  packageId: string;
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
 }
 
 export function createDelegationStore(txb: TransactionBlock) {
@@ -82,6 +99,54 @@ export function editCapsuleBabyName(txb: TransactionBlock, { auth, baby, newName
   return txb.moveCall({
     arguments: [typeof baby == "string" ? txb.object(baby) : baby, txb.pure(newName), auth],
     target: `${babyPackageId}::capsule_baby::edit_baby_name`,
+    typeArguments: [],
+  });
+}
+
+export function createOrganizationFromPublishReceipt(txb: TransactionBlock, receipt: string) {
+  let owner = ownerKeypair.getPublicKey().toSuiAddress();
+
+  return txb.moveCall({
+    arguments: [txb.object(receipt), txb.pure(owner)],
+    target: `${ownershipPackageId}::organization::create_from_receipt`,
+    typeArguments: [],
+  });
+}
+
+export function addOrganizationPackage(
+  txb: TransactionBlock,
+  { auth, receipt, organization }: AddOrganizationPackageOptions
+) {
+  return txb.moveCall({
+    arguments: [txb.object(receipt), typeof organization == "string" ? txb.object(organization) : organization, auth],
+    target: `${ownershipPackageId}::organization::add_package`,
+    typeArguments: [],
+  });
+}
+
+export function removeOrganizationPackage(
+  txb: TransactionBlock,
+  { auth, packageId, organization }: RemoveOrganizationPackageOptions
+) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(packageId), auth],
+    target: `${ownershipPackageId}::organization::remove_package`,
+    typeArguments: [],
+  });
+}
+
+export function destroyOrganization(txb: TransactionBlock, { auth, organization }: DestroyOrganizationOptions) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, auth],
+    target: `${ownershipPackageId}::organization::destroy`,
+    typeArguments: [],
+  });
+}
+
+export function returnAndShareOrganization(txb: TransactionBlock, organization: TransactionArgument) {
+  return txb.moveCall({
+    arguments: [organization],
+    target: `${ownershipPackageId}::organization::return_and_share`,
     typeArguments: [],
   });
 }
