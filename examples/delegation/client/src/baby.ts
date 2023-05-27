@@ -50,8 +50,8 @@ async function createAndEditByOwner() {
   returnAndShareDelegationStore(txb, store);
   txb.setGasBudget(basGasBudget);
 
-  const res = await ownerSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
-  console.log(res);
+  const response = await ownerSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
+  console.log(response);
 }
 
 async function createAndEditByAgentWithoutDelegation() {
@@ -78,11 +78,20 @@ async function createAndEditByAgentWithoutDelegation() {
     editCapsuleBabyName(txb, { baby: babyId, auth, newName: "Hahh" });
     txb.setGasBudget(basGasBudget);
 
-    await agentSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
+    const response = await agentSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: {
+        showEffects: true,
+      },
+    });
+
+    if (response.effects?.status) {
+      console.log(`\nError: ${response.effects.status.error}`);
+    }
   }
 }
 
-async function createAndEditByAgent() {
+async function createAndEditBabyByAgentWithDelegation() {
   const txb = new TransactionBlock();
   const [baby] = createCapsuleBaby(txb, "SomeR");
   const [store] = createDelegationStore(txb);
@@ -117,7 +126,11 @@ async function createAndEditByAgent() {
     editCapsuleBabyName(txb, { baby: babyId, auth, newName: "Hahh" });
     txb.setGasBudget(basGasBudget);
 
-    await agentSigner.signAndExecuteTransactionBlock({ transactionBlock: txb });
+    const response = await agentSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+    });
+
+    console.log(response);
   }
 }
 
