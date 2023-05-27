@@ -1,5 +1,4 @@
 module package::capsule_baby {
-    use std::vector;
     use std::string::String;
 
     use sui::tx_context::{Self, TxContext};
@@ -7,9 +6,7 @@ module package::capsule_baby {
     use sui::transfer;
 
     use ownership::ownership;
-    use ownership::tx_authority;
-    use ownership::permission::ADMIN;
-    use ownership::delegation::{Self, DelegationStore};
+    use ownership::tx_authority::{Self, TxAuthority};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -55,54 +52,29 @@ module package::capsule_baby {
         transfer::share_object(baby)
     }
 
-    // Convenience function
-    public fun create_delegation_store(
-        ctx: &mut TxContext
-    ) {
-        let store = delegation::create(ctx);
-        delegation::return_and_share(store)
-    }
-
-    public fun delegate_baby(
-        baby: &mut CapsuleBaby,
-        store: &mut DelegationStore,
-        agent: address,
-        ctx: &mut TxContext
-    ) {
-        let auth = tx_authority::begin(ctx);
-        assert!(ownership::has_owner_permission<ADMIN>(&baby.id, &auth), ENO_OWNER_AUTH);
-
-        let objects = vector::singleton(object::id(baby));
-        delegation::add_permission_for_objects<EDITOR>(store, agent, objects, &auth)
-    }
-
-    public fun undelegate_baby(
-        baby: &mut CapsuleBaby,
-        store: &mut DelegationStore,
-        agent: address,
-        ctx: &mut TxContext
-    ) {
-        let auth = tx_authority::begin(ctx);
-        assert!(ownership::has_owner_permission<ADMIN>(&baby.id, &auth), ENO_OWNER_AUTH);
-
-        let objects = vector::singleton(object::id(baby));
-        delegation::remove_permission_for_objects_from_agent<EDITOR>(store, agent, objects, &auth)
-    }
-
     public fun edit_baby_name(
         baby: &mut CapsuleBaby,
-        store: &DelegationStore,
         new_name: String,
-        ctx: &mut TxContext
+        auth: &TxAuthority
     ) {
-        let auth = tx_authority::begin(ctx);
-        if(ownership::has_owner_permission<ADMIN>(&baby.id, &auth)) {
-            baby.name = new_name;
-        } else {
-            let auth = delegation::claim_delegation(store, ctx);
-            assert!(ownership::has_owner_permission<EDITOR>(&baby.id, &auth), ENO_OWNER_AUTH);
-
-            baby.name = new_name;
-        }
+        assert!(ownership::has_owner_permission<EDITOR>(&baby.id, auth), ENO_OWNER_AUTH);
+        baby.name = new_name;
     }
 }
+
+    // public fun edit_baby_name(
+    //     baby: &mut CapsuleBaby,
+    //     store: &DelegationStore,
+    //     new_name: String,
+    //     ctx: &mut TxContext
+    // ) {
+    //     let auth = tx_authority::begin(ctx);
+    //     if(ownership::has_owner_permission<ADMIN>(&baby.id, &auth)) {
+    //         baby.name = new_name;
+    //     } else {
+    //         let auth = delegation::claim_delegation(store, ctx);
+    //         assert!(ownership::has_owner_permission<EDITOR>(&baby.id, &auth), ENO_OWNER_AUTH);
+
+    //         baby.name = new_name;
+    //     }
+    // }
