@@ -14,6 +14,6 @@ export const agentSigner = new RawSigner(agentKeypair, provider);
 export const fakeOwnerSigner = new RawSigner(fakeOwnerKeypair, provider);
 
 export const baseGasBudget = 100_000_000;
-export const babyPackageId = "0x91231246a8243011cc8fe76bc0bfccd11c080f982e96011d18ce59f12620db8e";
-export const publishReceiptId = "0x2b45d6129cb589acd89e9bc56e6784274c0dba00f23f7a3bbeb87486a31dd67f";
+export const babyPackageId = "0x290a3f883aff31ab8b3f0b0bffaa85b21a5ca74a046b7afb78ae67e670bac382";
+export const publishReceiptId = "0xe042ce69a00a41cc246e8b2fca5bdcc80d544da089c113837a42291c99ed051a";
 export const ownershipPackageId = "0x67ddd36c005d4ab7f2b5062143f2c33fa8b88e745a9e5d805dd764a06d7675df";

@@ -8,6 +8,7 @@ module package::capsule_baby {
     use ownership::ownership;
     use ownership::publish_receipt;
     use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::organization::{Self, Organization};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -24,6 +25,7 @@ module package::capsule_baby {
     struct Witness has drop {}
 
     const ENO_OWNER_AUTH: u64 = 0;
+    const ENO_ORG_AUTH: u64 = 1;
 
     fun init(genesis: CAPSULE_BABY, ctx: &mut TxContext) {
         let reciept = publish_receipt::claim(&genesis, ctx);
@@ -65,6 +67,20 @@ module package::capsule_baby {
         auth: &TxAuthority
     ) {
         assert!(ownership::has_owner_permission<EDITOR>(&baby.id, auth), ENO_OWNER_AUTH);
+        baby.name = new_name;
+    }
+
+    public fun org_edit_baby_name(
+        baby: &mut CapsuleBaby,
+        organization: &Organization,
+        new_name: String,
+        ctx: &mut TxContext
+    ) {
+        let principal = tx_context::sender(ctx);
+        let auth = organization::assert_login<EDITOR>(organization, ctx);
+
+        assert!(tx_authority::has_permission<EDITOR>(principal, &auth), ENO_ORG_AUTH);
+
         baby.name = new_name;
     }
 }

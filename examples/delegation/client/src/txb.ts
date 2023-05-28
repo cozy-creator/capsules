@@ -7,6 +7,12 @@ interface EditBabyNameOptions {
   newName: string;
 }
 
+interface OrgEditBabyNameOptions {
+  baby: TransactionArgument | string;
+  organization: TransactionArgument | string;
+  newName: string;
+}
+
 interface BabyDelegationOptions {
   store: TransactionArgument | string;
   auth: TransactionArgument;
@@ -118,6 +124,18 @@ export function editCapsuleBabyName(txb: TransactionBlock, { auth, baby, newName
   return txb.moveCall({
     arguments: [typeof baby == "string" ? txb.object(baby) : baby, txb.pure(newName), auth],
     target: `${babyPackageId}::capsule_baby::edit_baby_name`,
+    typeArguments: [],
+  });
+}
+
+export function orgditCapsuleBabyName(txb: TransactionBlock, { organization, baby, newName }: OrgEditBabyNameOptions) {
+  return txb.moveCall({
+    arguments: [
+      typeof baby == "string" ? txb.object(baby) : baby,
+      typeof organization == "string" ? txb.object(organization) : organization,
+      txb.pure(newName),
+    ],
+    target: `${babyPackageId}::capsule_baby::org_edit_baby_name`,
     typeArguments: [],
   });
 }

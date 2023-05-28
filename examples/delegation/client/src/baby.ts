@@ -8,6 +8,7 @@ import {
   delegateBaby,
   editCapsuleBabyName,
   grantPermissiontoOrganizationRole,
+  orgditCapsuleBabyName,
   returnAndShareCapsuleBaby,
   returnAndShareDelegationStore,
   setOrganizationRoleForAgent,
@@ -242,8 +243,7 @@ async function createAndEditBabyByOrganization(orgId: string, initialName: strin
 
   {
     const txb = new TransactionBlock();
-    const [auth] = claimOrganizationPermissions(txb, orgId);
-    editCapsuleBabyName(txb, { baby: babyId, auth, newName: editName });
+    orgditCapsuleBabyName(txb, { baby: babyId, organization: orgId, newName: editName });
     txb.setGasBudget(baseGasBudget);
 
     const response = await agentSigner.signAndExecuteTransactionBlock({
@@ -259,4 +259,4 @@ async function createAndEditBabyByOrganization(orgId: string, initialName: strin
 // createAndEditByAgentWithoutDelegation("Ayo", "Max");
 // createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
 // createAndEditBabyByAgentWithFakeOwnerDelegation("Barb", "Ayo");
-// createAndEditBabyByOrganization("0xe14df24e315fbbf0853dadd28a199f591e6ea9420eeb0c90756acfeda500d1af", "Barb", "Bayo");
+// createAndEditBabyByOrganization("0x7e12ac3390139506742f89ab4c9faa71a04284f561f75b0ee5f73192aecb9cce", "Barb", "Bayo");
