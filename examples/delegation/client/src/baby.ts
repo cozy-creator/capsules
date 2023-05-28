@@ -2,12 +2,15 @@ import { SuiTransactionBlockResponse, TransactionBlock } from "@mysten/sui.js";
 import {
   beginTxAuth,
   claimDelegation,
+  claimOrganizationPermissions,
   createCapsuleBaby,
   createDelegationStore,
   delegateBaby,
   editCapsuleBabyName,
+  grantPermissiontoOrganizationRole,
   returnAndShareCapsuleBaby,
   returnAndShareDelegationStore,
+  setOrganizationRoleForAgent,
 } from "./txb";
 import {
   agentSigner,
@@ -209,8 +212,51 @@ async function createAndEditBabyByAgentWithFakeOwnerDelegation(initialName: stri
   }
 }
 
+async function createAndEditBabyByOrganization(orgId: string, initialName: string, editName: string) {
+  const txb = new TransactionBlock();
+  const agent = await agentSigner.getAddress();
+
+  const [baby] = createCapsuleBaby(txb, initialName);
+  const [auth] = beginTxAuth(txb);
+
+  setOrganizationRoleForAgent(txb, { organization: orgId, role: "Editor", agent, auth });
+  grantPermissiontoOrganizationRole(txb, {
+    organization: orgId,
+    role: "Editor",
+    permission: `${babyPackageId}::capsule_baby::EDITOR`,
+    auth,
+  });
+
+  returnAndShareCapsuleBaby(txb, baby);
+  txb.setGasBudget(baseGasBudget);
+
+  const response = await ownerSigner.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+    options: {
+      showEffects: true,
+    },
+  });
+
+  const [babyId] = await getBabyIdAndStoreIdfromTxResponse(response);
+  if (!babyId) throw new Error("Cannot capsule baby in tx response");
+
+  {
+    const txb = new TransactionBlock();
+    const [auth] = claimOrganizationPermissions(txb, orgId);
+    editCapsuleBabyName(txb, { baby: babyId, auth, newName: editName });
+    txb.setGasBudget(baseGasBudget);
+
+    const response = await agentSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+    });
+
+    console.log(response);
+  }
+}
+
 // createAndShareCapsuleBaby("Ayo");
 // createAndEditByOwner("Ayo", "Mide");
 // createAndEditByAgentWithoutDelegation("Ayo", "Max");
 // createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
 // createAndEditBabyByAgentWithFakeOwnerDelegation("Barb", "Ayo");
+// createAndEditBabyByOrganization("0xe14df24e315fbbf0853dadd28a199f591e6ea9420eeb0c90756acfeda500d1af", "Barb", "Bayo");

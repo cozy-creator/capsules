@@ -36,6 +36,20 @@ interface OrganizationEndorsementOptions {
   auth: TransactionArgument;
   organization: TransactionArgument | string;
 }
+
+interface SetOrganizationRoleForAgentOptions {
+  agent: string;
+  role: string;
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
+}
+
+interface GrantPermissionTOOrganizationRoleOptions {
+  role: string;
+  permission: string;
+  auth: TransactionArgument;
+  organization: TransactionArgument | string;
+}
 export function createDelegationStore(txb: TransactionBlock) {
   return txb.moveCall({
     arguments: [],
@@ -174,6 +188,41 @@ export function unendorseOrganization(
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(address), auth],
     target: `${ownershipPackageId}::organization::remove_endorsement`,
+    typeArguments: [],
+  });
+}
+
+export function setOrganizationRoleForAgent(
+  txb: TransactionBlock,
+  { agent, role, auth, organization }: SetOrganizationRoleForAgentOptions
+) {
+  return txb.moveCall({
+    arguments: [
+      typeof organization == "string" ? txb.object(organization) : organization,
+      txb.pure(agent),
+      txb.pure(role),
+      auth,
+    ],
+    target: `${ownershipPackageId}::organization::set_role_for_agent`,
+    typeArguments: [],
+  });
+}
+
+export function grantPermissiontoOrganizationRole(
+  txb: TransactionBlock,
+  { permission, role, auth, organization }: GrantPermissionTOOrganizationRoleOptions
+) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(role), auth],
+    target: `${ownershipPackageId}::organization::grant_permission_to_role`,
+    typeArguments: [permission],
+  });
+}
+
+export function claimOrganizationPermissions(txb: TransactionBlock, organization: TransactionArgument | string) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization],
+    target: `${ownershipPackageId}::organization::claim_permissions`,
     typeArguments: [],
   });
 }
