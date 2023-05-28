@@ -42,7 +42,6 @@ async function getBabyIdAndStoreIdfromTxResponse(response: SuiTransactionBlockRe
 async function createAndShareCapsuleBaby(name: string) {
   const txb = new TransactionBlock();
   const [baby] = createCapsuleBaby(txb, name);
-  const [store] = createDelegationStore(txb);
 
   returnAndShareCapsuleBaby(txb, baby);
   txb.setGasBudget(baseGasBudget);
