@@ -2,13 +2,16 @@ import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner } from "@mysten/
 
 const ownerMnemonics = "pause estate bargain cycle grow same trumpet north merge check expire zoo";
 const agentMnemonics = "hybrid sniff fan aisle easily seat cycle zoo struggle renew change leave";
+const fakeOwnerMnemonics = "train heavy pizza chunk eight march silver seminar gauge unveil brain upset";
 
 export const ownerKeypair = Ed25519Keypair.deriveKeypair(ownerMnemonics);
 export const agentKeypair = Ed25519Keypair.deriveKeypair(agentMnemonics);
+export const fakeOwnerKeypair = Ed25519Keypair.deriveKeypair(fakeOwnerMnemonics);
 
 export const provider = new JsonRpcProvider(new Connection({ fullnode: "http://127.0.0.1:9000" }));
 export const ownerSigner = new RawSigner(ownerKeypair, provider);
 export const agentSigner = new RawSigner(agentKeypair, provider);
+export const fakeOwnerSigner = new RawSigner(fakeOwnerKeypair, provider);
 
 export const baseGasBudget = 100_000_000;
 export const babyPackageId = "0x91231246a8243011cc8fe76bc0bfccd11c080f982e96011d18ce59f12620db8e";

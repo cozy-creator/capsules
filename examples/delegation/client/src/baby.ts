@@ -9,7 +9,15 @@ import {
   returnAndShareCapsuleBaby,
   returnAndShareDelegationStore,
 } from "./txb";
-import { agentSigner, babyPackageId, baseGasBudget, ownerSigner, ownershipPackageId, provider } from "./config";
+import {
+  agentSigner,
+  babyPackageId,
+  baseGasBudget,
+  fakeOwnerSigner,
+  ownerSigner,
+  ownershipPackageId,
+  provider,
+} from "./config";
 
 async function getBabyIdAndStoreIdfromTxResponse(response: SuiTransactionBlockResponse) {
   if (response.effects && response.effects.created) {
@@ -29,9 +37,6 @@ async function getBabyIdAndStoreIdfromTxResponse(response: SuiTransactionBlockRe
 
       if (storeId && babyId) break;
     }
-
-    if (!storeId) throw new Error("Cannot find delegation store in tx response");
-    if (!babyId) throw new Error("Cannot capsule baby in tx response");
 
     return [babyId, storeId];
   }
@@ -85,6 +90,8 @@ async function createAndEditByAgentWithoutDelegation(initialName: string, editNa
   });
 
   const [babyId, storeId] = await getBabyIdAndStoreIdfromTxResponse(response);
+  if (!storeId) throw new Error("Cannot find delegation store in tx response");
+  if (!babyId) throw new Error("Cannot capsule baby in tx response");
 
   {
     const txb = new TransactionBlock();
@@ -122,6 +129,8 @@ async function createAndEditBabyByAgentWithDelegation(initialName: string, editN
   });
 
   const [babyId, storeId] = await getBabyIdAndStoreIdfromTxResponse(response);
+  if (!storeId) throw new Error("Cannot find delegation store in tx response");
+  if (!babyId) throw new Error("Cannot capsule baby in tx response");
 
   {
     const txb = new TransactionBlock();
@@ -148,7 +157,61 @@ async function createAndEditBabyByAgentWithDelegation(initialName: string, editN
   }
 }
 
+async function createAndEditBabyByAgentWithFakeOwnerDelegation(initialName: string, editName: string) {
+  const txb = new TransactionBlock();
+  const [baby] = createCapsuleBaby(txb, initialName);
+
+  returnAndShareCapsuleBaby(txb, baby);
+  txb.setGasBudget(baseGasBudget);
+
+  const response = await ownerSigner.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+    options: {
+      showEffects: true,
+    },
+  });
+
+  const [babyId] = await getBabyIdAndStoreIdfromTxResponse(response);
+  if (!babyId) throw new Error("Cannot capsule baby in tx response");
+
+  let storeId;
+  {
+    const txb = new TransactionBlock();
+    const agent = await agentSigner.getAddress();
+    const [store] = createDelegationStore(txb);
+    const [auth] = beginTxAuth(txb);
+
+    delegateBaby(txb, { agent, babyId, auth, store });
+    returnAndShareDelegationStore(txb, store);
+    txb.setGasBudget(baseGasBudget);
+
+    const response = await fakeOwnerSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+    const [_, s] = await getBabyIdAndStoreIdfromTxResponse(response);
+
+    storeId = s;
+  }
+
+  if (!storeId) throw new Error("Cannot find delegation store in tx response");
+
+  {
+    const txb = new TransactionBlock();
+    const [auth] = claimDelegation(txb, storeId);
+    editCapsuleBabyName(txb, { baby: babyId, auth, newName: editName });
+    txb.setGasBudget(baseGasBudget);
+
+    const response = await agentSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+    });
+
+    console.log(response);
+  }
+}
+
 // createAndShareCapsuleBaby("Ayo");
 // createAndEditByOwner("Ayo", "Mide");
-// createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
 // createAndEditByAgentWithoutDelegation("Ayo", "Max");
+// createAndEditBabyByAgentWithDelegation("Barb", "Ayo");
+// createAndEditBabyByAgentWithFakeOwnerDelegation("Barb", "Ayo");
