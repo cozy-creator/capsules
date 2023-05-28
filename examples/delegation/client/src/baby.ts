@@ -191,10 +191,9 @@ async function createAndEditBabyByAgentWithFakeOwnerDelegation(initialName: stri
     });
     const [_, s] = await getBabyIdAndStoreIdfromTxResponse(response);
 
+    if (!s) throw new Error("Cannot find delegation store in tx response");
     storeId = s;
   }
-
-  if (!storeId) throw new Error("Cannot find delegation store in tx response");
 
   {
     const txb = new TransactionBlock();
