@@ -3,14 +3,11 @@
 // unlike the capsule's metadata schema, the dispenser schema does not include the field name.
 
 module dispenser::schema {
-    use std::hash;
     use std::vector;
-
-    use sui::bcs;
 
     use sui_utils::deserialize;
 
-    struct Schema has store, drop {
+    struct Schema has copy, store, drop {
         fields: vector<vector<u8>>
     }
 
@@ -89,13 +86,7 @@ module dispenser::schema {
         }
     }
 
-    fun compute_schema_id(fields: vector<vector<u8>>): vector<u8> {
-        let bytes = bcs::to_bytes(&fields);
-        hash::sha3_256(bytes)
-    }
-
     fun is_supported_type(type: &vector<u8>): bool {
         vector::contains(&SUPPORTED_TYPES, type)
     }
-
 }
