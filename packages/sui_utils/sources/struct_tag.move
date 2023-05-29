@@ -69,7 +69,8 @@ module sui_utils::struct_tag {
     }
 
     // More relaxed comparison; if type1's generic is left undefined, then it's treated as *, meaning it
-    // matches any value for type2's generics.
+    // matches any value for type2's generics. This is NOT commutative; type2's generics being undefined
+    // does not mean that it matches any value for type1.
     public fun match(type1: &StructTag, type2: &StructTag): bool {
         (type1.package_id == type2.package_id
             && type1.module_name == type2.module_name

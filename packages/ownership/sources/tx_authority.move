@@ -18,7 +18,11 @@ module ownership::tx_authority {
     use ownership::permission_set::{Self, PermissionSet};
     use ownership::permission::{Self, Permission};
 
+    // Hardcoded struct name for package witnesses
     const WITNESS_STRUCT: vector<u8> = b"Witness";
+
+    // Error constants
+    const ENOT_A_PACKAGE_WITNESS: u64 = 0;
 
     // agent_permissions: (principle => Permission types)
     // package_org: (package ID => organization-id (as an address) that controls that package)
@@ -58,8 +62,14 @@ module ownership::tx_authority {
     //     }
     // }
 
+    // A 'package witness' is any struct with the name 'Witness' and the `drop` ability.
+    // The module_name is unimportant; only the package_id matters. Effectively this means
+    // that any module within a package can produce the same package Witness.
     public fun begin_with_package_witness<Witness: drop>(_witness: Witness): TxAuthority {
-        new_internal(object::id_to_address(&encode::package_id<Witness>()))
+        let (package_id, _, struct_name, _)= encode::type_name_decomposed<Witness>();
+        assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
+
+        new_internal(object::id_to_address(&package_id))
     }
 
     public fun empty(): TxAuthority {
@@ -112,8 +122,11 @@ module ownership::tx_authority {
     // }
 
     public fun add_package_witness<Witness: drop>(_witness: Witness, auth: &TxAuthority): TxAuthority {
+        let (package_id, _, struct_name, _)= encode::type_name_decomposed<Witness>();
+        assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
+
         let new_auth = copy_(auth);
-        let package_addr = object::id_to_address(&encode::package_id<Witness>());
+        let package_addr = object::id_to_address(&package_id);
         let permissions = permission_set::new(vector[permission::admin()]);
 
         vec_map2::set(&mut new_auth.agent_permissions, &package_addr, permissions);

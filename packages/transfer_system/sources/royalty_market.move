@@ -95,7 +95,7 @@ module transfer_system::royalty_market {
     /// 
     /// A `TxAuthority` struct will be constructed using the witness royalty market
     /// The contructed auth will later be used to authorize the item transfer
-    public fun transfer<T: key + store, C>(
+    public fun transfer<T: key, C>(
         uid: &mut UID,
         payment: RoyaltyPayment,
         coin: Coin<C>,
