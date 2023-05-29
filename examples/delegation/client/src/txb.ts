@@ -7,12 +7,6 @@ interface EditBabyNameOptions {
   newName: string;
 }
 
-interface OrgEditBabyNameOptions {
-  baby: TransactionArgument | string;
-  organization: TransactionArgument | string;
-  newName: string;
-}
-
 interface BabyDelegationOptions {
   store: TransactionArgument | string;
   auth: TransactionArgument;
@@ -50,12 +44,18 @@ interface SetOrganizationRoleForAgentOptions {
   organization: TransactionArgument | string;
 }
 
-interface GrantPermissionTOOrganizationRoleOptions {
+interface OrganizationPermissionRoleOptions {
   role: string;
   permission: string;
   auth: TransactionArgument;
   organization: TransactionArgument | string;
 }
+
+interface DestroyDelegationStoreOptions {
+  store: TransactionArgument | string;
+  auth: TransactionArgument;
+}
+
 export function createDelegationStore(txb: TransactionBlock) {
   return txb.moveCall({
     arguments: [],
@@ -64,6 +64,13 @@ export function createDelegationStore(txb: TransactionBlock) {
   });
 }
 
+export function destroyDelegationStore(txb: TransactionBlock, { store, auth }: DestroyDelegationStoreOptions) {
+  return txb.moveCall({
+    typeArguments: [],
+    target: `${ownershipPackageId}::delegation::destroy`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, auth],
+  });
+}
 export function returnAndShareDelegationStore(txb: TransactionBlock, store: TransactionArgument) {
   return txb.moveCall({
     typeArguments: [],
@@ -124,18 +131,6 @@ export function editCapsuleBabyName(txb: TransactionBlock, { auth, baby, newName
   return txb.moveCall({
     arguments: [typeof baby == "string" ? txb.object(baby) : baby, txb.pure(newName), auth],
     target: `${babyPackageId}::capsule_baby::edit_baby_name`,
-    typeArguments: [],
-  });
-}
-
-export function orgditCapsuleBabyName(txb: TransactionBlock, { organization, baby, newName }: OrgEditBabyNameOptions) {
-  return txb.moveCall({
-    arguments: [
-      typeof baby == "string" ? txb.object(baby) : baby,
-      typeof organization == "string" ? txb.object(organization) : organization,
-      txb.pure(newName),
-    ],
-    target: `${babyPackageId}::capsule_baby::org_edit_baby_name`,
     typeArguments: [],
   });
 }
@@ -228,7 +223,7 @@ export function setOrganizationRoleForAgent(
 
 export function grantPermissiontoOrganizationRole(
   txb: TransactionBlock,
-  { permission, role, auth, organization }: GrantPermissionTOOrganizationRoleOptions
+  { permission, role, auth, organization }: OrganizationPermissionRoleOptions
 ) {
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(role), auth],
@@ -237,6 +232,16 @@ export function grantPermissiontoOrganizationRole(
   });
 }
 
+export function revokePermissionFromOrganizationRole(
+  txb: TransactionBlock,
+  { permission, role, auth, organization }: OrganizationPermissionRoleOptions
+) {
+  return txb.moveCall({
+    arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(role), auth],
+    target: `${ownershipPackageId}::organization::revoke_permission_from_role`,
+    typeArguments: [permission],
+  });
+}
 export function claimOrganizationPermissions(txb: TransactionBlock, organization: TransactionArgument | string) {
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization],

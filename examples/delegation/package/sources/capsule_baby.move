@@ -5,10 +5,9 @@ module package::capsule_baby {
     use sui::object::{Self, UID};
     use sui::transfer;
 
-    use ownership::ownership;
+    use ownership::ownership::{Self, has_owner_permission, has_package_permission};
     use ownership::publish_receipt;
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::organization::{Self, Organization};
 
     use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
@@ -66,20 +65,8 @@ module package::capsule_baby {
         new_name: String,
         auth: &TxAuthority
     ) {
-        assert!(ownership::has_owner_permission<EDITOR>(&baby.id, auth), ENO_OWNER_AUTH);
-        baby.name = new_name;
-    }
-
-    public fun org_edit_baby_name(
-        baby: &mut CapsuleBaby,
-        organization: &Organization,
-        new_name: String,
-        ctx: &mut TxContext
-    ) {
-        let principal = tx_context::sender(ctx);
-        let auth = organization::assert_login<EDITOR>(organization, ctx);
-
-        assert!(tx_authority::has_permission<EDITOR>(principal, &auth), ENO_ORG_AUTH);
+        let has_editor_permission = has_owner_permission<EDITOR>(&baby.id, auth) || has_package_permission<EDITOR>(&baby.id, auth);
+        assert!(has_editor_permission, ENO_OWNER_AUTH);
 
         baby.name = new_name;
     }
