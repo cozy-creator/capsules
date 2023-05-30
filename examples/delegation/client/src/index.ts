@@ -13,6 +13,8 @@ import {
   removePermissionForObjects,
   addGeneralPermission,
   removeGeneralPermission,
+  addPermissionForType,
+  removeTypePermission,
 } from "./txb";
 import { agentSigner, babyPackageId, baseGasBudget, fakeOwnerSigner, ownerSigner } from "./config";
 
@@ -149,6 +151,39 @@ async function editByAgentWithInvalidObjectPermission({ newName, babyId, storeId
   });
 
   printTxStat("Edit baby invalid object delegation", response);
+}
+
+async function editBabyByAgentWithTypePermission({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
+  const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
+  const agent = await agentSigner.getAddress();
+  {
+    const txb = new TransactionBlock();
+    const [auth] = beginTxAuth(txb);
+
+    addPermissionForType(txb, { objectType: capsuleBabyType, permissionType, agent, auth, store: storeId });
+    txb.setGasBudget(baseGasBudget);
+
+    await ownerSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+  }
+
+  {
+    const txb = new TransactionBlock();
+    const [auth] = claimDelegation(txb, storeId);
+    editCapsuleBabyName(txb, { baby: babyId, auth, newName });
+    txb.setGasBudget(baseGasBudget);
+
+    const response = await agentSigner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    printTxStat("Edit baby with type delegation", response);
+  }
+
+  await revokeTypePermisssion({ store: storeId, permissionType, objectType: capsuleBabyType });
 }
 
 async function editBabyByAgentWithFakeOwnerDelegationStore({
@@ -294,6 +329,29 @@ async function revokeGeneralPermisssion({ store, permissionType }: { store: stri
     options: { showEffects: true },
   });
 }
+
+async function revokeTypePermisssion({
+  store,
+  objectType,
+  permissionType,
+}: {
+  store: string;
+  objectType: string;
+  permissionType: string;
+}) {
+  const agent = await agentSigner.getAddress();
+
+  const txb = new TransactionBlock();
+  const [auth] = claimDelegation(txb, store);
+  removeTypePermission(txb, { objectType, auth, permissionType, agent, store });
+  txb.setGasBudget(baseGasBudget);
+
+  await ownerSigner.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+    options: { showEffects: true },
+  });
+}
+
 async function main() {
   const organizationId = "0x531cce643ec633179370feac197503e708b9d6ee17cd25b4259a6f0a95fbd598";
   const babyId = await createAndShareCapsuleBaby("Ayo");
@@ -303,9 +361,10 @@ async function main() {
   await editBabyByAgentWithGeneralPermission({ babyId, storeId, newName: "Maxine" });
   await editBabyByAgentWithObjectPermission({ babyId, storeId, newName: "Max" });
   await editByAgentWithInvalidObjectPermission({ babyId, storeId, newName: "Bob" });
+  await editBabyByAgentWithTypePermission({ babyId, storeId, newName: "Paul" });
   await editBabyByAgentWithFakeOwnerDelegationStore({ babyId, storeId, newName: "Wura" });
   await editBabyByOrganizationPermission({ babyId, organizationId, newName: "Rahman" });
-  await editBabyByOrganizationRevokedPermission({ babyId, organizationId, newName: "Paul" });
+  await editBabyByOrganizationRevokedPermission({ babyId, organizationId, newName: "Kehinde" });
 }
 
 main();

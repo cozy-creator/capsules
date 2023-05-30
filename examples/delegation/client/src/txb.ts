@@ -22,6 +22,14 @@ export interface ObjectPermissionOptions {
   agent: string;
 }
 
+export interface TypePermissionOptions {
+  store: TransactionArgument | string;
+  auth: TransactionArgument;
+  permissionType: string;
+  objectType: string;
+  agent: string;
+}
+
 interface AddOrganizationPackageOptions {
   receipt: string;
   auth: TransactionArgument;
@@ -125,6 +133,17 @@ export function addPermissionForObjects(
   });
 }
 
+export function addPermissionForType(
+  txb: TransactionBlock,
+  { objectType, permissionType, auth, store, agent }: TypePermissionOptions
+) {
+  return txb.moveCall({
+    typeArguments: [objectType, permissionType],
+    target: `${ownershipPackageId}::delegation::add_permission_for_type`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), auth],
+  });
+}
+
 export function removePermissionForObjects(
   txb: TransactionBlock,
   { permissionType, auth, store, agent, ids }: ObjectPermissionOptions
@@ -143,6 +162,17 @@ export function removeGeneralPermission(
   return txb.moveCall({
     typeArguments: [permissionType],
     target: `${ownershipPackageId}::delegation::remove_general_permission_from_agent`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), auth],
+  });
+}
+
+export function removeTypePermission(
+  txb: TransactionBlock,
+  { objectType, permissionType, auth, store, agent }: TypePermissionOptions
+) {
+  return txb.moveCall({
+    typeArguments: [objectType, permissionType],
+    target: `${ownershipPackageId}::delegation::remove_permission_for_type_from_agent`,
     arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), auth],
   });
 }
