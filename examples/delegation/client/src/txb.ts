@@ -10,6 +10,7 @@ interface EditBabyNameOptions {
 interface ObjectPermissionOptions {
   store: TransactionArgument | string;
   auth: TransactionArgument;
+  permissionType: string;
   ids: string[];
   agent: string;
 }
@@ -46,7 +47,7 @@ interface SetOrganizationRoleForAgentOptions {
 
 interface OrganizationPermissionRoleOptions {
   role: string;
-  permission: string;
+  permissionType: string;
   auth: TransactionArgument;
   organization: TransactionArgument | string;
 }
@@ -95,9 +96,12 @@ export function claimDelegation(txb: TransactionBlock, store: TransactionArgumen
   });
 }
 
-export function addPermissionForObjects(txb: TransactionBlock, { auth, store, agent, ids }: ObjectPermissionOptions) {
+export function addPermissionForObjects(
+  txb: TransactionBlock,
+  { permissionType, auth, store, agent, ids }: ObjectPermissionOptions
+) {
   return txb.moveCall({
-    typeArguments: [`${babyPackageId}::capsule_baby::EDITOR`],
+    typeArguments: [permissionType],
     target: `${ownershipPackageId}::delegation::add_permission_for_objects`,
     arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure(ids), auth],
   });
@@ -105,10 +109,10 @@ export function addPermissionForObjects(txb: TransactionBlock, { auth, store, ag
 
 export function removePermissionForObjects(
   txb: TransactionBlock,
-  { auth, store, agent, ids }: ObjectPermissionOptions
+  { permissionType, auth, store, agent, ids }: ObjectPermissionOptions
 ) {
   return txb.moveCall({
-    typeArguments: [`${babyPackageId}::capsule_baby::EDITOR`],
+    typeArguments: [permissionType],
     target: `${ownershipPackageId}::delegation::remove_permission_for_objects_from_agent`,
     arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure(ids), auth],
   });
@@ -226,23 +230,23 @@ export function setOrganizationRoleForAgent(
 
 export function grantPermissiontoOrganizationRole(
   txb: TransactionBlock,
-  { permission, role, auth, organization }: OrganizationPermissionRoleOptions
+  { permissionType, role, auth, organization }: OrganizationPermissionRoleOptions
 ) {
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(role), auth],
     target: `${ownershipPackageId}::organization::grant_permission_to_role`,
-    typeArguments: [permission],
+    typeArguments: [permissionType],
   });
 }
 
 export function revokePermissionFromOrganizationRole(
   txb: TransactionBlock,
-  { permission, role, auth, organization }: OrganizationPermissionRoleOptions
+  { permissionType, role, auth, organization }: OrganizationPermissionRoleOptions
 ) {
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization, txb.pure(role), auth],
     target: `${ownershipPackageId}::organization::revoke_permission_from_role`,
-    typeArguments: [permission],
+    typeArguments: [permissionType],
   });
 }
 export function claimOrganizationPermissions(txb: TransactionBlock, organization: TransactionArgument | string) {

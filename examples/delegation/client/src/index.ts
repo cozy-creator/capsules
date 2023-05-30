@@ -84,11 +84,13 @@ async function editByAgentWithInvalidDelegation({ newName, babyId, storeId }: Ed
 
 async function editBabyByAgentWithDelegation({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
   {
-    const txb = new TransactionBlock();
+    const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
     const agent = await agentSigner.getAddress();
+
+    const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    addPermissionForObjects(txb, { agent, ids: [babyId], auth, store: storeId });
+    addPermissionForObjects(txb, { permissionType, agent, ids: [babyId], auth, store: storeId });
     txb.setGasBudget(baseGasBudget);
 
     await ownerSigner.signAndExecuteTransactionBlock({
@@ -114,10 +116,13 @@ async function editBabyByAgentWithDelegation({ newName, babyId, storeId }: EditB
 
 async function editBabyByAgentWithFakeOwnerDelegation({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
   {
+    const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
+    const agent = await agentSigner.getAddress();
+
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    addPermissionForObjects(txb, { agent: await agentSigner.getAddress(), ids: [babyId], auth, store: storeId });
+    addPermissionForObjects(txb, { permissionType, agent, ids: [babyId], auth, store: storeId });
     txb.setGasBudget(baseGasBudget);
 
     await fakeOwnerSigner.signAndExecuteTransactionBlock({
@@ -142,14 +147,14 @@ async function editBabyByAgentWithFakeOwnerDelegation({ newName, babyId, storeId
 }
 
 async function editBabyByOrganizationPermission({ newName, organizationId, babyId }: EditBabyWithOrgAuthOptions) {
-  const permission = `${babyPackageId}::capsule_baby::EDITOR`;
+  const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
 
   const txb = new TransactionBlock();
   const agent = await agentSigner.getAddress();
   const [auth] = beginTxAuth(txb);
 
   setOrganizationRoleForAgent(txb, { organization: organizationId, role: "Editor", agent, auth });
-  grantPermissiontoOrganizationRole(txb, { organization: organizationId, role: "Editor", permission, auth });
+  grantPermissiontoOrganizationRole(txb, { organization: organizationId, role: "Editor", permissionType, auth });
 
   txb.setGasBudget(baseGasBudget);
 
@@ -180,15 +185,15 @@ async function editBabyByOrganizationRevokedPermission({
   organizationId,
   babyId,
 }: EditBabyWithOrgAuthOptions) {
-  const permission = `${babyPackageId}::capsule_baby::EDITOR`;
+  const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
 
   const txb = new TransactionBlock();
   const [auth] = beginTxAuth(txb);
   const agent = await agentSigner.getAddress();
 
   setOrganizationRoleForAgent(txb, { organization: organizationId, role: "Editor", agent, auth });
-  grantPermissiontoOrganizationRole(txb, { organization: organizationId, role: "Editor", permission, auth });
-  revokePermissionFromOrganizationRole(txb, { organization: organizationId, role: "Editor", permission, auth });
+  grantPermissiontoOrganizationRole(txb, { organization: organizationId, role: "Editor", permissionType, auth });
+  revokePermissionFromOrganizationRole(txb, { organization: organizationId, role: "Editor", permissionType, auth });
   txb.setGasBudget(baseGasBudget);
 
   await ownerSigner.signAndExecuteTransactionBlock({
