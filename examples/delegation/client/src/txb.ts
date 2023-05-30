@@ -7,10 +7,10 @@ interface EditBabyNameOptions {
   newName: string;
 }
 
-interface BabyDelegationOptions {
+interface ObjectPermissionOptions {
   store: TransactionArgument | string;
   auth: TransactionArgument;
-  babyId: string;
+  ids: string[];
   agent: string;
 }
 
@@ -95,19 +95,22 @@ export function claimDelegation(txb: TransactionBlock, store: TransactionArgumen
   });
 }
 
-export function delegateBaby(txb: TransactionBlock, { auth, store, agent, babyId }: BabyDelegationOptions) {
+export function addPermissionForObjects(txb: TransactionBlock, { auth, store, agent, ids }: ObjectPermissionOptions) {
   return txb.moveCall({
     typeArguments: [`${babyPackageId}::capsule_baby::EDITOR`],
     target: `${ownershipPackageId}::delegation::add_permission_for_objects`,
-    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure([babyId]), auth],
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure(ids), auth],
   });
 }
 
-export function undelegateBaby(txb: TransactionBlock, { auth, store, agent, babyId }: BabyDelegationOptions) {
+export function removePermissionForObjects(
+  txb: TransactionBlock,
+  { auth, store, agent, ids }: ObjectPermissionOptions
+) {
   return txb.moveCall({
     typeArguments: [`${babyPackageId}::capsule_baby::EDITOR`],
-    target: `${ownershipPackageId}::delegation::add_permission_for_objects`,
-    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure([babyId]), auth],
+    target: `${ownershipPackageId}::delegation::remove_permission_for_objects_from_agent`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure(ids), auth],
   });
 }
 

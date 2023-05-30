@@ -4,7 +4,7 @@ import {
   claimDelegation,
   claimOrganizationPermissions,
   createCapsuleBaby,
-  delegateBaby,
+  addPermissionForObjects,
   editCapsuleBabyName,
   grantPermissiontoOrganizationRole,
   returnAndShareCapsuleBaby,
@@ -88,7 +88,7 @@ async function editBabyByAgentWithDelegation({ newName, babyId, storeId }: EditB
     const agent = await agentSigner.getAddress();
     const [auth] = beginTxAuth(txb);
 
-    delegateBaby(txb, { agent, babyId, auth, store: storeId });
+    addPermissionForObjects(txb, { agent, ids: [babyId], auth, store: storeId });
     txb.setGasBudget(baseGasBudget);
 
     await ownerSigner.signAndExecuteTransactionBlock({
@@ -117,7 +117,7 @@ async function editBabyByAgentWithFakeOwnerDelegation({ newName, babyId, storeId
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    delegateBaby(txb, { agent: await agentSigner.getAddress(), babyId, auth, store: storeId });
+    addPermissionForObjects(txb, { agent: await agentSigner.getAddress(), ids: [babyId], auth, store: storeId });
     txb.setGasBudget(baseGasBudget);
 
     await fakeOwnerSigner.signAndExecuteTransactionBlock({
