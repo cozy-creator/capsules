@@ -8,7 +8,7 @@ module ownership::tx_authority {
     use std::vector;
 
     use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, ID};
+    use sui::object::{Self, ID, UID};
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::encode;
@@ -39,11 +39,6 @@ module ownership::tx_authority {
     // Begins with a transaction-context object
     public fun begin(ctx: &TxContext): TxAuthority {
         new_internal(tx_context::sender(ctx))
-    }
-
-    // Begins with a capability-id
-    public fun begin_with_id<T: key>(cap: &T): TxAuthority {
-        new_internal(object::id_address(cap))
     }
 
     // Begins with a capability-type
@@ -88,15 +83,6 @@ module ownership::tx_authority {
         let permissions = permission_set::new(vector[permission::admin()]);
 
         vec_map2::set(&mut new_auth.agent_permissions, &tx_context::sender(ctx), permissions);
-
-        new_auth
-    }
-
-    public fun add_id<T: key>(cap: &T, auth: &TxAuthority): TxAuthority {
-        let new_auth = copy_(auth);
-        let permissions = permission_set::new(vector[permission::admin()]);
-
-        vec_map2::set(&mut new_auth.agent_permissions, &object::id_address(cap), permissions);
 
         new_auth
     }
@@ -408,6 +394,24 @@ module ownership::tx_authority {
         permission_set::merge(principal_set, filtered_set);
 
         new_auth
+    }
+
+    // Only callable by ownership
+    friend ownership::ownership;
+
+    public(friend) fun add_object_id(
+        uid: &UID,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let new_auth = copy_(auth);
+        let permissions = permission_set::new(vector[permission::admin()]);
+        vec_map2::set(&mut new_auth.agent_permissions, &object::uid_to_address(uid), permissions);
+
+        new_auth
+    }
+
+    public(friend) fun begin_with_object_id(uid: &UID): TxAuthority {
+        new_internal(object::uid_to_address(uid))
     }
 
 }

@@ -19,16 +19,18 @@ module ownership::ownership {
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::permission::MANAGER;
+    use ownership::permission::{ADMIN, MANAGER};
 
     // error enums
-    const ENO_MODULE_AUTHORITY: u64 = 0;
+    const ENO_PACKAGE_AUTHORITY: u64 = 0;
     const ENO_OWNER_AUTHORITY: u64 = 1;
     const ENO_TRANSFER_AUTHORITY: u64 = 2;
     const EUID_DOES_NOT_BELONG_TO_OBJECT: u64 = 3;
     const EOBJECT_NOT_INITIALIZED: u64 = 4;
     const EOBJECT_ALREADY_INITIALIZED: u64 = 5;
     const EOWNER_ALREADY_INITIALIZED: u64 = 6;
+    const EOBJECT_MUST_NOT_HAVE_OWNER: u64 = 7;
+    const ETRANSFER_AUTH_MUST_BE_EJECTED_FIRST: u64 = 8;
 
     // Is it safe to have 'copy' and 'drop' here? Probably
     // Do we need to store 'type'? Probably
@@ -105,7 +107,7 @@ module ownership::ownership {
     public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
         assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
-        assert!(tx_authority::has_package_permission<T, MANAGER>(auth), ENO_MODULE_AUTHORITY);
+        assert!(tx_authority::has_package_permission<T, MANAGER>(auth), ENO_PACKAGE_AUTHORITY);
     }
 
     public fun is_initialized(uid: &UID): bool {
@@ -212,22 +214,55 @@ module ownership::ownership {
         ownership.owner = new_owner;
     }
 
-    // Requires module, owner, and transfer authorities all to sign off on this migration
-    // This is a difficult operation to do!
-    // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
-    // allow for unilateral changes by the module-authority.
-    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auth: Option<address>, auth: &TxAuthority) {
+    // Only the transfer-auth can eject itself. Owner authority is not required.
+    public fun eject_transfer_auth(uid: &mut UID, auth: &TxAuthority) {
         assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_TRANSFER_AUTHORITY);
-        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_MODULE_AUTHORITY);
+
+        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        ownership.transfer_auth = option::none();
+    }
+
+    // Requires the permission of both the package and the current owner.
+    // This means packages _cannot_ change their transfer-functionality unilaterally.
+    // Transfer-auth must be undefined; i.e., never set before, or ejected.
+    // If the new transfer-auth requires initialization, that must be called separately after this.
+    public fun set_transfer_auth(uid: &mut UID, new_auth: address, auth: &TxAuthority) {
+        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_PACKAGE_AUTHORITY);
         assert!(has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.transfer_auth = new_transfer_auth;
+        assert!(option::is_none(&ownership.transfer_auth), ETRANSFER_AUTH_MUST_BE_EJECTED_FIRST);
+
+        ownership.transfer_auth = option::some(new_auth);
     }
 
-    // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
-    // changed again.
+    // Transfer-auth is set to a non-existent address, meaning the owner can never be changed
     public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
-        migrate_transfer_auth(uid, option::none(), auth);
+        set_transfer_auth(uid, @0x0, auth);
+    }
+
+    // ======= TxAuthority Extended =======
+    // We can add to tx-authority for objects using Ownership-specific logic
+
+    public fun begin_with_object_id(
+        uid: &UID
+    ): TxAuthority {
+        let owner_maybe = get_owner(uid);
+        assert!(option::is_none(&owner_maybe), EOBJECT_MUST_NOT_HAVE_OWNER);
+
+        tx_authority::begin_with_object_id(uid)
+    }
+
+    public fun add_object_id(
+        uid: &UID,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let owner_maybe = get_owner(uid);
+        if (option::is_some(&owner_maybe)) {
+            let owner = option::destroy_some(owner_maybe);
+            assert!(tx_authority::has_permission<ADMIN>(owner, auth), ENO_OWNER_AUTHORITY);
+        };
+
+        tx_authority::add_object_id(uid, auth)
     }
 }

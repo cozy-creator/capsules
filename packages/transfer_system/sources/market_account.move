@@ -22,6 +22,7 @@ module transfer_system::market_account {
         balances: Bag
     }
 
+    // Package authority
     struct Witness has drop {}
 
     const ENO_OWNER_AUTHORITY: u64 = 0;

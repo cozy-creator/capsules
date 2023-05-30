@@ -103,7 +103,7 @@ module transfer_system::royalty_market {
     ) {
         assert!(!transfer_freezer::is_transfer_freezed(uid), ETRANSFER_FREEZED);
         assert!(type_name::get<T>() == payment.type, EITEM_TYPE_MISMATCH);
-        if(!is_capsule<T>(uid)) { assert_valid_item_type<T>(uid) };
+        // if(!is_capsule<T>(uid)) { assert_valid_item_type<T>(uid) };
 
         let RoyaltyPayment { item, value, creator, type: _ } = payment;
         assert!(object::uid_to_inner(uid) == item, EITEM_RECEIPT_MISMATCH);

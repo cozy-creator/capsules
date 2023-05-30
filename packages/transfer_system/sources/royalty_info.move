@@ -11,22 +11,28 @@
 // TO DO: we could store RoyaltyInfo inside of the Organization object itself if we wanted?
 
 module transfer_system::royalty_info {
-    use sui::clock::{Self, Clock};
+    use std::option::{Self, Option};
+
+    use sui::clock::Clock;
+    use sui::coin::{Self, Coin};
     use sui::math;
     use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use sui::transfer;
 
-    use sui_utils::encode;
+    use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
 
-    use transfer_system::{Self, TradeHistory, PairVolume};
+    use transfer_system::trade_history::{Self, TradeHistory, PairVolume};
+
+    // Error Constants
+    const ENO_PACKAGE_PERMISSION: u64 = 0;
+    const EINVALID_ROYALTY_ARGS: u64 = 1;
 
     // Constants
-    const MAX_ROYALTY: u64 = 10_000; // 100% royalty
+    const MAX_ROYALTY: u128 = 10_000; // 100% royalty
     const TRILLION: u128 = 1_000_000_000_000;
-    const MONTH_MS: u64 = 2_592_000_000;
 
     // ====== Royalty Info ======
 
@@ -49,7 +55,7 @@ module transfer_system::royalty_info {
     public fun create<T, C>(
         max_bps: u64,
         slope: u64,
-        min_bps: 0,
+        min_bps: u64,
         pay_to: address,
         affiliate_bps: u64,
         auth: &TxAuthority,
@@ -64,14 +70,19 @@ module transfer_system::royalty_info {
         type: StructTag,
         max_bps: u64,
         slope: u64,
-        min_bps: 0,
-        affiliate_share_bps: u64,
+        min_bps: u64,
+        affiliate_bps: u64,
         pay_to: address,
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): RoyaltyInfo<C> {
-        let package_id = struct_tag::package_id(type);
+        let package_id = struct_tag::package_id(&type);
         assert!(tx_authority::has_package_permission_<ROYALTY>(package_id, auth), ENO_PACKAGE_PERMISSION);
+
+        // Input validation
+        assert!(min_bps <= max_bps, EINVALID_ROYALTY_ARGS);
+        assert!(max_bps <= (MAX_ROYALTY as u64), EINVALID_ROYALTY_ARGS);
+        assert!(affiliate_bps <= (MAX_ROYALTY as u64), EINVALID_ROYALTY_ARGS);
 
         RoyaltyInfo<C> { id: object::new(ctx), type, max_bps, slope, min_bps, affiliate_bps, pay_to }
     }
@@ -89,11 +100,11 @@ module transfer_system::royalty_info {
         let package_id = struct_tag::package_id(&royalty.type);
         assert!(tx_authority::has_package_permission_<ROYALTY>(package_id, auth), ENO_PACKAGE_PERMISSION);
 
-        if (option::is_some(max_bps)) { royalty.max_bps = option::destroy_some(max_bps); };
-        if (option::is_some(slope)) { royalty.slope = option::destroy_some(slope); };
-        if (option::is_some(min_bps)) { royalty.min_bps = option::destroy_some(min_bps); };
-        if (option::is_some(affiliate_bps)) { royalty.affiliate_bps = option::destroy_some(affiliate_bps); };
-        if (option::is_some(pay_to)) { royalty.pay_to = option::destroy_some(pay_to); };
+        if (option::is_some(&max_bps)) { royalty.max_bps = option::destroy_some(max_bps); };
+        if (option::is_some(&slope)) { royalty.slope = option::destroy_some(slope); };
+        if (option::is_some(&min_bps)) { royalty.min_bps = option::destroy_some(min_bps); };
+        if (option::is_some(&affiliate_bps)) { royalty.affiliate_bps = option::destroy_some(affiliate_bps); };
+        if (option::is_some(&pay_to)) { royalty.pay_to = option::destroy_some(pay_to); };
     }
 
     // Doesn't work until Sui supports destroying shared objects
@@ -114,36 +125,36 @@ module transfer_system::royalty_info {
     public fun calculate_fee_bps<C>(pair: &PairVolume<C>, royalty_info: &RoyaltyInfo<C>): u64 {
         let volume = (trade_history::volume(pair) as u128);
         let computed = ((volume * (royalty_info.slope as u128) / TRILLION) as u64);
-        if (computed >= royalty_info.start_bps) {
-            royalty_info.end_bps
+        if (computed >= royalty_info.max_bps) {
+            royalty_info.min_bps
         } else {
-            math::max(royalty_info.start_bps - computed, royalty_info.min_bps)
+            math::max(royalty_info.max_bps - computed, royalty_info.min_bps)
         }
     }
 
     // Returns the amount of Coin<C> that was paid (the total royalty)
     public fun pay_royalty<C>(
-        history: &mut TradeHistory<C>,
+        history: &mut TradeHistory,
         royalty_info: &RoyaltyInfo<C>,
-        affiliate: Option<address>
+        affiliate: Option<address>,
         price: u64,
         coin: &mut Coin<C>,
         clock: &Clock,
         ctx: &mut TxContext
     ): u64 {
-        let pair = trade_history::borrow_mut<C>(history, royalty_info.type);
+        let pair = trade_history::borrow_mut_<C>(history, royalty_info.type);
 
         trade_history::decay(pair, clock);
         let royalty_bps = calculate_fee_bps(pair, royalty_info);
-        let royalty = ((price as u128) * (royalty_bps as u128) / MAX_ROYALTY) as u64;
-        trade_history::record_trade(pair, price, clock);
+        let royalty = ((price as u128) * (royalty_bps as u128) / MAX_ROYALTY as u64);
+        trade_history::record_trade(price, pair, clock);
 
         if (option::is_some(&affiliate)) {
             let affiliate_bonus = (((royalty as u128) * (royalty_info.affiliate_bps as u128) / MAX_ROYALTY) as u64);
-            transfer::transfer(coin::split(coin, affiliate_bonus, ctx), option::destroy_some(affiliate));
-            transfer::transfer(coin::split(coin, royalty - affiliate_bonus, ctx), royalty_info.pay_to);
+            transfer::public_transfer(coin::split(coin, affiliate_bonus, ctx), option::destroy_some(affiliate));
+            transfer::public_transfer(coin::split(coin, royalty - affiliate_bonus, ctx), royalty_info.pay_to);
         } else {
-            transfer::transfer(coin::split(coin, royalty, ctx), royalty_info.pay_to);
+            transfer::public_transfer(coin::split(coin, royalty, ctx), royalty_info.pay_to);
         };
 
         royalty
@@ -151,7 +162,7 @@ module transfer_system::royalty_info {
 
     // ====== Getter Functions ======
 
-    public fun type<C>(royalty_info: &RoyaltyInfo<C>): StructTag {
-        royalty_info.type
+    public fun type<C>(royalty_info: &RoyaltyInfo<C>): &StructTag {
+        &royalty_info.type
     }
 }
