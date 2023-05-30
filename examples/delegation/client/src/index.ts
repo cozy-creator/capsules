@@ -18,7 +18,7 @@ import {
 } from "./txb";
 import { agentSigner, babyPackageId, baseGasBudget, fakeOwnerSigner, ownerSigner } from "./config";
 
-import { getCreatedIdsFromResponseWithType, printTxStat } from "./utils";
+import { getCreatedIdsFromResponseWithType, printTxStat, sleep } from "./utils";
 import { createAndShareDelegationStore } from "./delegation";
 
 const capsuleBabyType = `${babyPackageId}::capsule_baby::CapsuleBaby`;
@@ -49,6 +49,8 @@ async function createAndShareCapsuleBaby(name: string) {
   });
 
   printTxStat("create and share baby", response);
+
+  await sleep();
 
   const [babyId] = await getCreatedIdsFromResponseWithType(response, [capsuleBabyType]);
   return babyId;
@@ -87,6 +89,8 @@ async function editBabyByAgentWithGeneralPermission({ newName, babyId, storeId }
     });
   }
 
+  await sleep();
+
   {
     const txb = new TransactionBlock();
     const [auth] = claimDelegation(txb, storeId);
@@ -100,6 +104,8 @@ async function editBabyByAgentWithGeneralPermission({ newName, babyId, storeId }
 
     printTxStat("Edit baby with general delegation", response);
   }
+
+  await sleep();
 
   await revokeGeneralPermisssion({ store: storeId, permissionType });
 }
@@ -120,6 +126,8 @@ async function editBabyByAgentWithObjectPermission({ newName, babyId, storeId }:
     });
   }
 
+  await sleep();
+
   {
     const txb = new TransactionBlock();
     const [auth] = claimDelegation(txb, storeId);
@@ -133,6 +141,8 @@ async function editBabyByAgentWithObjectPermission({ newName, babyId, storeId }:
 
     printTxStat("Edit baby with object delegation", response);
   }
+
+  await sleep();
 
   await revokeBabyPermisssion({ store: storeId, permissionType, babyId });
 }
@@ -169,6 +179,8 @@ async function editBabyByAgentWithTypePermission({ newName, babyId, storeId }: E
     });
   }
 
+  await sleep();
+
   {
     const txb = new TransactionBlock();
     const [auth] = claimDelegation(txb, storeId);
@@ -182,6 +194,8 @@ async function editBabyByAgentWithTypePermission({ newName, babyId, storeId }: E
 
     printTxStat("Edit baby with type delegation", response);
   }
+
+  await sleep();
 
   await revokeTypePermisssion({ store: storeId, permissionType, objectType: capsuleBabyType });
 }
@@ -206,6 +220,8 @@ async function editBabyByAgentWithFakeOwnerDelegationStore({
       options: { showEffects: true },
     });
   }
+
+  await sleep();
 
   {
     const txb = new TransactionBlock();
@@ -240,6 +256,8 @@ async function editBabyByOrganizationPermission({ newName, organizationId, babyI
       showEffects: true,
     },
   });
+
+  await sleep();
 
   {
     const txb = new TransactionBlock();
@@ -278,6 +296,8 @@ async function editBabyByOrganizationRevokedPermission({
       showEffects: true,
     },
   });
+
+  await sleep();
 
   {
     const txb = new TransactionBlock();
@@ -353,17 +373,33 @@ async function revokeTypePermisssion({
 }
 
 async function main() {
-  const organizationId = "0x531cce643ec633179370feac197503e708b9d6ee17cd25b4259a6f0a95fbd598";
   const babyId = await createAndShareCapsuleBaby("Ayo");
+  await sleep();
+
   const storeId = await createAndShareDelegationStore(ownerSigner);
+  const organizationId = "0xca27953f81af408a7746a95e1c0f3acffb5c54250c257f4cff6ef8238cf29c6a";
 
   await editByOwner({ babyId, newName: "Mide" });
+  await sleep();
+
   await editBabyByAgentWithGeneralPermission({ babyId, storeId, newName: "Maxine" });
+  await sleep();
+
   await editBabyByAgentWithObjectPermission({ babyId, storeId, newName: "Max" });
+  await sleep();
+
   await editByAgentWithInvalidObjectPermission({ babyId, storeId, newName: "Bob" });
+  await sleep();
+
   await editBabyByAgentWithTypePermission({ babyId, storeId, newName: "Paul" });
+  await sleep();
+
   await editBabyByAgentWithFakeOwnerDelegationStore({ babyId, storeId, newName: "Wura" });
+  await sleep();
+
   await editBabyByOrganizationPermission({ babyId, organizationId, newName: "Rahman" });
+  await sleep();
+
   await editBabyByOrganizationRevokedPermission({ babyId, organizationId, newName: "Kehinde" });
 }
 

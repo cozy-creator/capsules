@@ -1,6 +1,6 @@
 import { beginTxAuth, createDelegationStore, destroyDelegationStore, returnAndShareDelegationStore } from "./txb";
 import { baseGasBudget, ownerSigner, ownershipPackageId } from "./config";
-import { getCreatedIdsFromResponseWithType, printTxStat } from "./utils";
+import { getCreatedIdsFromResponseWithType, printTxStat, sleep } from "./utils";
 import { RawSigner, TransactionBlock } from "@mysten/sui.js";
 
 const storeType = `${ownershipPackageId}::delegation::DelegationStore`;
@@ -18,6 +18,7 @@ export async function createAndShareDelegationStore(signer: RawSigner) {
   });
 
   printTxStat("create and share delegation store", response);
+  await sleep();
 
   const [storeId] = await getCreatedIdsFromResponseWithType(response, [storeType]);
   return storeId;

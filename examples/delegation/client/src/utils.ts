@@ -39,3 +39,7 @@ export async function getCreatedIdsFromResponseWithType(response: SuiTransaction
 
   return typeIds;
 }
+
+export function sleep(ms = 3000) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
