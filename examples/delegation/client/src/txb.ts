@@ -7,7 +7,14 @@ interface EditBabyNameOptions {
   newName: string;
 }
 
-interface ObjectPermissionOptions {
+export interface GeneralPermissionOptions {
+  store: TransactionArgument | string;
+  auth: TransactionArgument;
+  permissionType: string;
+  agent: string;
+}
+
+export interface ObjectPermissionOptions {
   store: TransactionArgument | string;
   auth: TransactionArgument;
   permissionType: string;
@@ -98,7 +105,7 @@ export function claimDelegation(txb: TransactionBlock, store: TransactionArgumen
 
 export function addGeneralPermission(
   txb: TransactionBlock,
-  { permissionType, auth, store, agent }: ObjectPermissionOptions
+  { permissionType, auth, store, agent }: GeneralPermissionOptions
 ) {
   return txb.moveCall({
     typeArguments: [permissionType],
@@ -126,6 +133,17 @@ export function removePermissionForObjects(
     typeArguments: [permissionType],
     target: `${ownershipPackageId}::delegation::remove_permission_for_objects_from_agent`,
     arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), txb.pure(ids), auth],
+  });
+}
+
+export function removeGeneralPermission(
+  txb: TransactionBlock,
+  { permissionType, auth, store, agent }: GeneralPermissionOptions
+) {
+  return txb.moveCall({
+    typeArguments: [permissionType],
+    target: `${ownershipPackageId}::delegation::remove_general_permission_from_agent`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), auth],
   });
 }
 
