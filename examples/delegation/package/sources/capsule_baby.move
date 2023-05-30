@@ -9,7 +9,7 @@ module package::capsule_baby {
     use ownership::publish_receipt;
     use ownership::tx_authority::{Self, TxAuthority};
 
-    use transfer_system::simple_transfer::Witness as SimpleTransfer;
+    // use transfer_system::simple_transfer::Witness as SimpleTransfer;
 
     use sui_utils::typed_id;
 
@@ -51,7 +51,7 @@ module package::capsule_baby {
 
         let tid = typed_id::new(&baby);
         let auth = tx_authority::begin_with_package_witness(Witness {});
-        ownership::as_shared_object<CapsuleBaby, SimpleTransfer>(&mut baby.id, tid, owner, &auth);
+        ownership::as_shared_object<CapsuleBaby, Witness>(&mut baby.id, tid, owner, &auth);
 
         baby
     }
