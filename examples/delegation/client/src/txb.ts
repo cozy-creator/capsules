@@ -96,6 +96,17 @@ export function claimDelegation(txb: TransactionBlock, store: TransactionArgumen
   });
 }
 
+export function addGeneralPermission(
+  txb: TransactionBlock,
+  { permissionType, auth, store, agent }: ObjectPermissionOptions
+) {
+  return txb.moveCall({
+    typeArguments: [permissionType],
+    target: `${ownershipPackageId}::delegation::add_permission`,
+    arguments: [typeof store == "string" ? txb.object(store) : store, txb.pure(agent), auth],
+  });
+}
+
 export function addPermissionForObjects(
   txb: TransactionBlock,
   { permissionType, auth, store, agent, ids }: ObjectPermissionOptions
@@ -249,6 +260,7 @@ export function revokePermissionFromOrganizationRole(
     typeArguments: [permissionType],
   });
 }
+
 export function claimOrganizationPermissions(txb: TransactionBlock, organization: TransactionArgument | string) {
   return txb.moveCall({
     arguments: [typeof organization == "string" ? txb.object(organization) : organization],

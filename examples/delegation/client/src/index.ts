@@ -66,7 +66,7 @@ async function editByOwner({ newName, babyId }: EditBabyOptions) {
   printTxStat("Edit baby by owner", response);
 }
 
-async function editByAgentWithInvalidDelegation({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
+async function editByAgentWithInvalidObjectPermission({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
   const txb = new TransactionBlock();
   const [auth] = claimDelegation(txb, storeId);
   editCapsuleBabyName(txb, { baby: babyId, auth, newName });
@@ -82,7 +82,7 @@ async function editByAgentWithInvalidDelegation({ newName, babyId, storeId }: Ed
   printTxStat("Edit baby invalid delegation auth", response);
 }
 
-async function editBabyByAgentWithDelegation({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
+async function editBabyByAgentWithObjectPermission({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
   {
     const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
     const agent = await agentSigner.getAddress();
@@ -114,7 +114,11 @@ async function editBabyByAgentWithDelegation({ newName, babyId, storeId }: EditB
   }
 }
 
-async function editBabyByAgentWithFakeOwnerDelegation({ newName, babyId, storeId }: EditBabyWithDelegationOptions) {
+async function editBabyByAgentWithFakeOwnerDelegationStore({
+  newName,
+  babyId,
+  storeId,
+}: EditBabyWithDelegationOptions) {
   {
     const permissionType = `${babyPackageId}::capsule_baby::EDITOR`;
     const agent = await agentSigner.getAddress();
@@ -224,9 +228,9 @@ async function main() {
   const storeId = await createAndShareDelegationStore(ownerSigner);
 
   await editByOwner({ babyId, newName: "Mide" });
-  await editBabyByAgentWithDelegation({ babyId, storeId, newName: "Max" });
-  await editByAgentWithInvalidDelegation({ babyId, storeId, newName: "Bob" });
-  await editBabyByAgentWithFakeOwnerDelegation({ babyId, storeId, newName: "Wura" });
+  await editBabyByAgentWithObjectPermission({ babyId, storeId, newName: "Max" });
+  await editByAgentWithInvalidObjectPermission({ babyId, storeId, newName: "Bob" });
+  await editBabyByAgentWithFakeOwnerDelegationStore({ babyId, storeId, newName: "Wura" });
   await editBabyByOrganizationPermission({ babyId, organizationId, newName: "Rahman" });
   await editBabyByOrganizationRevokedPermission({ babyId, organizationId, newName: "Paul" });
 }
