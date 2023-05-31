@@ -1,13 +1,14 @@
 // TO DO: instead of storing sell-offers inside of the object itself, we could store them inside of TradeHistory
 
 module transfer_system::royalty_market3 {
+    use std::vector;
     use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
 
     use sui::clock::Clock;
     use sui::coin::{Self, Coin};
     use sui::dynamic_field;
-    use sui::object::{UID, ID};
+    use sui::object::{uid_to_inner, UID, ID};
     use sui::transfer;
     use sui::tx_context::{TxContext};
     use sui::vec_map::{Self, VecMap};
@@ -21,7 +22,7 @@ module transfer_system::royalty_market3 {
 
     use transfer_system::reclaimer;
     use transfer_system::royalty_info::{Self, RoyaltyInfo};
-    use transfer_system::trade_history::TradeHistory;
+    use transfer_system::market_account::{Self, MarketAccount};
 
     // Prevent users from accidentally overflowing with too many offers
     const MAX_OFFERS: u64 = 16;
@@ -44,6 +45,7 @@ module transfer_system::royalty_market3 {
     }
 
     struct Key has store, copy, drop { }
+    struct BuyKey has store, copy, drop { type: StructTag }
 
     // Package authority witness
     struct Witness has drop { }
@@ -72,7 +74,7 @@ module transfer_system::royalty_market3 {
     public fun fill_sell_offer<C>(
         uid: &mut UID,
         buyer: address,
-        history: &mut TradeHistory,
+        account: &mut MarketAccount,
         royalty_info: &RoyaltyInfo<C>,
         affiliate: Option<address>,
         coin: &mut Coin<C>,
@@ -88,7 +90,7 @@ module transfer_system::royalty_market3 {
         // Aborts if there isn't an existing sell-offer for Coin<C>
         let (_, SellOffer { price, pay_to }) = vec_map::remove(&mut sell_offers, &type_name::get<C>());
 
-        let royalty = royalty_info::pay_royalty(history, royalty_info, affiliate, price, coin, clock, ctx);
+        let royalty = royalty_info::pay_royalty(account, royalty_info, affiliate, price, coin, clock, ctx);
 
         transfer::public_transfer(coin::split(coin, price - royalty, ctx), pay_to);
         ownership::transfer(uid, option::some(buyer), &tx_authority::begin_with_type(&Witness { }));
@@ -100,9 +102,49 @@ module transfer_system::royalty_market3 {
 
     // ======== Buy Offers ========
 
-    public entry fun create_buy_offer() {}
+    public fun create_buy_offer<C>(
+        uid: &UID,
+        account: &mut MarketAccount,
+        price: u64,
+        auth: &TxAuthority
+    ) {
+        let account_uid = market_account::extend(account);
+        assert!(ownership::has_owner_permission<BUY>(account_uid, auth), ENO_OWNER_PERMISSION);
 
-    public entry fun fill_buy_offer() {}
+        let for_type = ownership::get_type(uid);
+        let buy_offers = dynamic_field2::borrow_mut_fill(account_uid, BuyKey { type: *option::borrow(&for_type) }, vec_map::empty());
+        let inner_offers = vec_map2::borrow_mut_fill(buy_offers, &type_name::get<C>(), vector::empty());
+
+        vector::push_back(inner_offers, BuyOffer {
+            price,
+            for_type,
+            for_id: option::some(uid_to_inner(uid))
+        });
+    }
+
+    public fun fill_buy_offer<C>(
+        uid: &mut UID,
+        seller: address,
+        account: &mut MarketAccount,
+        royalty_info: &RoyaltyInfo<C>,
+        affiliate: Option<address>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let type = option::destroy_some(ownership::get_type(uid));
+        assert!(struct_tag::match(royalty_info::type(royalty_info), &type), EWRONG_ROYALTY_INFO);
+
+        let item_id = uid_to_inner(uid);
+        let buy_offers = dynamic_field::borrow_mut<BuyKey, VecMap<TypeName, vector<BuyOffer>>>(uid, BuyKey { type });
+        let inner_offers = vec_map::get_mut(buy_offers, &type_name::get<C>());
+        let offer = find_buy_offer(item_id, inner_offers);
+
+        let coin = market_account::withdraw<C>(account, offer.price, ctx);
+        royalty_info::pay_royalty(account, royalty_info, affiliate, offer.price, &mut coin, clock, ctx);
+
+        transfer::public_transfer(coin, seller);
+        ownership::transfer(uid, option::some(seller), &tx_authority::begin_with_type(&Witness { }));
+    }
 
     public entry fun cancel_buy_offer() {}
 
@@ -133,6 +175,21 @@ module transfer_system::royalty_market3 {
         if (dynamic_field::exists_(uid, Key {})) {
             dynamic_field::remove<Key, VecMap<TypeName, SellOffer>>(uid, Key {});
         };
+    }
+
+    fun find_buy_offer(id: ID, offers: &vector<BuyOffer>): BuyOffer {
+        let (i, length) = (0, vector::length(offers));
+
+        while(i < length) {
+            let offer = vector::borrow(offers, i);
+            if(offer.for_id == option::some(id)) {
+                return *offer
+            };
+
+            i = i + 1
+        };
+
+        abort 0
     }
 
     // ======== Getters ========

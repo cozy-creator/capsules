@@ -16,6 +16,8 @@ module transfer_system::market_account {
     use sui_utils::typed_id;
 
     friend transfer_system::trading;
+    friend transfer_system::trade_history;
+    friend transfer_system::royalty_market3;
 
     struct MarketAccount has key {
         id: UID,
@@ -78,6 +80,14 @@ module transfer_system::market_account {
 
     public fun owner(self: &MarketAccount): address {
         option::destroy_some(ownership::get_owner(&self.id))
+    }
+
+    public fun uid(self: &MarketAccount): &UID {
+        &self.id
+    }
+
+    public(friend) fun extend(self: &mut MarketAccount): &mut UID {
+        &mut self.id
     }
 
     public fun assert_account_ownership(self: &MarketAccount, auth: &TxAuthority) {

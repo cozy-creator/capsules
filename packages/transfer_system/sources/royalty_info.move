@@ -24,7 +24,8 @@ module transfer_system::royalty_info {
     
     use ownership::tx_authority::{Self, TxAuthority};
 
-    use transfer_system::trade_history::{Self, TradeHistory, PairVolume};
+    use transfer_system::market_account::MarketAccount;
+    use transfer_system::trade_history::{Self, PairVolume};
 
     // Error Constants
     const ENO_PACKAGE_PERMISSION: u64 = 0;
@@ -134,7 +135,7 @@ module transfer_system::royalty_info {
 
     // Returns the amount of Coin<C> that was paid (the total royalty)
     public fun pay_royalty<C>(
-        history: &mut TradeHistory,
+        account: &mut MarketAccount,
         royalty_info: &RoyaltyInfo<C>,
         affiliate: Option<address>,
         price: u64,
@@ -142,7 +143,7 @@ module transfer_system::royalty_info {
         clock: &Clock,
         ctx: &mut TxContext
     ): u64 {
-        let pair = trade_history::borrow_mut_<C>(history, royalty_info.type);
+        let pair = trade_history::borrow_mut_<C>(account, royalty_info.type);
 
         trade_history::decay(pair, clock);
         let royalty_bps = calculate_fee_bps(pair, royalty_info);

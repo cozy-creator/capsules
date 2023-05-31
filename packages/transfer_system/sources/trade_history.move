@@ -1,20 +1,15 @@
 module transfer_system::trade_history {
     use sui::clock::{Self, Clock};
     use sui::math;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
     use sui_utils::struct_tag::{Self, StructTag};
     use sui_utils::dynamic_field2;
 
+    use transfer_system::market_account::{Self, MarketAccount};
+
     // Constants
     const MONTH_MS: u128 = 2_592_000_000; // 30 days in milliseconds
 
-    // Root-level or stored owned object. Stores PairVolume data
-    struct TradeHistory has key, store {
-        id: UID
-    }
 
     // Trade pair corresponds to (Coin<C>, Type)
     struct PairVolume<phantom C> has store, copy, drop {
@@ -27,17 +22,6 @@ module transfer_system::trade_history {
         type: StructTag
     }
 
-    // Convenience function
-    public entry fun create_history(ctx: &mut TxContext){
-        transfer::transfer(create_history_(ctx), tx_context::sender(ctx));
-    }
-
-    public fun create_history_(ctx: &mut TxContext): TradeHistory {
-        TradeHistory {
-            id: object::new(ctx)
-        }
-    }
-    
     // ========= Royalty Info Functions =========
     // PairVolume can only be modified by royalty_info::pay_royalty
 
@@ -58,23 +42,25 @@ module transfer_system::trade_history {
         pair.volume = pair.volume + price;
     }
 
-    public(friend) fun borrow_mut<C, T>(history: &mut TradeHistory): &mut PairVolume<C> {
-        borrow_mut_(history, struct_tag::get<T>())
+    public(friend) fun borrow_mut<C, T>(account: &mut MarketAccount): &mut PairVolume<C> {
+        borrow_mut_(account, struct_tag::get<T>())
     }
 
-    public(friend) fun borrow_mut_<C>(history: &mut TradeHistory, type: StructTag): &mut PairVolume<C> {
-        dynamic_field2::borrow_mut_fill(&mut history.id, Key<C> { type }, PairVolume<C> { type, volume: 0, last_trade_ms: 0 })
+    public(friend) fun borrow_mut_<C>(account: &mut MarketAccount, type: StructTag): &mut PairVolume<C> {
+        let account_uid = market_account::extend(account);
+        dynamic_field2::borrow_mut_fill(account_uid, Key<C> { type }, PairVolume<C> { type, volume: 0, last_trade_ms: 0 })
     }
 
     // ====== Getter Functions ======
 
-    public fun get<C, Type>(history: &TradeHistory): PairVolume<C> {
-        get_<C>(history, struct_tag::get<Type>())
+    public fun get<C, Type>(account: &MarketAccount): PairVolume<C> {
+        get_<C>(account, struct_tag::get<Type>())
     }
 
-    public fun get_<C>(history: &TradeHistory, type: StructTag): PairVolume<C> {
+    public fun get_<C>(account: &MarketAccount, type: StructTag): PairVolume<C> {
         let key = Key<C> { type };
-        dynamic_field2::get_with_default(&history.id, key, PairVolume<C> { type, volume: 0, last_trade_ms: 0 })
+        let account_uid = market_account::uid(account);
+        dynamic_field2::get_with_default(account_uid, key, PairVolume<C> { type, volume: 0, last_trade_ms: 0 })
     }
 
     public fun volume<C>(pair: &PairVolume<C>): u64 {
