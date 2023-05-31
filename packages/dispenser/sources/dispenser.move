@@ -60,7 +60,6 @@ module dispenser::dispenser {
  
     // ========== Witness structs =========
     struct Witness has drop {}
-    struct Key has store, copy, drop { slot: vector<u8> }
 
     // ========== Error constants ==========
 
