@@ -1,6 +1,7 @@
 [package]
 name = "Dispenser"
 version = "0.0.1"
+published-at = "0xd1cf8ebdbe62c6f3f5ddd122b00ccb457caa33fce337cefcd5551c2f08c8643f"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -8,4 +9,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-dispenser =  "0x0"
+dispenser =  "0xd1cf8ebdbe62c6f3f5ddd122b00ccb457caa33fce337cefcd5551c2f08c8643f"

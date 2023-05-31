@@ -46,8 +46,9 @@ module dispenser::dispenser {
         // This contains the information about the ownership, module authority of the dispenser.
     }
 
-    // ========== Witness structs =========
     struct Witness has drop {}
+    struct NOT_COIN {}
+
 
     // ========== Error constants ==========
 
@@ -71,8 +72,20 @@ module dispenser::dispenser {
 
     // ========== Public functions ==========
 
-    public fun create<C>(
+    public fun create_(
+        owner:address,
+        end_time:u64,
+        start_time:u64,
+        total_items: u64,
+        is_random: bool,
+        schema:vector<vector<u8>>,
         clock: &Clock,
+        ctx: &mut TxContext
+    ): Dispenser<NOT_COIN> {
+        create<NOT_COIN>(owner, 0u64, end_time, start_time, total_items, is_random, schema, clock, ctx)
+    }
+
+    public fun create<C>(
         owner:address,
         price: u64,
         end_time:u64,
@@ -80,6 +93,7 @@ module dispenser::dispenser {
         total_items: u64,
         is_random: bool,
         schema:vector<vector<u8>>,
+        clock: &Clock,
         ctx: &mut TxContext
     ): Dispenser<C> {
         let current_time = clock::timestamp_ms(clock);
@@ -134,13 +148,20 @@ module dispenser::dispenser {
         self.items_loaded = total_loaded;
     }
 
+    public fun dispense_free_item(
+        self: &mut Dispenser<NOT_COIN>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): (u64, vector<u8>) {
+        dispense_internal(self, clock, ctx)
+    }
+
     public fun dispense_item<C>(
         self: &mut Dispenser<C>,
         coin: Coin<C>,
         clock: &Clock,
         ctx: &mut TxContext
     ): (u64, vector<u8>) {
-        assert!(self.total_items == self.items_loaded, EDISPENSER_NOT_PROPERLY_LOADED);
         assert!(coin::value(&coin) >= self.price, EINSUFFICIENT_COIN_PAYMENT);
 
         let payment = coin::split(&mut coin, self.price, ctx);
@@ -197,8 +218,9 @@ module dispenser::dispenser {
         clock: &Clock,
         ctx: &mut TxContext
     ): (u64, vector<u8>) {
-        let current_time = clock::timestamp_ms(clock);
+        assert!(self.total_items == self.items_loaded, EDISPENSER_NOT_PROPERLY_LOADED);
 
+        let current_time = clock::timestamp_ms(clock);
         if(self.start_time != 0u64) { assert!(current_time >= self.start_time, ESTART_TIME_NOT_REACHED) };
         if(self.end_time != 0u64) { assert!(current_time < self.end_time, EEND_TIME_ELAPSED) };
 
