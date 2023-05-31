@@ -28,8 +28,6 @@ module dispenser::dispenser {
         items: Table<u64, vector<u8>>,
         /// The price of each item in the dispenser.
         price: u64,
-        /// The schema defining the structure of the items.
-        schema: Schema,
         /// The time when the dispenser ends.
         end_time: u64,
         /// The time when the dispenser starts.
@@ -56,6 +54,8 @@ module dispenser::dispenser {
         uri_prefix: Option<String>,
         /// Shared description of the items.
         description: String,
+        /// The schema defining the structure of the items.
+        schema: Schema,
     }
  
     // ========== Witness structs =========
@@ -106,7 +106,6 @@ module dispenser::dispenser {
         let dispenser = Dispenser {
             id: object::new(ctx),
             price,
-            schema,
             end_time,
             is_random,
             start_time,
@@ -115,6 +114,7 @@ module dispenser::dispenser {
             items: table::new(ctx),
             balance: balance::zero(),
             items_config: ItemsConfig {
+                schema,
                 description,
                 uri_prefix: option::none(),
                 name_prefix: option::none(),
@@ -147,7 +147,7 @@ module dispenser::dispenser {
 
         while (i < length) {
             let item = vector::pop_back(&mut items);
-            schema::validate(&self.schema, item);
+            schema::validate(&self.items_config.schema, item);
 
             let idx = table::length(&self.items);
             table::add(&mut self.items, idx, item);
