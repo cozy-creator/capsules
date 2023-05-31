@@ -1,7 +1,6 @@
 module dispenser::dispenser {
     use std::vector;
-    use std::string::{String};
-    use std::option::{Self, Option};
+    use std::option;
 
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
@@ -24,8 +23,6 @@ module dispenser::dispenser {
 
     struct Dispenser<phantom C> has key {
         id: UID,
-        /// Table of items available in the dispenser.
-        items: Table<u64, vector<u8>>,
         /// The price of each item in the dispenser.
         price: u64,
         /// The time when the dispenser ends.
@@ -40,24 +37,15 @@ module dispenser::dispenser {
         total_items: u64,
         /// Number of items currently loaded in the dispenser.
         items_loaded: u64,
-        /// Optional configuration for the items.
-        items_config: ItemsConfig,
-
+        /// Table of items available in the dispenser.
+        items: Table<u64, vector<u8>>,
+        /// The schema defining the structure of the items.
+        schema: Schema,
+        
         // There's an `ownership::ownership::Key { }` attached to the dispenser. 
         // This contains the information about the ownership, module authority of the dispenser.
     }
 
-    struct ItemsConfig has copy, store, drop {
-        /// Prefix for the name of the items.
-        name_prefix: Option<String>,
-        /// Prefix for the URI of the items.
-        uri_prefix: Option<String>,
-        /// Shared description of the items.
-        description: String,
-        /// The schema defining the structure of the items.
-        schema: Schema,
-    }
- 
     // ========== Witness structs =========
     struct Witness has drop {}
 
@@ -70,7 +58,6 @@ module dispenser::dispenser {
     const ESCHEMA_NOT_SET: u64 = 4;
     const EDISPENSER_EMPTY: u64 = 5;
     const ESCHEMA_ALREADY_SET: u64 = 6;
-    const EINVALID_DISPENSER_SERIALIZATION: u64 = 7;
     const EMAXIMUM_CAPACITY_EXCEEDED: u64 = 8;
     const EINVALID_START_TIME: u64 = 9;
     const EINVALID_END_TIME: u64 = 10;
@@ -79,9 +66,8 @@ module dispenser::dispenser {
     const ESTART_TIME_NOT_REACHED: u64 = 13;
     const EEND_TIME_ELAPSED: u64 = 14;
     const EINSUFFICIENT_COIN_PAYMENT: u64 = 15;
-    const EDISPENSER_PAUSED: u64 = 16;
-    const EDISPENSER_NOT_PAUSED: u64 = 17;
-    const EINSUFFICIENT_BALANCE: u64 = 18;
+    const EDISPENSER_NOT_PROPERLY_LOADED: u64 = 16;
+    const EINSUFFICIENT_DISPENSER_BALANCE: u64 = 18;
 
     // ========== Public functions ==========
 
@@ -94,7 +80,6 @@ module dispenser::dispenser {
         total_items: u64,
         is_random: bool,
         schema:vector<vector<u8>>,
-        description: String,
         ctx: &mut TxContext
     ): Dispenser<C> {
         let current_time = clock::timestamp_ms(clock);
@@ -106,19 +91,14 @@ module dispenser::dispenser {
         let dispenser = Dispenser {
             id: object::new(ctx),
             price,
+            schema,
             end_time,
             is_random,
             start_time,
             total_items,
             items_loaded: 0,
             items: table::new(ctx),
-            balance: balance::zero(),
-            items_config: ItemsConfig {
-                schema,
-                description,
-                uri_prefix: option::none(),
-                name_prefix: option::none(),
-            }
+            balance: balance::zero()
         };
 
         let tid = typed_id::new(&dispenser);
@@ -128,11 +108,7 @@ module dispenser::dispenser {
         dispenser
     }
 
-    public fun return_and_share<C>(self: Dispenser<C>) {
-        transfer::share_object(self)
-    }
-
-    public fun load<C>(
+    public fun load_items<C>(
         self: &mut Dispenser<C>,
         items: vector<vector<u8>>,
         auth: &TxAuthority
@@ -142,12 +118,12 @@ module dispenser::dispenser {
 
         let (i, length) = (0, vector::length(&items));
 
-        let new_loaded = self.items_loaded + length;
-        assert!(new_loaded <= self.total_items, EMAXIMUM_CAPACITY_EXCEEDED);
+        let total_loaded = self.items_loaded + length;
+        assert!(total_loaded <= self.total_items, EMAXIMUM_CAPACITY_EXCEEDED);
 
         while (i < length) {
             let item = vector::pop_back(&mut items);
-            schema::validate(&self.items_config.schema, item);
+            schema::validate(&self.schema, item);
 
             let idx = table::length(&self.items);
             table::add(&mut self.items, idx, item);
@@ -155,39 +131,45 @@ module dispenser::dispenser {
             i = i + 1;
         };
 
-        self.items_loaded = new_loaded;
+        self.items_loaded = total_loaded;
     }
 
-
-    public fun dispense<C>(
+    public fun dispense_item<C>(
         self: &mut Dispenser<C>,
-        clock: &Clock,
         coin: Coin<C>,
+        clock: &Clock,
         ctx: &mut TxContext
     ): (u64, vector<u8>) {
-        let coin_value = coin::value(&coin);
-        assert!(coin_value >= self.price, EINSUFFICIENT_COIN_PAYMENT);
+        assert!(self.total_items == self.items_loaded, EDISPENSER_NOT_PROPERLY_LOADED);
+        assert!(coin::value(&coin) >= self.price, EINSUFFICIENT_COIN_PAYMENT);
 
-        let payment = if(coin_value > self.price) {
-            let payment = coin::split(&mut coin, self.price, ctx);
-            transfer::public_transfer(coin, tx_context::sender(ctx));
-            payment
-        } else {
-            coin
-        };
-
+        let payment = coin::split(&mut coin, self.price, ctx);
         balance::join(&mut self.balance, coin::into_balance(payment));
+
+        destroy_or_return_coin(coin, ctx);
         dispense_internal(self, clock, ctx)
     }
 
-    public fun withdraw<C>(
+    public fun return_and_share<C>(self: Dispenser<C>) {
+        transfer::share_object(self)
+    }
+
+    public fun transfer_ownership<C>(
+        self: &mut Dispenser<C>,
+        new_owner: address,
+        auth: &TxAuthority,
+    ) {
+        ownership::transfer(&mut self.id, option::some(new_owner), auth);
+    }
+
+    public fun withdraw_coin<C>(
         self: &mut Dispenser<C>,
         amount: u64,
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): Coin<C> {
         assert!(ownership::has_owner_permission<ADMIN>(&self.id, auth), EINVALID_OWNER_AUTH);
-        assert!(amount <= balance::value(&self.balance), EINSUFFICIENT_BALANCE);
+        assert!(amount <= balance::value(&self.balance), EINSUFFICIENT_DISPENSER_BALANCE);
 
         coin::take(&mut self.balance, amount, ctx)
     }
@@ -201,6 +183,14 @@ module dispenser::dispenser {
 
 
     // ========== Internal helper functions ==========
+
+    fun destroy_or_return_coin<C>(coin: Coin<C>, ctx: &mut TxContext) {
+        if(coin::value(&coin) == 0){
+            coin::destroy_zero(coin)
+        } else {
+            transfer::public_transfer(coin, tx_context::sender(ctx))
+        }
+    }
 
     fun dispense_internal<C>(
         self: &mut Dispenser<C>,
