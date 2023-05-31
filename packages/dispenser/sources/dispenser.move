@@ -1,33 +1,31 @@
 module dispenser::dispenser {
     use std::vector;
-    use std::type_name;
     use std::string::{String};
     use std::option::{Self, Option};
 
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
-    use sui::bag::{Self, Bag};
+    use sui::table::{Self, Table};
     use sui::coin::{Self, Coin};
     use sui::clock::{Self, Clock};
-    use sui::dynamic_field;
     use sui::transfer;
 
-    // use ownership::ownership;
-    // use ownership::tx_authority::{Self, TxAuthority};
+    use ownership::ownership;
+    use ownership::permission::ADMIN;
+    use ownership::tx_authority::{Self, TxAuthority};
 
-    // use sui_utils::typed_id;
     use sui_utils::rand;
-    use sui_utils::counter::{Self, Counter};
+    use sui_utils::typed_id;
 
     use dispenser::schema::{Self, Schema};
 
     // ========== Storage structs ==========
 
-    struct Dispenser<phantom T, phantom C> has key {
+    struct Dispenser<phantom C> has key {
         id: UID,
-        /// Bag of items available in the dispenser.
-        items: Bag,
+        /// Table of items available in the dispenser.
+        items: Table<u64, vector<u8>>,
         /// The price of each item in the dispenser.
         price: u64,
         /// The schema defining the structure of the items.
@@ -38,28 +36,26 @@ module dispenser::dispenser {
         start_time: u64,
         /// Flag indicating if the dispenser distributes items randomly or sequentially.
         is_random: bool,
-        /// Flag indicating if the dispenser is active or not.
-        is_active: bool,
+        /// THe balance currently available in the dispenser.
+        balance: Balance<C>,
         /// Total number of items in the dispenser.
         total_items: u64,
         /// Number of items currently loaded in the dispenser.
         items_loaded: u64,
         /// Optional configuration for the items.
         items_config: ItemsConfig,
-        /// THe balance currently available in the dispenser.
-        balance: Balance<C>
 
         // There's an `ownership::ownership::Key { }` attached to the dispenser. 
         // This contains the information about the ownership, module authority of the dispenser.
     }
 
     struct ItemsConfig has copy, store, drop {
-        /// Shared description of the items.
-        description: String,
-        /// Prefix for the URI of the items.
-        uri_prefix: Option<String>,
         /// Prefix for the name of the items.
         name_prefix: Option<String>,
+        /// Prefix for the URI of the items.
+        uri_prefix: Option<String>,
+        /// Shared description of the items.
+        description: String,
     }
  
     // ========== Witness structs =========
@@ -90,33 +86,7 @@ module dispenser::dispenser {
 
     // ========== Public functions ==========
 
-    // public fun create<T: copy + store + drop>(
-    //     clock: &Clock,
-    //     owner: address,
-    //     end_time: u64,
-    //     start_time: u64,
-    //     total_items: u64,
-    //     is_random: bool,
-    //     schema: vector<vector<u8>>,
-    //     ctx: &mut TxContext
-    // ): Dispenser<T, NOT_COIN> {
-    //     let price = 0;
-
-    //     create<T, NOT_COIN>(
-    //         clock,
-    //         price,
-    //         max_items,
-    //         start_time,
-    //         end_time,
-    //         owner_maybe,
-    //         schema_maybe,
-    //         is_serialized,
-    //         is_sequential,
-    //         ctx
-    //     )
-    // }
-
-    public fun create<T: copy + store + drop, C>(
+    public fun create<C>(
         clock: &Clock,
         owner:address,
         price: u64,
@@ -125,212 +95,135 @@ module dispenser::dispenser {
         total_items: u64,
         is_random: bool,
         schema:vector<vector<u8>>,
+        description: String,
         ctx: &mut TxContext
-    ): Dispenser<T, C> {
+    ): Dispenser<C> {
         let current_time = clock::timestamp_ms(clock);
-
-        // if(type_name::get<C>() == type_name::get<NOT_COIN>()) {
-        //     assert!(price == 0, EINVALID_PRICE);
-        // };
+        let schema = schema::create(schema);
 
         if(start_time != 0u64) { assert!(start_time >= current_time, EINVALID_START_TIME) };
         if(end_time != 0u64) { assert!(current_time < end_time, EINVALID_START_TIME) };
 
         let dispenser = Dispenser {
             id: object::new(ctx),
-            items: bag::new(ctx),
             price,
             schema,
             end_time,
-            start_time,
             is_random,
-            is_active,
+            start_time,
+            total_items,
+            items_loaded: 0,
+            items: table::new(ctx),
+            balance: balance::zero(),
+            items_config: ItemsConfig {
+                description,
+                uri_prefix: option::none(),
+                name_prefix: option::none(),
+            }
         };
 
-        let _owner = if(option::is_some(&owner_maybe)) {
-          option::destroy_some(owner_maybe)
-        } else {
-            tx_context::sender(ctx)
-        };
-
-        // let typed_id = typed_id::new(&dispenser);
-        // let auth = tx_authority::add_type(&Witness {}, &tx_authority::begin(ctx));
-        // ownership::as_shared_object_(&mut dispenser.id, typed_id, vector[owner], vector::empty(), &auth);
-
-        if(is_serialized) {
-            assert!(type_name::into_string(type_name::get<T>()) == string(b"vector<u8>"), EINVALID_ITEM_TYPE);
-            assert!(option::is_some(&schema_maybe), 0);
-
-            set_schema(&mut dispenser, option::destroy_some(schema_maybe), /* &auth */);
-        };
-
-        if(!is_sequential) {
-            let key = Key { slot: COUNTER_BYTES };
-            let counter = counter::new_<Witness>(Witness {}, ctx);
-            dynamic_field::add<Key, Counter<Witness>>(&mut dispenser.id, key, counter)
-        };
+        let tid = typed_id::new(&dispenser);
+        let auth = tx_authority::begin_with_package_witness(Witness {});
+        ownership::as_shared_object_(&mut dispenser.id, tid, owner, owner, &auth);
 
         dispenser
     }
 
-    // public fun return_and_share<T, C>(self: Dispenser<T, C>) {
-    //     transfer::share_object(self)
-    // }
+    public fun return_and_share<C>(self: Dispenser<C>) {
+        transfer::share_object(self)
+    }
 
-    // public fun load_<C>(self: &mut Dispenser<vector<u8>, C>, items: vector<vector<u8>>, /* auth: &TxAuthority */) {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(!vector::is_empty(&items), ECANNOT_LOAD_EMPTY_ITEMS);
-    //     assert!(self.config.is_serialized, EINVALID_DISPENSER_SERIALIZATION);
-    //     assert!(option::is_some(&self.config.schema), ESCHEMA_NOT_SET);
+    public fun load<C>(
+        self: &mut Dispenser<C>,
+        items: vector<vector<u8>>,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::has_owner_permission<ADMIN>(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(!vector::is_empty(&items), ECANNOT_LOAD_EMPTY_ITEMS);
 
-    //     let (i, len) = (0, vector::length(&items));
-    //     let items_loaded = self.items_loaded + len;
-    //     let schema = option::borrow(&self.config.schema);
+        let (i, length) = (0, vector::length(&items));
 
-    //     assert!(items_loaded <= self.config.max_items, EMAXIMUM_CAPACITY_EXCEEDED);
+        let new_loaded = self.items_loaded + length;
+        assert!(new_loaded <= self.total_items, EMAXIMUM_CAPACITY_EXCEEDED);
 
-    //     while (i < len) {
-    //         let item = vector::pop_back(&mut items);
-    //         schema::validate(schema, item);
+        while (i < length) {
+            let item = vector::pop_back(&mut items);
+            schema::validate(&self.schema, item);
 
-    //         let index = bag::length(&self.items);
-    //         bag::add(&mut self.items, index, item);
+            let idx = table::length(&self.items);
+            table::add(&mut self.items, idx, item);
 
-    //         i = i + 1;
-    //     };
-     
-    //     self.items_loaded = items_loaded;
-    // }
+            i = i + 1;
+        };
 
-    // public fun load<T: copy + store + drop, C>(self: &mut Dispenser<T, C>, items: vector<T>, /* auth: &TxAuthority */) {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(!vector::is_empty(&items), ECANNOT_LOAD_EMPTY_ITEMS);
-    //     assert!(!self.config.is_serialized, EINVALID_DISPENSER_SERIALIZATION);
+        self.items_loaded = new_loaded;
+    }
 
-    //     let (i, len) = (0, vector::length(&items));
-    //     let items_loaded = self.items_loaded + len;
 
-    //     assert!(items_loaded <= self.config.max_items, EMAXIMUM_CAPACITY_EXCEEDED);
+    public fun dispense<C>(
+        self: &mut Dispenser<C>,
+        clock: &Clock,
+        coin: Coin<C>,
+        ctx: &mut TxContext
+    ): (u64, vector<u8>) {
+        let coin_value = coin::value(&coin);
+        assert!(coin_value >= self.price, EINSUFFICIENT_COIN_PAYMENT);
 
-    //     while (i < len) {
-    //         let item = vector::pop_back(&mut items);
-    //         let index = bag::length(&self.items);
+        let payment = if(coin_value > self.price) {
+            let payment = coin::split(&mut coin, self.price, ctx);
+            transfer::public_transfer(coin, tx_context::sender(ctx));
+            payment
+        } else {
+            coin
+        };
 
-    //         bag::add(&mut self.items, index, item);
+        balance::join(&mut self.balance, coin::into_balance(payment));
+        dispense_internal(self, clock, ctx)
+    }
 
-    //         i = i + 1;
-    //     };
+    public fun withdraw<C>(
+        self: &mut Dispenser<C>,
+        amount: u64,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ): Coin<C> {
+        assert!(ownership::has_owner_permission<ADMIN>(&self.id, auth), EINVALID_OWNER_AUTH);
+        assert!(amount <= balance::value(&self.balance), EINSUFFICIENT_BALANCE);
 
-    //     self.items_loaded = items_loaded;
-    // }
+        coin::take(&mut self.balance, amount, ctx)
+    }
 
-    // public fun dispense_<W: drop, T: copy + store + drop>(
-    //     self: &mut Dispenser<T, NOT_COIN>,
-    //     witness: &W,
-    //     clock: &Clock,
-    //     ctx: &mut TxContext
-    // ): T {
-    //     dispense_internal(self, witness, clock, ctx)
-    // }
 
-    // public fun dispense<W: drop, T: copy + store + drop, C>(
-    //     self: &mut Dispenser<T, C>,
-    //     witness: &W,
-    //     clock: &Clock,
-    //     coin: Coin<C>,
-    //     ctx: &mut TxContext
-    // ): T {
-    //     let coin_value = coin::value(&coin);
-    //     assert!(coin_value >= self.config.price, EINSUFFICIENT_COIN_PAYMENT);
+    // ========== Public view functions ==========
 
-    //     let payment = if(coin_value > self.config.price) {
-    //         let payment = coin::split(&mut coin, self.config.price, ctx);
-    //         transfer::public_transfer(coin, tx_context::sender(ctx));
-    //         payment
-    //     } else {
-    //         coin
-    //     };
+    public fun balance<C>(self: &Dispenser<C>): u64 {
+        balance::value(&self.balance)
+    }
 
-    //     balance::join(&mut self.balance, coin::into_balance(payment));
-    //     dispense_internal(self, witness, clock, ctx)
-    // }
-    
-    // public fun set_schema<T, C>(self: &mut Dispenser<T, C>, schema: vector<vector<u8>>, /* auth: &TxAuthority */) {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(option::is_none(&self.config.schema), ESCHEMA_ALREADY_SET);
 
-    //     option::fill(&mut self.config.schema, schema::create(schema));
-    // }
+    // ========== Internal helper functions ==========
 
-    // public fun withdraw<T, C>(self: &mut Dispenser<T, C>, amount: u64, ctx: &mut TxContext): Coin<C> {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(amount <= balance::value(&self.balance), EINSUFFICIENT_BALANCE);
-    //     coin::take(&mut self.balance, amount, ctx)
-    // }
+    fun dispense_internal<C>(
+        self: &mut Dispenser<C>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): (u64, vector<u8>) {
+        let current_time = clock::timestamp_ms(clock);
 
-    // public fun resume<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(self.config.is_paused, EDISPENSER_NOT_PAUSED);
+        if(self.start_time != 0u64) { assert!(current_time >= self.start_time, ESTART_TIME_NOT_REACHED) };
+        if(self.end_time != 0u64) { assert!(current_time < self.end_time, EEND_TIME_ELAPSED) };
 
-    //     self.config.is_paused = false
-    // }
+        let index = table::length(&self.items) - 1;
+        let item = table::remove(&mut self.items, index);
 
-    // public fun pause<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */) {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     assert!(!self.config.is_paused, EDISPENSER_PAUSED);
+        if(self.is_random && !table::is_empty(&self.items)) {
+            index = rand::rng_with_clock(0, table::length(&self.items), clock, ctx);
+            item = table::remove(&mut self.items, index);
+            table::add(&mut self.items, index, item);
+        };
 
-    //     self.config.is_paused = true
-    // }
-
-    // public fun extend<T, C>(self: &mut Dispenser<T, C>, /* auth: &TxAuthority */): &mut UID {
-    //     // assert!(ownership::is_authorized_by_owner(&self.id, auth), EINVALID_OWNER_AUTH);
-    //     &mut self.id
-    // }
-
-    // public fun balance<T, C>(self: &Dispenser<T, C>): u64 {
-    //     balance::value(&self.balance)
-    // }
-
-    // fun dispense_internal<W: drop, T: copy + store + drop, C>(
-    //     self: &mut Dispenser<T, C>,
-    //     _witness: &W,
-    //     clock: &Clock,
-    //     ctx: &mut TxContext
-    // ): T {
-    //     // TODO: verify module auth when the ownership module is properly working
-    //     assert!(!self.config.is_paused, EDISPENSER_PAUSED);
-
-    //     let now = clock::timestamp_ms(clock);
-
-    //     if(option::is_some(&self.config.start_time)) {
-    //         assert!(now >= *option::borrow(&self.config.start_time), ESTART_TIME_NOT_REACHED)
-    //     };
-
-    //     if(option::is_some(&self.config.end_time)) {
-    //         assert!(now <= *option::borrow(&self.config.end_time), EEND_TIME_ELAPSED)
-    //     };
-
-    //     if(self.config.is_sequential) {
-    //         let index = bag::length(&self.items) - 1;
-    //         bag::remove<u64, T>(&mut self.items, index)
-    //     } else {
-    //         let last_index = bag::length(&self.items) - 1;
-    //         let last_item = bag::remove<u64, T>(&mut self.items,  last_index);
-
-    //         if(bag::is_empty(&self.items)) {
-    //             last_item
-    //         } else {
-    //             let key = Key { slot: COUNTER_BYTES };
-    //             let counter = dynamic_field::borrow_mut<Key, Counter<Witness>>(&mut self.id, key);
-    //             let index = rand::rng_with_clock_and_counter(&Witness {}, 0, bag::length(&self.items), clock, counter, ctx);
-    //             let selected_item = bag::remove<u64, T>(&mut self.items, index);
-
-    //             bag::add<u64, T>(&mut self.items, index, last_item);
-    //             selected_item
-    //         }
-    //     }
-    // }
-
+        (index, item)
+    }
 }
 
 #[test_only]
@@ -369,7 +262,7 @@ module dispenser::dispenser_test {
     ) {
         let ctx = test_scenario::ctx(scenario);
         if(option::is_some(&price)) {
-            let dispenser = dispenser::create<T, C>(
+            let dispenser = dispenser::create<C>(
                 clock,
                 option::destroy_some(price),
                 max_items,
