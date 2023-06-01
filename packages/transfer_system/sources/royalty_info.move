@@ -135,7 +135,8 @@ module transfer_system::royalty_info {
 
     // Returns the amount of Coin<C> that was paid (the total royalty)
     public fun pay_royalty<C>(
-        account: &mut MarketAccount,
+        seller_account: &mut MarketAccount,
+        buyer_account: &mut MarketAccount,
         royalty_info: &RoyaltyInfo<C>,
         affiliate: Option<address>,
         price: u64,
@@ -143,12 +144,17 @@ module transfer_system::royalty_info {
         clock: &Clock,
         ctx: &mut TxContext
     ): u64 {
-        let pair = trade_history::borrow_mut_<C>(account, royalty_info.type);
+        let buyer_pair = trade_history::borrow_mut_<C>(buyer_account, royalty_info.type);
+        let seller_pair = trade_history::borrow_mut_<C>(seller_account, royalty_info.type);
 
-        trade_history::decay(pair, clock);
-        let royalty_bps = calculate_fee_bps(pair, royalty_info);
+        trade_history::decay(buyer_pair, clock);
+        trade_history::decay(seller_pair, clock);
+
+        let royalty_bps = calculate_fee_bps(buyer_pair, royalty_info);
         let royalty = ((price as u128) * (royalty_bps as u128) / MAX_ROYALTY as u64);
-        trade_history::record_trade(price, pair, clock);
+
+        trade_history::record_trade(price, buyer_pair, clock);
+        trade_history::record_trade(royalty, seller_pair, clock);
 
         if (option::is_some(&affiliate)) {
             let affiliate_bonus = (((royalty as u128) * (royalty_info.affiliate_bps as u128) / MAX_ROYALTY) as u64);
