@@ -3,11 +3,11 @@
     <v-app>
       <Appbar />
 
-      <v-container>
-        <v-main>
+      <v-main>
+        <v-container>
           <router-view />
-        </v-main>
-      </v-container>
+        </v-container>
+      </v-main>
     </v-app>
   </EthosConnectProvider>
 </template>

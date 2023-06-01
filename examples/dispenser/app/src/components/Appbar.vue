@@ -25,7 +25,7 @@
       v-if="ethos.context.wallet.status != 'connected'"
       variant="tonal"
       color="black"
-      @click="showConnect"
+      @click="showConnectModal"
     >
       Connect wallet
     </v-btn>
@@ -53,14 +53,18 @@ const sidelinks = [
     to: "/dispenser/create",
   },
   {
-    title: "Dispenser info",
+    title: "Dispenser Info",
     icon: "mdi-information",
     to: "/dispenser/view",
   },
+  {
+    title: "Mint Items",
+    icon: "mdi-factory",
+    to: "/dispenser/mint",
+  },
 ];
 
-console.log(ethos);
-function showConnect() {
+function showConnectModal() {
   ethos.context.modal.openModal();
 }
 

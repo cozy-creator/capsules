@@ -73,7 +73,7 @@ module dispenser::dispenser {
     // ========== Public functions ==========
 
     public fun create_(
-        owner:address,
+        owner: address,
         end_time:u64,
         start_time:u64,
         total_items: u64,
@@ -86,7 +86,7 @@ module dispenser::dispenser {
     }
 
     public fun create<C>(
-        owner:address,
+        owner: address,
         price: u64,
         end_time:u64,
         start_time:u64,
