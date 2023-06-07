@@ -316,3 +316,5 @@ $300 for a 10k collection
 - Admin creating pre-made NFTs (60): 769.6 milliSUI
 
 - Buying an object through OB kiosk: 12.6 milliSUI
+
+- Buying an object on haven's compass: 6.2 milliSUI

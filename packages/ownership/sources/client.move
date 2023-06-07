@@ -13,36 +13,34 @@ module ownership::client {
 
     use sui_utils::dynamic_field2;
 
+    use sui::action::ANY;
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::ownership;
 
     // Error enums
     const ENO_PROVISION_AUTHORITY: u64 = 0;
 
-    // Permission type; allows for access to a UID mutably
-    struct UID_MUT {}
-
     // Defaults to `true` if the owner does not exist
-    public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::has_owner_permission<Permission>(uid, auth)
+    public fun can_act_as_owner<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_owner<Permission>(uid, auth)
     }
 
     // If this is initialized, module authority exists and is always the native module (the module
     // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun has_package_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::has_package_permission<Permission>(uid, auth)
+    public fun can_act_as_package<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_package<Permission>(uid, auth)
     }
 
     /// Defaults to `false` if transfer authority is not set.
-    public fun has_transfer_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::has_transfer_permission<Permission>(uid, auth)
+    public fun can_act_as_transfer_auth<Permission>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_transfer_auth<Permission>(uid, auth)
     }
 
     // Also checks to see if a namespace has previously been provisioned in this UID
     public fun can_borrow_uid_mut(uid: &UID, auth: &TxAuthority): bool {
-        if (ownership::has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (ownership::has_package_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
-        if (ownership::has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+        if (ownership::can_act_as_owner<ANY>(uid, auth)) { return true }; // Owner type added
+        if (ownership::can_act_as_package<ANY>(uid, auth)) { return true }; // Witness type added
+        if (ownership::can_act_as_transfer_auth<ANY>(uid, auth)) { return true }; // Transfer type added
 
         // Check for namespace provisioning--these are manually added by an owner or namespace to an object's UID
         let agents = tx_authority::agents(auth);

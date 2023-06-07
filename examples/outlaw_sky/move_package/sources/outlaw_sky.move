@@ -88,7 +88,7 @@ module outlaw_sky::outlaw_sky {
 
     // This will overwrite the field 'name' in the `Witness` namespace with a new string
     public entry fun rename(outlaw: &mut Outlaw, new_name: String, ctx: &TxContext) {
-        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::can_act_as_owner<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         data::set(Witness {}, &mut outlaw.id, vector[utf8(b"name")], vector[new_name]);
     }
@@ -96,7 +96,7 @@ module outlaw_sky::outlaw_sky {
     // This is a sample of how atomic updates work; the existing value is borrowed and then modified,
     // rather than simply being overwritten. This is safter for concurrently running processes
     public entry fun add_attribute(outlaw: &mut Outlaw, key: String, value: String, ctx: &mut TxContext) {
-        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::can_act_as_owner<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
@@ -105,7 +105,7 @@ module outlaw_sky::outlaw_sky {
     }
 
     public entry fun remove_attribute(outlaw: &mut Outlaw, key: String, ctx: &mut TxContext) {
-        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::can_act_as_owner<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let attributes = data::borrow_mut_fill<Witness, VecMap<String, String>>(
             Witness {}, &mut outlaw.id, utf8(b"attributes"), vec_map::empty());
@@ -114,7 +114,7 @@ module outlaw_sky::outlaw_sky {
     }
 
     public entry fun increment_power_level(outlaw: &mut Outlaw, ctx: &mut TxContext) {
-        assert!(client::has_owner_permission<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
+        assert!(client::can_act_as_owner<EDIT>(&outlaw.id, &tx_authority::begin(ctx)), ENOT_OWNER);
 
         let power_level = data::borrow_mut_fill<Witness, u64>(
             Witness {}, &mut outlaw.id, utf8(b"power_level"), 0);

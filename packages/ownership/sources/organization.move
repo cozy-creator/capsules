@@ -13,15 +13,12 @@
 // over the user's keypair. To prevent this, we disallow transferring ownership of Organization objects created
 // outside of using a publish_receipt, and the owner is permanently the principal.
 //
-// Security note: the principal address of a organization is the package-id of the publish-receipt used to
-// create it initially, or the user's address who created it initially. For security, we should
-// make sure it's impossible to do tx_authority::add_id() with the package-id of the published
-// package somehow, otherwise the security of organizations will be compromised. In that case we'll
-// use an alternative address as the principal address (perhaps a hash of something or just a random
-// 32 byte value?).
+// Security note: the principal address of a organization is the object-id of the organization object.
+// This is safe, because it is a 'shared object' and you cannot add the object-id to tx_authority by
+// mere possession (reference) of the object.
 //
 // If you want to rotate the master-key for a organization, you can simply send the organization to a new
-// address using AdminTransfer.
+// address using OrgTransfer.
 
 module ownership::organization {
     use std::string::String;
@@ -40,7 +37,7 @@ module ownership::organization {
     use ownership::permission::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
-    use ownership::admin_transfer::Witness as AdminTransfer;
+    use ownership::org_transfer::Witness as OrgTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error enums
@@ -51,11 +48,8 @@ module ownership::organization {
     const ENO_MODULE_AUTHORITY: u64 = 4;
     const EPACKAGE_NOT_FOUND: u64 = 5;
 
-    // The principal address (org-id) is stored within the RBAC, and cannot be changed after creation
-    //
-    // Org-id is distinct from the object-id; this is because all Organizations are shared objects,
-    // meaning anyone can gain access to it and add `org.id` to their TxAuthority. However, org-id is a
-    // private field, meaning no one can gain access to it without using our API.
+    // The principal address (org-id) is also stored within the RBAC.
+    // An organizationd ID cannot be changed after creation.
     //
     // All package-IDs stored within the Organization map to the same org-id; the org-id is the principal.
     // That means if you have permission from the org-id, you have permision to all its packages. Whereas
@@ -85,19 +79,19 @@ module ownership::organization {
     // Placed on PublishReceipt to prevent organizations from being claimed twice
     struct Key has store, copy, drop {}
 
-    // Permission types
+    // Package Authority Witness
+    struct Witness has drop {}
+
+    // Action types
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
     // struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
 
-    // Authority object
-    struct Witness has drop {}
-
     // ======== Create Organizations ======== 
 
     // Claim an organization object from a publish receipt.
-    // The organization-address (principal) will be generated and cannot be changed. It is not
-    // the same as the Organization object's ID.
+    // The organization-address (principal) will be generated and cannot be changed. The org-id is the
+    // same as this object-ID.
     // Organization objects allow us to combine several packages under the same organization.
     public fun create_from_receipt(
         receipt: &mut PublishReceipt,
@@ -112,10 +106,9 @@ module ownership::organization {
     fun create_internal(owner: address, ctx: &mut TxContext): Organization {
         let org_uid = object::new(ctx);
         let rbac = rbac::create(object::uid_to_address(&org_uid));
-        object::delete(org_uid); // org_id is not stored
 
         let organization = Organization { 
-            id: object::new(ctx),
+            id: org_id,
             packages: vector::empty(),
             rbac 
         };
@@ -123,7 +116,7 @@ module ownership::organization {
         // Initialize ownership
         let typed_id = typed_id::new(&organization);
         let auth = tx_authority::begin_with_package_witness(Witness { });
-        ownership::as_shared_object<Organization, AdminTransfer>(&mut organization.id, typed_id, owner, &auth);
+        ownership::as_shared_object<Organization, OrgTransfer>(&mut organization.id, typed_id, owner, &auth);
 
         organization
     }
@@ -171,7 +164,7 @@ module ownership::organization {
     }
 
     // ======== Edit Organizations =====
-    // You must be the owner of a organization to edit it. If you want to change owners, call into AdminTransfer.
+    // You must be the owner of a organization to edit it. If you want to change owners, call into OrgTransfer.
     // Ownership of organizations created with anything other than a publish_receipt are non-transferable.
 
     // Abort if package_id does not exist within the organization

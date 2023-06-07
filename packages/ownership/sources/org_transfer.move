@@ -1,8 +1,9 @@
 // Same as simple-transfer, but with ADMIN intead of TRANSFER as the requested permission.
 // This exists for Organization, so that an owner doesn't carelessly grant the 'TRANSFER' permission
-// to an agent, and then the TRANSFER agent takes over the Organization object.
+// to an agent, and then the TRANSFER agent takes over the Organization object by transfer it to
+// itself.
 
-module ownership::admin_transfer {
+module ownership::org_transfer {
     use std::option;
 
     use sui::object::{Self, UID};
@@ -16,7 +17,7 @@ module ownership::admin_transfer {
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
 
-    // Witness type
+    // Package Witness
     struct Witness has drop { } 
 
     // Convenience function

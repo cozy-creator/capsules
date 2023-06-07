@@ -43,7 +43,7 @@ module attach::data {
     // Key used to store data on an object for a given namespace + key
     struct Key has store, copy, drop { namespace: Option<ID>, key: String }
 
-    // Permission types
+    // Action types
     struct WRITE {}
 
     // Convenience function using a Witness pattern. 'witness' is the Namespace, and must have
@@ -69,7 +69,7 @@ module attach::data {
         values: vector<T>,
         auth: &TxAuthority
     ) {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
@@ -107,7 +107,7 @@ module attach::data {
         fields: vector<vector<String>>,
         auth: &TxAuthority
     ) {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
         assert!(vector::length(&data) == vector::length(&fields), EINCORRECT_DATA_LENGTH);
         
         let old_types_to_drop = schema::update_object_schema(uid, namespace, fields);
@@ -141,7 +141,7 @@ module attach::data {
         keys: vector<String>,
         auth: &TxAuthority
     ) {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let old_types = schema::remove(uid, namespace, keys);
 
@@ -173,7 +173,7 @@ module attach::data {
         namespace: Option<ID>,
         auth: &TxAuthority
     ) {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::remove_all(uid, namespace);
 
@@ -226,7 +226,7 @@ module attach::data {
         key: String,
         auth: &TxAuthority
     ): &mut T {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
@@ -252,7 +252,7 @@ module attach::data {
         default: T,
         auth: &TxAuthority
     ): &mut T {
-        assert!(server::has_package_permission_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field2::borrow_mut_fill<Key, T>(uid, Key { namespace, key }, default)
     }
@@ -273,7 +273,7 @@ module attach::data {
         destination_uid: &mut UID,
         auth: &TxAuthority
     ) {
-        assert!(server::has_package_permission_opt<WRITE>(destination, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(server::can_act_as_package_opt<WRITE>(destination, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::into_keys_types(source_uid, source);
         let i = 0;

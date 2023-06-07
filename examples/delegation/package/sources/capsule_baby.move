@@ -5,7 +5,7 @@ module package::capsule_baby {
     use sui::object::{Self, UID};
     use sui::transfer;
 
-    use ownership::ownership::{Self, has_owner_permission, has_package_permission};
+    use ownership::ownership::{Self, can_act_as_owner, can_act_as_package};
     use ownership::publish_receipt;
     use ownership::tx_authority::{Self, TxAuthority};
 
@@ -23,8 +23,7 @@ module package::capsule_baby {
 
     struct Witness has drop {}
 
-    const ENO_OWNER_AUTH: u64 = 0;
-    const ENO_ORG_AUTH: u64 = 1;
+    const ENO_AUTHORITY: u64 = 0;
 
     fun init(genesis: CAPSULE_BABY, ctx: &mut TxContext) {
         let reciept = publish_receipt::claim(&genesis, ctx);
@@ -65,8 +64,8 @@ module package::capsule_baby {
         new_name: String,
         auth: &TxAuthority
     ) {
-        let has_editor_permission = has_owner_permission<EDITOR>(&baby.id, auth) || has_package_permission<EDITOR>(&baby.id, auth);
-        assert!(has_editor_permission, ENO_OWNER_AUTH);
+        assert!(can_act_as_owner<EDITOR>(&baby.id, auth) || 
+            can_act_as_package<EDITOR>(&baby.id, auth), ENO_AUTHORITY);
 
         baby.name = new_name;
     }

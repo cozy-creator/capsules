@@ -66,14 +66,14 @@ module capsule::capsule {
     }
 
     public fun borrow<T: key + store>(capsule: &Capsule<T>, auth: &TxAuthority): &T {
-        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         option::borrow(&capsule.contents)
     }
 
     public fun borrow_mut<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut T {
-        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         option::borrow_mut(&mut capsule.contents)
@@ -82,7 +82,7 @@ module capsule::capsule {
     // Unfortunately we cannot delete shared objects In Sui, which would be ideal. This means that this capsule, as a shared object,
     // will persist in memory forever despite being useless. This is why we need the Option<T> wrapper for contents.
     public fun extract<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): T {
-        assert!(ownership::has_transfer_permission<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(ownership::can_act_as_transfer_auth<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
 
         // Set the owner to none, so it doesn't get picked by an indexer as owned by anyone
@@ -91,7 +91,7 @@ module capsule::capsule {
     }
 
     public fun destroy<T: key + store>(capsule: Capsule<T>, auth: &TxAuthority): T {
-        assert!(ownership::has_transfer_permission<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(ownership::can_act_as_transfer_auth<ADMIN>(&capsule.id, auth), ENO_TRANSFER_AUTHORITY);
         assert!(option::is_some(&capsule.contents), ECAPSULE_IS_EMPTY);
         let Capsule { id, contents } = capsule;
 
@@ -100,7 +100,7 @@ module capsule::capsule {
     }
 
     public fun extend<T: key + store>(capsule: &mut Capsule<T>, auth: &TxAuthority): &mut UID {
-        assert!(ownership::has_owner_permission<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&capsule.id, auth), ENO_OWNER_AUTHORITY);
 
         &mut capsule.id
     }
