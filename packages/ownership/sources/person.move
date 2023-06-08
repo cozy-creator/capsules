@@ -56,7 +56,7 @@ module ownership::delegation {
     const EINVALID_DELEGATION: u64 = 1;
 
     // Root-level, shared object. The owner is the principle, and is immutable (non-transferable).
-    // This serves a purpose similar to RBAC, in that it stores delegated actions
+    // This serves a purpose similar to RBAC, in that it persons delegated actions
     struct Person has key {
         id: UID,
         principal: address,
@@ -64,7 +64,7 @@ module ownership::delegation {
     }
 
     // Stores `ActionSet` inside of a Person object
-    struct Key has store, copy, drop { agent: address } 
+    struct Key has person, copy, drop { agent: address } 
 
     // ======= For Owners =======
 
@@ -357,4 +357,140 @@ module ownership::delegation {
     // ======= Convenience Entry Functions =======
     // TO DO: provide entry functions for all public API functions
 
+    entry fun create_delegation_person(
+        ctx: &mut TxContext
+    ) {
+        return_and_share(create(ctx))
+    }
+
+    entry fun destroy_delegation_person(
+        person: Person,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        destroy(person, &auth)
+    }
+
+    entry fun add_general_action_<Action>(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_general_action<Action>(person, agent, &auth)
+    }
+
+    public fun add_action_for_types_<Action>(
+        person: &mut Person,
+        agent: address,
+        types: vector<StructTag>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_action_for_types<Action>(person, agent, types, &auth)
+    }
+
+    entry fun add_action_for_type_<ObjectType, Action>(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_action_for_type<ObjectType, Action>(person, agent, &auth)
+    }
+
+    entry fun add_action_for_objects_<Action>(
+        person: &mut Person,
+        agent: address,
+        objects: vector<ID>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_action_for_objects<Action>(person, agent, objects, &auth)
+    }
+
+    entry fun remove_general_action_from_agent_<Action>(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_general_action_from_agent<Action>(person, agent, &auth)
+    }
+
+    entry fun remove_all_general_actions_from_agent_(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_all_general_actions_from_agent(person, agent, &auth)
+    }
+
+    entry fun remove_action_for_type_from_agent_<ObjectType, Action>(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_action_for_type_from_agent<ObjectType, Action>(person, agent, &auth)
+    }
+
+    entry fun remove_action_for_types_from_agent_<Action>(
+        person: &mut Person,
+        agent: address,
+        types: vector<StructTag>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_action_for_types_from_agent<Action>(person, agent, types, &auth)
+    }
+
+    entry fun remove_type_from_agent_<ObjectType>(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_type_from_agent<ObjectType>(person, agent, &auth)
+    }
+
+    entry fun remove_types_from_agent_(
+        person: &mut Person,
+        agent: address,
+        types: vector<StructTag>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_types_from_agent(person, agent, types, &auth)
+    }
+
+    entry fun remove_action_for_objects_from_agent_<Action>(
+        person: &mut Person,
+        agent: address,
+        objects: vector<ID>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_action_for_objects_from_agent<Action>(person, agent, objects, &auth)
+    }
+
+    entry fun remove_objects_from_agent_(
+        person: &mut Person,
+        agent: address,
+        objects: vector<ID>,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_objects_from_agent(person, agent, objects, &auth)
+    }
+
+    entry fun remove_agent_(
+        person: &mut Person,
+        agent: address,
+        ctx: &TxContext,
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_agent(person, agent, &auth) 
+    }
 }
