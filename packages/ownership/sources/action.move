@@ -25,7 +25,7 @@ module ownership::action {
     friend ownership::rbac;
     friend ownership::tx_authority;
 
-    // Sspecial system-level actions.
+    // Special system-level actions.
     // If the principal gives an agent the MANAGER action, then they can act as
     // that agent for all action-types (there is no scope), except for admin.
     //
