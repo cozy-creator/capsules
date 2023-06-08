@@ -439,17 +439,41 @@ module ownership::organization {
     // These improve usability by making organization functions callable directly by the Sui CLI; no need
     // for client-side composition to construct a TxAuthority object.
 
-    public entry fun create_from_receipt_(receipt: &mut PublishReceipt, ctx: &mut TxContext) {
+    entry fun create_from_receipt_(
+        receipt: &mut PublishReceipt,
+        ctx: &mut TxContext
+    ) {
         let organization = create_from_receipt(receipt, tx_context::sender(ctx), ctx);
         return_and_share(organization);
     }
 
-    public entry fun create_from_package_(stored: Package, ctx: &mut TxContext) {
+    entry fun create_from_package_(
+        stored: Package,
+        ctx: &mut TxContext
+    ) {
         let organization = create_from_package(stored, tx_context::sender(ctx), ctx);
         return_and_share(organization);
     }
 
-    public entry fun remove_package_(
+    entry fun add_package_(
+        organization: &mut Organization,
+        receipt: &mut PublishReceipt,
+        ctx: &mut TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_package(receipt, organization, &auth, ctx)
+    }
+
+    entry fun add_package_from_stored_(
+        organization: &mut Organization,
+        stored: Package,
+        ctx: &mut TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_package_from_stored(organization, package, &auth)
+    }
+
+    entry fun remove_package_(
         organization: &mut Organization,
         package_id: ID,
         recipient: address,
@@ -460,13 +484,81 @@ module ownership::organization {
         transfer::transfer(package, recipient);
     }
 
-    public entry fun set_role_for_agent_(org: &mut Organization, agent: address, role: String, ctx: &TxContext) {
+    entry fun destroy_(
+        organization: Organization,
+        ctx: &mut TxContext
+    ) {
         let auth = tx_authority::begin(ctx);
-        set_role_for_agent(org, agent, role, &auth);
+        destroy(organization, &auth);
     }
 
-    // *** TO DO: Add Convenience entry functions for RBAC operations here ***
+    // ========== Agent & Roles conenience ntry functions ==========
 
+    entry fun delete_agent_(
+        organization: &mut Organization,
+        agent: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        delete_agent(organization, agent, &auth);
+    }
+
+    entry fun set_role_for_agent_(
+        organization: &mut Organization,
+        agent: address,
+        role: String,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        set_role_for_agent(organization, agent, role, &auth);
+    }
+
+    entry fun grant_permission_to_role_<Permission>(
+        organization: &mut Organization,
+        role: String,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        grant_permission_to_role<Permission>(organization, role, &auth)
+    }
+
+    entry fun revoke_permission_from_role_<Permission>(
+        organization: &mut Organization,
+        role: String,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        revoke_permission_from_role<Permission>(organization, role, &auth)
+    }
+
+    entry fun delete_role_and_agents_(
+        organization: &mut Organization,
+        role: String,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        delete_role_and_agents(organization, role, &auth)
+    }
+
+    // ========== Endorsements convenience entry functions ==========
+
+    entry fun add_endorsement_(
+        organization: &mut Organization,
+        from: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_endorsement(organization, from, &auth)
+    }
+
+    entry fun remove_endorsement_(
+        organization: &mut Organization,
+        from: address,
+        ctx: &TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        remove_endorsement(organization, from, &auth)
+    }
 }
 
 
