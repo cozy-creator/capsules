@@ -64,7 +64,7 @@ module ownership::delegation {
     }
 
     // Stores `ActionSet` inside of a Person object
-    struct Key has person, copy, drop { agent: address } 
+    struct Key has store, copy, drop { agent: address } 
 
     // ======= For Owners =======
 
