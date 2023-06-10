@@ -15,8 +15,8 @@ module ownership::tx_authority {
     use sui_utils::struct_tag::StructTag;
     use sui_utils::vec_map2;
 
-    use ownership::permission_set::{Self, ActionSet};
-    use ownership::permission::{Self, Action};
+    use ownership::action_set::{Self, ActionSet};
+    use ownership::action::{Self, Action};
 
     // Hardcoded struct name for package witnesses
     const WITNESS_STRUCT: vector<u8> = b"Witness";
@@ -24,12 +24,12 @@ module ownership::tx_authority {
     // Error constants
     const ENOT_A_PACKAGE_WITNESS: u64 = 0;
 
-    // agent_permissions: (principle => Action types)
+    // principal_actions: (principle => Set of available actions as that principal)
     // package_org: (package ID => organization-id (as an address) that controls that package)
-    // We are keeping agent_permissions internal, because otherwise someone could duplicate and store one of
-    // the `Action` structs, although I don't think they'd be able to use it anywhere.
+    // We are keeping principal_actions internal, because otherwise someone could duplicate and store one of
+    // the `ActionSet` structs, although I don't think they'd be able to use it anywhere.
     struct TxAuthority has drop {
-        agent_permissions: VecMap<address, ActionSet>,
+        principal_actions: VecMap<address, ActionSet>,
         package_org: VecMap<ID, address>
     }
 
@@ -46,16 +46,14 @@ module ownership::tx_authority {
         new_internal(encode::type_into_address<T>())
     }
 
-    // public fun begin_with_single_use(single_use: SingleUseAction): TxAuthority {
-    //     let (principal, permission) = permission::consume_single_use(single_use);
+    public fun begin_with_single_use(single_use: SingleUseAction): TxAuthority {
+        let (principal, action) = action::consume_single_use(single_use);
 
-    //     TxAuthority {
-    //         agent_permissions: vec_map2::new(principal, vector[permission]),
-    //         agent_type_constraints: vec_map::empty(),
-    //         agent_object_constraints: vec_map::empty(),
-    //         package_org: vec_map::empty() 
-    //     }
-    // }
+        TxAuthority {
+            principal_actions: vec_map2::new(principal, vector[action]),
+            package_org: vec_map::empty() 
+        }
+    }
 
     // A 'package witness' is any struct with the name 'Witness' and the `drop` ability.
     // The module_name is unimportant; only the package_id matters. Effectively this means
@@ -69,7 +67,7 @@ module ownership::tx_authority {
 
     public fun empty(): TxAuthority {
         TxAuthority { 
-            agent_permissions: vec_map::empty(),
+            principal_actions: vec_map::empty(),
             package_org: vec_map::empty() 
         }
     }
@@ -80,29 +78,29 @@ module ownership::tx_authority {
     // This will be more useful once Sui supports multi-party transactions (August 2023)
     public fun add_signer(ctx: &TxContext, auth: &TxAuthority): TxAuthority {
         let new_auth = copy_(auth);
-        let permissions = permission_set::new(vector[permission::admin()]);
+        let permissions = action_set::new(vector[action::admin()]);
 
-        vec_map2::set(&mut new_auth.agent_permissions, &tx_context::sender(ctx), permissions);
+        vec_map2::set(&mut new_auth.principal_actions, &tx_context::sender(ctx), permissions);
 
         new_auth
     }
 
     public fun add_type<T>(_cap: &T, auth: &TxAuthority): TxAuthority {
         let new_auth = copy_(auth);
-        let permissions = permission_set::new(vector[permission::admin()]);
+        let permissions = action_set::new(vector[action::admin()]);
 
-        vec_map2::set(&mut new_auth.agent_permissions, &encode::type_into_address<T>(), permissions);
+        vec_map2::set(&mut new_auth.principal_actions, &encode::type_into_address<T>(), permissions);
 
         new_auth
     }
 
     // public fun add_single_use(single_use: SingleUseAction, auth: &TxAuthority): TxAuthority {
     //     let new_auth = copy_(auth);
-    //     let fallback = permission_set::new(vector[]);
+    //     let fallback = action_set::new(vector[]);
 
-    //     let (principal, permission) = permission::consume_single_use(single_use);
-    //     let existing = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &principal, fallback);
-    //     permission::add(&mut permission_set::general_mut(existing), vector[permission]);
+    //     let (principal, action) = action::consume_single_use(single_use);
+    //     let existing = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &principal, fallback);
+    //     action::add(&mut action_set::general_mut(existing), vector[action]);
 
     //     new_auth
     // }
@@ -113,16 +111,16 @@ module ownership::tx_authority {
 
         let new_auth = copy_(auth);
         let package_addr = object::id_to_address(&package_id);
-        let permissions = permission_set::new(vector[permission::admin()]);
+        let permissions = action_set::new(vector[action::admin()]);
 
-        vec_map2::set(&mut new_auth.agent_permissions, &package_addr, permissions);
+        vec_map2::set(&mut new_auth.principal_actions, &package_addr, permissions);
 
         new_auth
     }
 
     public fun copy_(auth: &TxAuthority): TxAuthority {
         TxAuthority { 
-            agent_permissions: auth.agent_permissions,
+            principal_actions: auth.principal_actions,
             package_org: auth.package_org
         }
     }
@@ -130,11 +128,11 @@ module ownership::tx_authority {
     // ========= Action Validity Checkers =========
 
     public fun can_act_as_address<Action>(principal: address, auth: &TxAuthority): bool {
-        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        let set_maybe = vec_map2::get_maybe(&auth.principal_actions, &principal);
         if (option::is_none(&set_maybe)) { return false };
         let set = option::destroy_some(set_maybe);
 
-        action::has_action<Action>(permission_set::general(&set))
+        action::has_action<Action>(action_set::general(&set))
     }
 
     // `T` can be any type belong to the package, such as 0x599::my_module::StructName
@@ -170,18 +168,18 @@ module ownership::tx_authority {
 
     // ========= Exclude MANAGER Action =========
     // Note: If you are doing a sensitive edit, such as assigning new delegations or roles, it's
-    // recommended that you check for <ADMIN> permission, or at least define a special permission
+    // recommended that you check for <ADMIN> action, or at least define a special action
     // such as <ASSIGN_ROLE> and then exclude managers, which will automatically have all
     // permissions other than admin. You can do this by doing something like:
     // `assert!(tx_authority::can_act_as_address<ASSIGN_ROLE>(package_id, auth), ENO_AUTHORITY)`;
     // `assert!(!tx_authority::is_manager(principal, auth), ENO_AUTHORITY)`;
 
     public fun is_manager(principal: address, auth: &TxAuthority): bool {
-        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        let set_maybe = vec_map2::get_maybe(&auth.principal_actions, &principal);
         if (option::is_none(&set_maybe)) { return false };
         let set = option::destroy_some(set_maybe);
 
-        permission::has_manager_permission(permission_set::general(&set))
+        action::has_manager_permission(action_set::general(&set))
     }
 
     public fun has_package_permission_excluding_manager<T, Action>(auth: &TxAuthority): bool {
@@ -214,22 +212,22 @@ module ownership::tx_authority {
         object_id: &ID,
         auth: &TxAuthority
     ): bool {
-        let set_maybe = vec_map2::get_maybe(&auth.agent_permissions, &principal);
+        let set_maybe = vec_map2::get_maybe(&auth.principal_actions, &principal);
         if (option::is_none(&set_maybe)) { return false };
         let set = option::destroy_some(set_maybe);
 
         // Check against general permissions
-        if (action::has_action<Action>(permission_set::general(&set))) { return true };
+        if (action::has_action<Action>(action_set::general(&set))) { return true };
 
         // Check against type permissions
-        let type_permissions_maybe = vec_map2::match_struct_tag_maybe(permission_set::types(&set), struct_tag);
+        let type_permissions_maybe = vec_map2::match_struct_tag_maybe(action_set::types(&set), struct_tag);
         if (option::is_some(&type_permissions_maybe)) {
             let type_permissions = option::destroy_some(type_permissions_maybe);
             if (action::has_action<Action>(&type_permissions)) { return true };
         };
 
         // Check against object permissions
-        let object_permissions_maybe = vec_map2::get_maybe(permission_set::objects(&set), object_id);
+        let object_permissions_maybe = vec_map2::get_maybe(action_set::objects(&set), object_id);
         if (option::is_some(&object_permissions_maybe)) {
             let object_permissions = option::destroy_some(object_permissions_maybe);
             if (action::has_action<Action>(&object_permissions)) { return true };
@@ -298,7 +296,7 @@ module ownership::tx_authority {
     // ========= Getter Functions =========
 
     public fun agents(auth: &TxAuthority): vector<address> {
-        vec_map::keys(&auth.agent_permissions)
+        vec_map::keys(&auth.principal_actions)
     }
 
     public fun organizations(auth: &TxAuthority): VecMap<ID, address> {
@@ -329,7 +327,7 @@ module ownership::tx_authority {
 
     fun new_internal(principal: address): TxAuthority {
         TxAuthority {
-            agent_permissions: vec_map2::new(principal, permission_set::new(vector[permission::admin()])),
+            principal_actions: vec_map2::new(principal, action_set::new(vector[action::admin()])),
             package_org: vec_map::empty()
         }
     }
@@ -360,17 +358,17 @@ module ownership::tx_authority {
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = copy_(auth);
-        let fallback = permission_set::new(vector[]);
+        let fallback = action_set::new(vector[]);
 
         // Delegation cannot expand the permissions that an agent already has; it can merely extend a
         // subset of its existing permissions to a new principal
-        let agent_permissions = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &agent, fallback);
-        let filtered_permissions = permission::intersection(
-            &new_permissions, permission_set::general(agent_permissions));
+        let principal_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &agent, fallback);
+        let filtered_permissions = action::intersection(
+            &new_permissions, action_set::general(principal_actions));
 
         let principal_permissions = vec_map2::borrow_mut_fill(
-            &mut new_auth.agent_permissions, &principal, fallback);
-        permission::add(permission_set::general_mut(principal_permissions), filtered_permissions);
+            &mut new_auth.principal_actions, &principal, fallback);
+        action::add(action_set::general_mut(principal_permissions), filtered_permissions);
 
         new_auth
     }
@@ -385,13 +383,13 @@ module ownership::tx_authority {
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = copy_(auth);
-        let fallback = permission_set::new(vector[]);
+        let fallback = action_set::new(vector[]);
 
-        let agent_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &agent, fallback);
-        let filtered_set = permission_set::intersection(&new_set, agent_set);
+        let agent_set = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &agent, fallback);
+        let filtered_set = action_set::intersection(&new_set, agent_set);
 
-        let principal_set = vec_map2::borrow_mut_fill(&mut new_auth.agent_permissions, &principal, fallback);
-        permission_set::merge(principal_set, filtered_set);
+        let principal_set = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &principal, fallback);
+        action_set::merge(principal_set, filtered_set);
 
         new_auth
     }
@@ -404,8 +402,8 @@ module ownership::tx_authority {
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = copy_(auth);
-        let permissions = permission_set::new(vector[permission::admin()]);
-        vec_map2::set(&mut new_auth.agent_permissions, &object::uid_to_address(uid), permissions);
+        let permissions = action_set::new(vector[action::admin()]);
+        vec_map2::set(&mut new_auth.principal_actions, &object::uid_to_address(uid), permissions);
 
         new_auth
     }

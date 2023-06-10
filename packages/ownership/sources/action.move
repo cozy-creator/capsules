@@ -45,12 +45,6 @@ module ownership::action {
         inner: String
     }
 
-    // struct SingleUseAction has key, store {
-    //     id: UID,
-    //     principal: address,
-    //     action: Action
-    // }
-
     public(friend) fun admin(): Action {
         Action { inner: encode::type_name<ADMIN>() }
     }
@@ -220,33 +214,6 @@ module ownership::action {
     public fun new_for_testing<P>(): Action {
         new<P>()
     }
-
-    // =========== Single-use actions ===========
-    // Created by ownership::organization, destroyed by ownership::tx_authority to be added to TxAuthority
-    // These make up for the fact that Sui cannot do multi-party transactions; we can split one-party's
-    // half of the transaction into a single-use action, and then have the second party complete it
-
-    // public(friend) fun create_single_use<P>(
-    //     principal: address,
-    //     ctx: &mut TxContext
-    // ): SingleUseAction {
-    //     SingleUseAction {
-    //         id: object::new(ctx),
-    //         principal,
-    //         action: new<P>()
-    //     }
-    // }
-
-    // public(friend) fun consume_single_use(action: SingleUseAction): (address, Action) {
-    //     let SingleUseAction { id, principal, action } = action;
-    //     object::delete(id);
-    //     (principal, action)
-    // }
-
-    // public fun destroy_single_use(action: SingleUseAction) {
-    //     let SingleUseAction { id, principal: _, action: _ } = action;
-    //     object::delete(id);
-    // }
 }
 
     // Can be stored, but not copied. Used as a template to produce Action structs

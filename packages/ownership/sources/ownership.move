@@ -46,7 +46,7 @@ module ownership::ownership {
     // Dynamic field key for storing the Ownership struct
     struct Key has store, copy, drop { }
 
-    // Permission type allowing access to the UID
+    // Action type allowing access to the UID
     struct UID_MUT {} // Used to access UID_MUT
     struct TRANSFER {} // Used to perform a transfer (change the owner)
     struct MIGRATE {} // Used to change (migrate) the transfer-authority
@@ -115,14 +115,14 @@ module ownership::ownership {
     }
 
     // Defaults to `true` if the owner does not exist
-    public fun can_act_as_owner<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.owner)) true
             else {
                 let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_object_permission<Permission>(
+                tx_authority::has_object_permission<Action>(
                     owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -130,27 +130,36 @@ module ownership::ownership {
 
     // If this is initialized, package authority always exists and is always the native module (the module
     // declaring the object's type). I.e., the package-id corresponding to `0x599::my_module::Witness`.
-    public fun can_act_as_package<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_package<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let package_id = struct_tag::package_id(&ownership.type);
-            tx_authority::has_object_package_permission_<Permission>(
+            tx_authority::has_object_package_permission_<Action>(
                 package_id, &ownership.type, object::uid_as_inner(uid), auth)
         }
     }
 
     /// Defaults to `false` if transfer authority is not set.
-    public fun can_act_as_transfer_auth<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_transfer_auth<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.transfer_auth)) false
             else {
                 let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::has_object_permission<Permission>(
+                tx_authority::has_object_permission<Action>(
                     transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
             }
+        }
+    }
+
+    public fun can_act_as_address_on_object<Action>(principal: address, uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+            let id = object::uid_as_inner(uid);
+            tx_authority::has_object_permission<Action>(principal, &ownership.type, id, auth)
         }
     }
 

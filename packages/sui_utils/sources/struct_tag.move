@@ -32,11 +32,10 @@ module sui_utils::struct_tag {
         StructTag { package_id, module_name, struct_name, generics }
     }
 
-    // Same as above, except generics are stripped.
-    // Aborts if generics are not present.
+    // Same as above, except generics are stripped, i.e., you get just sui::coin::Coin rather than
+    // sui::coin::Coin<T>
     public fun get_abstract<T>(): StructTag {
-        let (package_id, module_name, struct_name, generics) = encode::type_name_decomposed<T>();
-        assert!(vector::length(&generics) > 0, ESUPPLIED_TYPE_CANNOT_BE_ABSTRACT);
+        let (package_id, module_name, struct_name, _) = encode::type_name_decomposed<T>();
 
         StructTag { package_id, module_name, struct_name, generics: vector::empty<String>() }
     }

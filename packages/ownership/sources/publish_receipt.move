@@ -5,6 +5,10 @@
 // (1) the package could include multiple modules which call this once each, and (2) the module could re-use
 // the same one-time witness, since we do not drop it here. We do this so that the one-time-witness can
 // be used for things like creating a 0x2::coin::create_currency.
+//
+// Note that publish receipts can only be claimed in a module's init function (due to requiring a one-time
+// witness), when the package is deployed. In Sui, deploying an upgrade-package _does not_ call any init
+// function, meaning upgrades cannot be used to produce more publish receipts.
 
 module ownership::publish_receipt {
     use sui::object::{Self, ID, UID};

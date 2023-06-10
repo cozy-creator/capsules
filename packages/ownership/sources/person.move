@@ -109,10 +109,10 @@ module ownership::delegation {
         assert!(!action::is_admin_action<Action>() &&
             !action::is_manager_action<Action>(), EINVALID_DELEGATION);
 
-        let general = action_set::general_mut(agent_actions_mut(person, agent));
-        vector2::push_back_unique(general, action::new<Action>());
+        action_set::add_general<Action>(agent_actions_mut(person, agent));
     }
 
+    // Convenience function for a single type
     public fun add_action_for_type<ObjectType, Action>(
         person: &mut Person,
         agent: address,
@@ -137,14 +137,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let action = action::new<Action>();
-        let types_map = action_set::types_mut(agent_actions_mut(person, agent));
-
-        while (vector::length(&types) > 0) {
-            let type = vector::pop_back(&mut types);
-            let type_actions = vec_map2::borrow_mut_fill(types_map, &type, vector[]);
-            vector2::push_back_unique(type_actions, action);
-        };
+        action_set::add_action_for_types<Action>(agent_actions_mut(person, agent), types);
     }
 
     public fun add_action_for_objects<Action>(
@@ -155,14 +148,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let action = action::new<Action>();
-        let objects_map = action_set::objects_mut(agent_actions_mut(person, agent));
-
-        while (vector::length(&objects) > 0) {
-            let object_id = vector::pop_back(&mut objects);
-            let object_actions = vec_map2::borrow_mut_fill(objects_map, &object_id, vector[]);
-            vector2::push_back_unique(object_actions, action);
-        };
+        action_set::add_action_for_objects<Action>(agent_actions_mut(person, agent), types);
     }
 
     // ======= Remove Agent Actions =======
@@ -174,8 +160,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let general = action_set::general_mut(agent_actions_mut(person, agent));
-        vector2::remove_maybe(general, &action::new<Action>());
+        action_set::remove_general(agent_actions_mut(person, agent));
     }
 
     public fun remove_all_general_actions_from_agent(
@@ -185,10 +170,10 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let general = action_set::general_mut(agent_actions_mut(person, agent));
-        *general = vector[];
+        action_set::remove_all_general(agent_actions_mut(person, agent));
     }
 
+    // Convenience Function
     public fun remove_action_for_type_from_agent<ObjectType, Action>(
         person: &mut Person,
         agent: address,
@@ -206,33 +191,20 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let types_map = action_set::types_mut(agent_actions_mut(person, agent));
-        let action = action::new<Action>();
-
-        while (!vector::is_empty(&types)) {
-            let type_key = vector::pop_back(&mut types);
-            let index_maybe = vec_map::get_idx_opt(types_map, &type_key);
-            if (option::is_some(&index_maybe)) {
-                let index = option::destroy_some(index_maybe);
-                let (_, actions) = vec_map::get_entry_by_idx_mut(types_map, index);
-                vector2::remove_maybe(actions, &action);
-            };
-        };
+        action_set::remove_action_for_types<Action>(agent_actions_mut(person, agent));
     }
 
-    public fun remove_type_from_agent<ObjectType>(
+    // Convenience function
+    public fun remove_all_actions_for_type_from_agent<ObjectType>(
         person: &mut Person,
         agent: address,
         auth: &TxAuthority
     ) {
-       assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
-
-        let types_map = action_set::types_mut(agent_actions_mut(person, agent));
-        let type_key = struct_tag::get<ObjectType>();
-        vec_map2::remove_maybe(types_map, &type_key);
+        let types = vector[struct_tag::get<ObjectType>()];
+        remove_all_actions_for_types_from_agent(person, agent, types, auth);
     }
 
-    public fun remove_types_from_agent(
+    public fun remove_all_actions_for_types_from_agent(
         person: &mut Person,
         agent: address,
         types: vector<StructTag>,
@@ -240,12 +212,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let types_map = action_set::types_mut(agent_actions_mut(person, agent));
-
-        while(!vector::is_empty(&types)) {
-            let type_key = vector::pop_back(&mut types);
-            vec_map2::remove_maybe(types_map, &type_key);
-        };
+        action_set::remove_all_actions_for_types(agent_actions_mut(person, agent), types);
     }
 
     public fun remove_action_for_objects_from_agent<Action>(
@@ -256,21 +223,10 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let objects_map = action_set::objects_mut(agent_actions_mut(person, agent));
-        let action = action::new<Action>();
-
-        while(!vector::is_empty(&objects)) {
-            let object_key = vector::pop_back(&mut objects);
-            let index_maybe = vec_map::get_idx_opt(objects_map, &object_key);
-            if (option::is_some(&index_maybe)) {
-                let index = option::destroy_some(index_maybe);
-                let (_, actions) = vec_map::get_entry_by_idx_mut(objects_map, index);
-                vector2::remove_maybe(actions, &action);
-            };
-        }
+        action_set::remove_action_for_objects<Action>(agent_actions_mut(person, agent));
     }
 
-    public fun remove_objects_from_agent(
+    public fun remove_all_actions_for_objects_from_agent(
         person: &mut Person,
         agent: address,
         objects: vector<ID>,
@@ -278,12 +234,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        let objects_map = action_set::objects_mut(agent_actions_mut(person, agent));
-
-        while (!vector::is_empty(&objects)) {
-            let object_key = vector::pop_back(&mut objects);
-            vec_map2::remove_maybe(objects_map, &object_key);
-        };
+        action_set::remove_all_actions_for_objects(agent_actions_mut(person, agent), objects);
     }
 
     public fun remove_agent(

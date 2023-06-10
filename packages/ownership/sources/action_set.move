@@ -9,14 +9,16 @@ module ownership::action_set {
     use sui::vec_map::{Self, VecMap};
 
     use sui_utils::struct_tag::StructTag;
+    use sui_utils::vector2;
+    use sui_utils::vec_map2;
 
     use ownership::action::{Self, Action};
 
     friend ownership::tx_authority;
-    friend ownership::delegation;
+    friend ownership::person;
+    friend ownership::pending_action;
 
-    // TO DO: Is `copy` + `store` a security vulnerability? Can someone get ahold of this, store it,
-    // and use it maliciously later?
+    // Because this has copy + store, references to this struct should not be made public
     struct ActionSet has store, copy, drop {
         general: vector<Action>,
         on_types: VecMap<StructTag, vector<Action>>,
@@ -40,10 +42,10 @@ module ownership::action_set {
     }
 
     public(friend) fun intersection(self: &ActionSet, filter: &ActionSet): ActionSet {
-        let general = permission::intersection(&self.general, &filter.general);
-        let on_types = permission::vec_map_intersection(
+        let general = action::intersection(&self.general, &filter.general);
+        let on_types = action::vec_map_intersection(
             &self.on_types, &filter.general, &filter.on_types);
-        let on_objects = permission::vec_map_intersection(
+        let on_objects = action::vec_map_intersection(
             &self.on_objects, &filter.general, &filter.on_objects);
         
         ActionSet { general, on_types, on_objects }
@@ -52,34 +54,114 @@ module ownership::action_set {
     // This ensures that permissions are not improperly overwritten
     public(friend) fun merge(self: &mut ActionSet, new: ActionSet) {
         let ActionSet { general, on_types, on_objects } = new;
-        permission::add(&mut self.general, general);
-        permission::vec_map_add(&mut self.on_types, on_types);
-        permission::vec_map_add(&mut self.on_objects, on_objects);
+        action::add(&mut self.general, general);
+        action::vec_map_add(&mut self.on_types, on_types);
+        action::vec_map_add(&mut self.on_objects, on_objects);
     }
 
-    // ======== Field Accessors ========
+    // ======== Modification API ========
+
+    public(friend) fun add_general<Action>(set: &mut ActionSet) {
+        vector2::push_back_unique(set, action::new<Action>());
+    }
+
+    public(friend) fun remove_general<Action>(set: &mut ActionSet) {
+        vector2::remove_maybe(&mut set.general, &action::new<Action>());
+    }
+
+    public(friend) fun remove_all_general(set: &mut ActionSet) {
+        *set.general = vector[];
+    }
+
+    public(friend) fun add_action_for_types<Action>(set: &mut ActionSet, types: vector<StructTag>) {
+        while (vector::length(&types) > 0) {
+            let type = vector::pop_back(&mut types);
+            let type_actions = vec_map2::borrow_mut_fill(&mut set.on_types, &type, vector[]);
+            vector2::push_back_unique(type_actions, action::new<Action>());
+        };
+    }
+
+    public(friend) fun remove_action_for_types<Action>(set: &mut ActionSet, types: vector<StuctTag>) {
+        let action = action::new<Action>();
+
+        while (!vector::is_empty(&types)) {
+            let type_key = vector::pop_back(&mut types);
+            let index_maybe = vec_map::get_idx_opt(&mut set.on_types, &type_key);
+            if (option::is_some(&index_maybe)) {
+                let index = option::destroy_some(index_maybe);
+                let (_, actions) = vec_map::get_entry_by_idx_mut(&mut set.on_types, index);
+                vector2::remove_maybe(actions, &action);
+            };
+        };
+    }
+
+    public(friend) fun remove_all_actions_for_types(set: &mut ActionSet, types: vector<StructTag>) {
+        while (!vector::is_empty(&types)) {
+            let type_key = vector::pop_back(&mut types);
+            vec_map2::remove_maybe(&mut set.on_types, &type_key);
+        };
+    }
+
+    public(friend) fun add_action_for_object<Action>(set: &mut ActionSet, objects: vector<ID>) {
+        while (vector::length(&objects) > 0) {
+            let object_id = vector::pop_back(&mut objects);
+            let object_actions = vec_map2::borrow_mut_fill(&mut set.on_objects, &object_id, vector[]);
+            vector2::push_back_unique(object_actions, action::new<Action>());
+        };
+    }
+
+    public(friend) fun remove_action_for_objects<Action>(set: &mut ActionSet, objects: vector<ID>) {
+        let action = action::new<Action>();
+
+        while(!vector::is_empty(&objects)) {
+            let object_key = vector::pop_back(&mut objects);
+            let index_maybe = vec_map::get_idx_opt(&mut set.on_objects, &object_key);
+            if (option::is_some(&index_maybe)) {
+                let index = option::destroy_some(index_maybe);
+                let (_, actions) = vec_map::get_entry_by_idx_mut(&mut set.on_objects, index);
+                vector2::remove_maybe(actions, &action);
+            };
+        }
+    }
+
+    public(friend) fun remove_all_actions_for_objects(set: &mut ActionSet, objects: vector<ID>) {
+        while (!vector::is_empty(&objects)) {
+            let object_key = vector::pop_back(&mut objects);
+            vec_map2::remove_maybe(&mut set.on_objects, &object_key);
+        };
+    }
+
+    // ======== Getters ========
 
     public fun general(set: &ActionSet): &vector<Action> {
         &set.general
     }
 
-    public fun types(set: &ActionSet): &VecMap<StructTag, vector<Action>> {
+    public fun on_types(set: &ActionSet): &VecMap<StructTag, vector<Action>> {
         &set.on_types
     }
 
-    public fun objects(set: &ActionSet): &VecMap<ID, vector<Action>> {
+    public fun on_objects(set: &ActionSet): &VecMap<ID, vector<Action>> {
         &set.on_objects
     }
 
-    public(friend) fun general_mut(set: &mut ActionSet): &mut vector<Action> {
-        &mut set.general
+    // =========== Single-use actions ===========
+    // Created by ownership::pending_action, consumed by ownership::tx_authority.
+    // These allows parties to delegate an action now, and have it performed later, but only once.
+    // In the future, these could also be used to compensate for Sui's lack of native support for
+    // multi-party transactions.
+
+    struct SingleUseActions has store, drop {
+        principal: address,
+        actions: ActionSet
     }
 
-    public(friend) fun types_mut(set: &mut ActionSet): &mut VecMap<StructTag, vector<Action>> {
-        &mut set.on_types
+    public(friend) fun create_single_use(principal: address, actions: ActionSet): SingleUseActions {
+        SingleUseActions { principal, actions }
     }
 
-    public(friend) fun objects_mut(set: &mut ActionSet): &mut VecMap<ID, vector<Action>> {
-        &mut set.on_objects
+    public(friend) fun consume_single_use(single_use: SingleUseActions): (address, Action) {
+        let SingleUseActions { principal, action } = single_use;
+        (principal, action)
     }
 }
