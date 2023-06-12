@@ -282,7 +282,7 @@ module ownership::delegation {
 
     // ======= Getters =======
 
-    public fun principal(person: &Person): address {
+    public fun address(person: &Person): address {
         person.principal
     }
 
@@ -306,7 +306,6 @@ module ownership::delegation {
     }
 
     // ======= Convenience Entry Functions =======
-    // TO DO: provide entry functions for all public API functions
 
     entry fun create_delegation_person(
         ctx: &mut TxContext

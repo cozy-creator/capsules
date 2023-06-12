@@ -46,6 +46,9 @@ module ownership::ownership {
     // Dynamic field key for storing the Ownership struct
     struct Key has store, copy, drop { }
 
+    // Dynamic field key for indicating that an object is frozen
+    struct Frozen has store, copy, drop { }
+
     // Action type allowing access to the UID
     struct UID_MUT {} // Used to access UID_MUT
     struct TRANSFER {} // Used to perform a transfer (change the owner)
@@ -154,6 +157,7 @@ module ownership::ownership {
         }
     }
 
+    // For arbitrary addresses that are not one of the main three (owner, package, transfer_auth)
     public fun can_act_as_address_on_object<Action>(principal: address, uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
@@ -248,6 +252,25 @@ module ownership::ownership {
     // Transfer-auth is set to a non-existent address, meaning the owner can never be changed
     public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
         set_transfer_auth(uid, @0x0, auth);
+    }
+
+    // ======= Freezing =======
+    // Only transfer_auth has the right to freeze an object. It cannot be done by owner or packages.
+
+    public fun freeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_transfer_auth<FREEZE>(uid, auth), ENO_TRANSFER_AUTHORITY);
+
+        dynamic_field2::set(uid, Frozen { }, true);
+    }
+
+    public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_transfer_auth<FREEZE>(uid, auth), ENO_TRANSFER_AUTHORITY);
+
+        dynamic_field2::drop(uid, Frozen { });
+    }
+
+    public fun is_frozen(uid: &UID): bool {
+        dynamic_field::exists_(uid, Frozen { })
     }
 
     // ======= TxAuthority Extended =======
