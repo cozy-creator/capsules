@@ -13,10 +13,49 @@
 // - User issuing authorization for unfunded recurring payments (claim)
 // - Splitting organization funds amongst a group of individuals
 
+// Types of transfers:
+// - unfunded one-off transfers ($$ is known, single time, $$ not guaranteed)
+// - funded one-off transfers (holds) ($$ range is known, single time, $$ guaranteed)
+// - recurring unfunded transfers ($$ is known, multiple times, $$ not guaranteed)
+// - "pay as you go" ($$ is not known, multiple times, $$ not guaranteed)
+// (amount range, payment dates, end, funded / not)
+// payment dates = once every XX regular interval
+// end = once, until user cancels (at will), until $TOTAL is collected, request to close but must settle $$
+// funded = subject to hold expiration date
+//
+// amount range - use partial claim
+// payment date - refresh available amount for claim and amount
+// end - one full time, until exhausted, cancelled, until total, request to close
+// funded -> move funds to hold, indexed by claim-id, expiry (can be used with refresh?)
+
+// Types:
+// Claim - specified amount, once, expire / cancelled by owner / used, unfunded
+// 
+
 // Future Thoughts (TO DO):
 // Should we add some mechanism to make deposits permissioned? A DEPOSIT action?
 // Should anyone be allowed to create an account for coins of type T, or should that be
 // restricted, for who can hold what?
+
+// SPL Token 22:
+// Mint, Burn / Transfer from any account
+// Approval; delegation of a specified balance (or everything)
+// Freeze / Unfreeze
+//
+// Confidential balance
+// Transfer fee
+// Transfer restrictions (non-transferable) / Market-confounding mechanism
+//
+// Memo (??) (seems to be a non-functional message?) (requires deposit-authority?)
+// Interest bearing (??) (<---- display standard for this)
+// default account state (you need permission to open a token balance)
+
+// Be able to send people money via email / message (a link that only they can claim)
+
+// Cancel status?
+
+// Thought: is package-witness too powerful when used with organization? Organization effectively has
+// admin-control over doing stuff that we might want to be on-chain only.
 
 module economy::coin23 {
     use sui::balance::{Self, Balance};
@@ -55,16 +94,25 @@ module economy::coin23 {
 
     // - The Account owner cannot cancel a claim unless they have possession of it.
     // - Claim objects have referntial authority; only pass a &mut reference to them when redeeming them.
-    // - Claims are not guaranteed to be funded; the account's balance my be insufficient.
+    // - Claims are not guaranteed to be funded; the account's balance may be insufficient.
     // - If you want to guarantee an account is funded, use a hold record instead.
     // - Claims can be used partially; the full amount does not need to be redeemed at once.
     // - Claims cannot be dropped; they must be explicitly destroyed
-    // Single-writer object, root-level or stored
+    // Shared, root-level object
     struct Claim<phantom T> has key, store {
         id: UID,
         for_account: ID,
         amount: u64,
+        refresh: Option<Refresh>,
         expiration_ms: Option<u64> // claim is no longer valid after this date
+    }
+
+    struct Refresh has store, copy, drop {
+        amount_per_refresh: u64,
+        refresh_interval_ms: u64,
+        last_refresh_ms: u64,
+        refreshes_remaining: Option<u64>,
+        bond_amount: u64
     }
 
     // Thse are stored inside of the account, and can always be cancelled by the account owner.
