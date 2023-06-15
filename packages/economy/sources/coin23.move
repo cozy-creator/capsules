@@ -57,6 +57,20 @@
 // Thought: is package-witness too powerful when used with organization? Organization effectively has
 // admin-control over doing stuff that we might want to be on-chain only.
 
+// We need to be able to send invoices via email (off chain invoices, not on-chain)
+// We need to be able to attach memos
+// We need to be able to send claimable funds (via email, for example)
+
+// Claims that can be locked inside of objects, and used when unlocked
+// Claims that can be used by organizations, with delegation, to crank, by being shared objects
+// Claims that can be revoked by the account owner
+
+// cancelation of claim:
+// - expires: expired are not auto-deleted
+// - at will: stored within the account
+// - at request: stored within the account
+// - until total is collected: stored outside of account
+
 module economy::coin23 {
     use sui::balance::{Self, Balance};
     use sui::dynamic_field;
@@ -72,6 +86,7 @@ module economy::coin23 {
     const ENO_WITHDRAW_AUTHORITY: u64 = 0;
     const EINSUFFICIENT_FUNDS: u64 = 1;
     const ENO_CLAIM_AUTHORITY: u64 = 2;
+    const EINVALID_CLAIM: u64 = 3;
 
     // Account designed for Circle / USDC
     // Root-level shared object
@@ -80,11 +95,11 @@ module economy::coin23 {
         inbound_funds: Balance<T>,
         outbound_funds: VecMap<address, Hold<T>>,
         rev_share: VecMap<address, u64>, // address -> bps owed per address
-        balance: Balance<T>
+        available_balance: Balance<T>
     }
 
     struct Hold<phantom T> has store {
-        expiration_ms: Option<u64>, // the hold expires, and the funds can be returned to `balance`
+        expiration_ms: Option<u64>, // when the hold expires, and the funds can be returned to `balance`
         balance: Balance<T>
     }
 
@@ -98,11 +113,13 @@ module economy::coin23 {
     // - If you want to guarantee an account is funded, use a hold record instead.
     // - Claims can be used partially; the full amount does not need to be redeemed at once.
     // - Claims cannot be dropped; they must be explicitly destroyed
-    // Shared, root-level object
+    // Single-writer object. Can be root-level or stored
+    // When stored inside of the account, the account owner can delete it
+    // Can also be a root-level shared object
     struct Claim<phantom T> has key, store {
         id: UID,
         for_account: ID,
-        amount: u64,
+        amount: Option<u64>, // undefined for perpetuals
         refresh: Option<Refresh>,
         expiration_ms: Option<u64> // claim is no longer valid after this date
     }
@@ -112,7 +129,7 @@ module economy::coin23 {
         refresh_interval_ms: u64,
         last_refresh_ms: u64,
         refreshes_remaining: Option<u64>,
-        bond_amount: u64
+        end_amount: u64
     }
 
     // Thse are stored inside of the account, and can always be cancelled by the account owner.
@@ -121,23 +138,10 @@ module economy::coin23 {
         remaining_amount: u64
     }
 
-    struct HoldRecord has store, drop {
-        amount: u64,
-        expires_on_ms: u64
-    }
-
-    struct Entitlement {
-
-    }
-
-    // 100 , 50 / 50
-    // 50, 0 / 50
-    // 60, 5 / 55
-    // total / amount-withdrawn
-
     // Action types
-    struct WITHDRAW {} // Delegating this action allows the agent to fully withdraw all funds
-    struct CLAIM {} // used to claim held funds
+    struct WITHDRAW {} // delegating this allows the agent to withdraw available balance as owner
+    struct HOLD {} // delegating this allows the agent to add a hold to an account as owner
+    struct CLAIM {} // delegating this allows the agent to claim funds from an account as the claim-owner
 
     // ======== Consumer (Account Owner) API ========
 
@@ -146,6 +150,8 @@ module economy::coin23 {
     }
 
     public fun return_and_share(account: Account) {
+        // TO DO: insert owner
+
         transfer::share_object(account);
     }
 
@@ -155,6 +161,33 @@ module economy::coin23 {
         transfer_internal(sender, amount, receiver);
     }
 
+    // For joint-venture accounts and pertual royalties.
+    // All inbound funds (deposits) will be split according to the rev-sharing agreement.
+    public fun create_revenue_share() {
+
+    }
+
+    // For pay-day-loans or merchant-cash advances.
+    // Inbound funds (deposits) are split to fund the claim
+    public fun create_installment_plan_with_revenue_sweep() {
+
+    }
+
+    public fun create_installment_plan() {
+
+    }
+
+    // Useful for recurring billing. Can be cancelled immediately
+    public fun create_recurring_claim() {
+
+    }
+
+    // Useful for metered billing. Cannot be cancelled immediately; instead it's subject to some delay
+    public fun create_pay_as_you_go_claim() {
+        
+    }
+
+    // Useful for buy-offers and giving agents spending budgets
     public fun create_claim<T>(
         sender: &mut Account<T>,
         amount: u64,
@@ -170,6 +203,42 @@ module economy::coin23 {
             amount, 
             funded: false 
         }
+    }
+
+    // Adding a hold requires owner authorization, even if you are a merchant with a valid claim
+    // Will abort if `hold_amount` is greater than the account's available balance
+    // You can hold more or less than the claim's current amount
+    public fun add_hold_for_claim<T>(
+        account: &mut Account<T>,
+        claim: &Claim<T>,
+        hold_amount: u64,
+        duration_ms: u64,
+        clock: &Clock,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::can_act_as_owner<HOLD>(&account.id, auth), ENO_WITHDRAW_AUTHORITY);
+        assert!(is_valid_claim(account, claim, clock), EINVALID_CLAIM);
+
+        let hold = dynamic_field::borrow_mut<Key, Hold<T>>(&mut account.id, Key { for: claim.id });
+        rebalance(account.balance, &mut hold.balance, hold_amount);
+        hold.expires_on_ms = clock::timestamp_ms(clock) + duration_ms;
+    }
+
+    // ======= Helper Functions =======
+
+    public fun rebalance<T>(balance1: &mut Balance<T>, balance2: &mut Balance<T>, amount: u64) {
+
+    }
+
+    public fun is_valid_claim<T>(account: &Account<T>, claim: &Claim<T>, clock: &Clock): bool {
+        (object::uid_to_id(&account.id) == claim.for_account 
+            && claim.expires_on_ms < clock::timestamp_ms(clock)
+        )
+    }
+
+    // When a hold expires, the funds are returned to the account's balance
+    public fun end_hold(account: &mut Account, clock: &Clock) {
+
     }
 
     public fun hold_funds<T>(account: &mut Account<T>, amount: u64): Claim<T> {
