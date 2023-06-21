@@ -318,3 +318,12 @@ $300 for a 10k collection
 - Buying an object through OB kiosk: 12.6 milliSUI
 
 - Buying an object on haven's compass: 6.2 milliSUI
+
+- Buying a Bushi Battlepass: 14.1 milliSUI
+
+- Executing a swap on Turbos: 7.6 milliSUI
+- Executing a deposit on Turbos: 33 milliSUI
+
+- Exeucting a swap on Cetus: 4.5 milliSUI
+- Executing a deposit on Cetus: 12 milliSUI
+- Convert Cetus to xCetus: 7.8 milliSUI
