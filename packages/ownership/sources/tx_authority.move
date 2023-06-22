@@ -136,12 +136,12 @@ module ownership::tx_authority {
     }
 
     // `T` can be any type belong to the package, such as 0x599::my_module::StructName
-    public fun has_package_permission<T, Action>(auth: &TxAuthority): bool {
+    public fun can_act_as_package<T, Action>(auth: &TxAuthority): bool {
         let package_id = encode::package_id<T>();
-        has_package_permission_<Action>(package_id, auth)
+        can_act_as_package_<Action>(package_id, auth)
     }
 
-    public fun has_package_permission_<Action>(package_id: ID, auth: &TxAuthority): bool {
+    public fun can_act_as_package_<Action>(package_id: ID, auth: &TxAuthority): bool {
         // Checks if this package directly added `Action` to `auth``
         if (can_act_as_address<Action>(object::id_to_address(&package_id), auth)) {
             return true
@@ -182,12 +182,12 @@ module ownership::tx_authority {
         action::has_manager_permission(action_set::general(&set))
     }
 
-    public fun has_package_permission_excluding_manager<T, Action>(auth: &TxAuthority): bool {
+    public fun can_act_as_package_excluding_manager<T, Action>(auth: &TxAuthority): bool {
         let package_id = encode::package_id<T>();
-        has_package_permission_excluding_manager_<Action>(package_id, auth)
+        can_act_as_package_excluding_manager_<Action>(package_id, auth)
     }
 
-    public fun has_package_permission_excluding_manager_<Action>(package_id: ID, auth: &TxAuthority): bool {
+    public fun can_act_as_package_excluding_manager_<Action>(package_id: ID, auth: &TxAuthority): bool {
         // Checks if this package directly added `Action` to `auth``
         let package_addr = object::id_to_address(&package_id);
         if (can_act_as_address<Action>(package_addr, auth) && !is_manager(package_addr, auth)) {
