@@ -1,5 +1,5 @@
-// Sui's permission system, used to delegate authority from a principal to an agent
-// We call these permissions 'actions' for clarity. Packages can define their own arbitrary actions
+// Sui's action system, used to delegate authority from a principal to an agent
+// We call these actions 'actions' for clarity. Packages can define their own arbitrary actions
 // as structs; these structs do not need to be instantiated; they exist solely for type-checking.
 //
 // I wish that actions could be typed, like Action<T>, but that would make them hard
@@ -19,7 +19,7 @@ module ownership::action {
     use sui_utils::vector2;
     use sui_utils::vec_map2;
 
-    friend ownership::delegation;
+    friend ownership::person;
     friend ownership::organization;
     friend ownership::action_set;
     friend ownership::rbac;
@@ -34,7 +34,7 @@ module ownership::action {
     // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
     // to revoke the rights of the agent and make the principal secure again.
     //
-    // ANY is intended to be a wild-card, like `has_action<*>(actions)` and as long as their at least one
+    // ANY is intended to be a wild-card, like `can_act_as<*>(actions)` and as long as their at least one
     // action, it will return 'true'.
     struct ADMIN {}
     struct MANAGER {}
@@ -66,14 +66,14 @@ module ownership::action {
     //
     // That is, everything in `actions` that is outside of the `filter` will be removed
     public(friend) fun intersection(actions: &vector<Action>, filter: &vector<Action>): vector<Action> {
-        if (has_admin_action(filter)) { return *actions };
+        if (can_act_as_admin(filter)) { return *actions };
 
-        if (has_manager_action(filter)) {
-            if (has_admin_action(actions)) { return vector[manager()] }; // Downgrade to manager
+        if (can_act_as_manager(filter)) {
+            if (can_act_as_admin(actions)) { return vector[manager()] }; // Downgrade to manager
             return *actions
         };
 
-        if (has_admin_action(actions) || has_manager_action(actions)) { 
+        if (can_act_as_admin(actions) || can_act_as_manager(actions)) { 
             return *filter
         };
 
@@ -111,7 +111,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (has_admin_action(existing)) { return };
+        if (can_act_as_admin(existing)) { return };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -131,7 +131,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (has_admin_action(existing)) { return *existing };
+        if (can_act_as_admin(existing)) { return *existing };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -155,7 +155,7 @@ module ownership::action {
        };
     }
 
-    public fun has_admin_action(actions: &vector<Action>): bool {
+    public fun can_act_as_admin(actions: &vector<Action>): bool {
         vector::contains(actions, &admin())
     }
 
@@ -167,7 +167,7 @@ module ownership::action {
         action.inner == encode::type_name<ADMIN>()
     }
 
-    public fun has_manager_action(actions: &vector<Action>): bool {
+    public fun can_act_as_manager(actions: &vector<Action>): bool {
         vector::contains(actions, &manager())
     }
 
@@ -187,8 +187,8 @@ module ownership::action {
         action.inner == encode::type_name<ANY>()
     }
 
-    public fun has_action<P>(actions: &vector<Action>): bool {
-        if (has_admin_action(actions) || has_manager_action(actions)) {
+    public fun can_act_as<P>(actions: &vector<Action>): bool {
+        if (can_act_as_admin(actions) || can_act_as_manager(actions)) {
             return true
         };
 
@@ -205,9 +205,9 @@ module ownership::action {
         false
     }
 
-    public fun has_action_excluding_manager<P>(actions: &vector<Action>): bool {
-        if (has_manager_action(actions)) { return false };
-        has_action<P>(actions)
+    public fun can_act_as_excluding_manager<P>(actions: &vector<Action>): bool {
+        if (can_act_as_manager(actions)) { return false };
+        can_act_as<P>(actions)
     }
 
     #[test_only]

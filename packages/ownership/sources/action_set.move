@@ -5,6 +5,9 @@
 // delegators much more granular control.
 
 module ownership::action_set {
+    use std::option;
+    use std::vector;
+
     use sui::object::ID;
     use sui::vec_map::{Self, VecMap};
 
@@ -16,7 +19,7 @@ module ownership::action_set {
 
     friend ownership::tx_authority;
     friend ownership::person;
-    friend ownership::pending_action;
+    // friend ownership::pending_action;
 
     // Because this has copy + store, references to this struct should not be made public
     struct ActionSet has store, copy, drop {
@@ -51,7 +54,7 @@ module ownership::action_set {
         ActionSet { general, on_types, on_objects }
     }
 
-    // This ensures that permissions are not improperly overwritten
+    // This ensures that actions are not improperly overwritten
     public(friend) fun merge(self: &mut ActionSet, new: ActionSet) {
         let ActionSet { general, on_types, on_objects } = new;
         action::add(&mut self.general, general);
@@ -62,7 +65,7 @@ module ownership::action_set {
     // ======== Modification API ========
 
     public(friend) fun add_general<Action>(set: &mut ActionSet) {
-        vector2::push_back_unique(set, action::new<Action>());
+        vector2::push_back_unique(&mut set.general, action::new<Action>());
     }
 
     public(friend) fun remove_general<Action>(set: &mut ActionSet) {
@@ -70,7 +73,7 @@ module ownership::action_set {
     }
 
     public(friend) fun remove_all_general(set: &mut ActionSet) {
-        *set.general = vector[];
+        *&mut set.general = vector[];
     }
 
     public(friend) fun add_action_for_types<Action>(set: &mut ActionSet, types: vector<StructTag>) {
@@ -81,7 +84,7 @@ module ownership::action_set {
         };
     }
 
-    public(friend) fun remove_action_for_types<Action>(set: &mut ActionSet, types: vector<StuctTag>) {
+    public(friend) fun remove_action_for_types<Action>(set: &mut ActionSet, types: vector<StructTag>) {
         let action = action::new<Action>();
 
         while (!vector::is_empty(&types)) {
@@ -102,7 +105,7 @@ module ownership::action_set {
         };
     }
 
-    public(friend) fun add_action_for_object<Action>(set: &mut ActionSet, objects: vector<ID>) {
+    public(friend) fun add_action_for_objects<Action>(set: &mut ActionSet, objects: vector<ID>) {
         while (vector::length(&objects) > 0) {
             let object_id = vector::pop_back(&mut objects);
             let object_actions = vec_map2::borrow_mut_fill(&mut set.on_objects, &object_id, vector[]);
@@ -160,8 +163,8 @@ module ownership::action_set {
         SingleUseActions { principal, actions }
     }
 
-    public(friend) fun consume_single_use(single_use: SingleUseActions): (address, Action) {
-        let SingleUseActions { principal, action } = single_use;
-        (principal, action)
+    public(friend) fun consume_single_use(single_use: SingleUseActions): (address, ActionSet) {
+        let SingleUseActions { principal, actions } = single_use;
+        (principal, actions)
     }
 }

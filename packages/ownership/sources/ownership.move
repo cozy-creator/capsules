@@ -15,11 +15,12 @@ module ownership::ownership {
     use sui::dynamic_field;
 
     use sui_utils::encode;
+    use sui_utils::dynamic_field2;
     use sui_utils::typed_id::{Self, TypedID};
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::permission::{ADMIN, MANAGER};
+    use ownership::action::{ADMIN, MANAGER};
 
     // error enums
     const ENO_PACKAGE_AUTHORITY: u64 = 0;
@@ -53,6 +54,7 @@ module ownership::ownership {
     struct UID_MUT {} // Used to access UID_MUT
     struct TRANSFER {} // Used to perform a transfer (change the owner)
     struct MIGRATE {} // Used to change (migrate) the transfer-authority
+    struct FREEZE {} // Used to freeze the transfer-authority
 
     // ======= Initialize Ownership =======
     // The caller needs to supply a 'typed-id' here because `as_owned_object(&mut object.id, &object)`
@@ -125,7 +127,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.owner)) true
             else {
                 let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_object_permission<Action>(
+                tx_authority::can_act_as_object<Action>(
                     owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -138,7 +140,7 @@ module ownership::ownership {
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let package_id = struct_tag::package_id(&ownership.type);
-            tx_authority::has_object_package_permission_<Action>(
+            tx_authority::can_act_as_object_package_<Action>(
                 package_id, &ownership.type, object::uid_as_inner(uid), auth)
         }
     }
@@ -151,7 +153,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.transfer_auth)) false
             else {
                 let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::has_object_permission<Action>(
+                tx_authority::can_act_as_object<Action>(
                     transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -163,7 +165,7 @@ module ownership::ownership {
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let id = object::uid_as_inner(uid);
-            tx_authority::has_object_permission<Action>(principal, &ownership.type, id, auth)
+            tx_authority::can_act_as_object<Action>(principal, &ownership.type, id, auth)
         }
     }
 
@@ -235,7 +237,7 @@ module ownership::ownership {
         ownership.transfer_auth = option::none();
     }
 
-    // Requires the permission of both the package and the current owner.
+    // Requires the action of both the package and the current owner.
     // This means packages _cannot_ change their transfer-functionality unilaterally.
     // Transfer-auth must be undefined; i.e., never set before, or ejected.
     // If the new transfer-auth requires initialization, that must be called separately after this.
@@ -289,7 +291,7 @@ module ownership::ownership {
     }
 
     // If this object has an owner, then the owner must have given ADMIN authority to this transaction
-    // for you to claim ownership of the object. This means that permission-chaining is not possible,
+    // for you to claim ownership of the object. This means that action-chaining is not possible,
     // in the sense that if the owner grants you an EDIT action, that does not give you EDIT rights
     // over this object.
     // TO DO: should we change this? Probably?
@@ -300,7 +302,7 @@ module ownership::ownership {
         let owner_maybe = get_owner(uid);
         if (option::is_some(&owner_maybe)) {
             let owner = option::destroy_some(owner_maybe);
-            assert!(tx_authority::has_permission<ADMIN>(owner, auth), ENO_OWNER_AUTHORITY);
+            assert!(tx_authority::can_act_as_address<ADMIN>(owner, auth), ENO_OWNER_AUTHORITY);
         };
 
         tx_authority::add_object_id(uid, auth)

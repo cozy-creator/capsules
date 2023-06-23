@@ -13,7 +13,7 @@ module ownership::client {
 
     use sui_utils::dynamic_field2;
 
-    use sui::action::ANY;
+    use ownership::action::ANY;
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::ownership;
 
@@ -21,19 +21,19 @@ module ownership::client {
     const ENO_PROVISION_AUTHORITY: u64 = 0;
 
     // Defaults to `true` if the owner does not exist
-    public fun can_act_as_owner<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_owner<Permission>(uid, auth)
+    public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_owner<Action>(uid, auth)
     }
 
     // If this is initialized, module authority exists and is always the native module (the module
     // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun can_act_as_package<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_package<Permission>(uid, auth)
+    public fun can_act_as_package<Action>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_package<Action>(uid, auth)
     }
 
     /// Defaults to `false` if transfer authority is not set.
-    public fun can_act_as_transfer_auth<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_transfer_auth<Permission>(uid, auth)
+    public fun can_act_as_transfer_auth<Action>(uid: &UID, auth: &TxAuthority): bool {
+        ownership::can_act_as_transfer_auth<Action>(uid, auth)
     }
 
     // Also checks to see if a namespace has previously been provisioned in this UID
@@ -66,13 +66,13 @@ module ownership::client {
     struct PROVISION {} // allows provisioning and de-provisioning of namespaces
 
     public fun provision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_PROVISION_AUTHORITY);
+        assert!(tx_authority::can_act_as_address<PROVISION>(namespace, auth), ENO_PROVISION_AUTHORITY);
 
         dynamic_field2::set(uid, Key { namespace }, true);
     }
 
     public fun deprovision(uid: &mut UID, namespace: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<PROVISION>(namespace, auth), ENO_PROVISION_AUTHORITY);
+        assert!(tx_authority::can_act_as_address<PROVISION>(namespace, auth), ENO_PROVISION_AUTHORITY);
 
         dynamic_field2::drop<Key, bool>(uid, Key { namespace })
     }
@@ -86,12 +86,12 @@ module ownership::client {
     // We might remove the type-checks in the future for PROVISION and make UID have referential-authority
 }
 
-    // public fun has_stored_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-    //     let permissions = dynamic_field::borrow<Key, VecMap<address, vector<Permissions>>(uid, Key { });
+    // public fun has_stored_permission<Action>(uid: &UID, auth: &TxAuthority): bool {
+    //     let permissions = dynamic_field::borrow<Key, VecMap<address, vector<Actions>>(uid, Key { });
     //     let i = 0;
     //     while (i < vector::length(&auth.permissions)) {
     //         let permission = vector::borrow(&auth.permissions, i);
-    //         let principal = tx_authority::type_into_address<Permission>();
+    //         let principal = tx_authority::type_into_address<Action>();
     //         if (vector::contains(&permissions, &principal)) true
     //         else {
     //             i = i + 1;
@@ -99,7 +99,7 @@ module ownership::client {
     //     };
         
     //     let key = Key { permission, principal };
-    //     let permission = tx_authority::type_into_address<Permission>();
+    //     let permission = tx_authority::type_into_address<Action>();
     //     let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
     //     vector::contains(&ownership.transfer_auth, &permission)
     // }

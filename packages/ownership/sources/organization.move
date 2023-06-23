@@ -1,5 +1,5 @@
 // Organizations establish a single address that holds multiple packages within it. Such as a studio
-// publishing multiple packages and then unifying all their server-permissions underneath a single principal
+// publishing multiple packages and then unifying all their server-actions underneath a single principal
 // address.
 // A Organization can store the RBAC records for an entire organization.
 // The intent is that the Organization object will be owned by a master-key, which is a multi-sig wallet,
@@ -34,7 +34,7 @@ module ownership::organization {
 
     use ownership::client;
     use ownership::ownership;
-    use ownership::permission::ADMIN;
+    use ownership::action::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
     use ownership::org_transfer::Witness as OrgTransfer;
@@ -52,8 +52,8 @@ module ownership::organization {
     // An organizationd ID cannot be changed after creation.
     //
     // All package-IDs stored within the Organization map to the same org-id; the org-id is the principal.
-    // That means if you have permission from the org-id, you have permision to all its packages. Whereas
-    // if you only have permission to one of its packages, that does not extend upwards to the organization
+    // That means if you have action from the org-id, you have permision to all its packages. Whereas
+    // if you only have action to one of its packages, that does not extend upwards to the organization
     // as a whole.
     //
     // Shared, root-level object.
@@ -85,7 +85,7 @@ module ownership::organization {
     // Action types
     struct REMOVE_PACKAGE {}
     struct ADD_PACKAGE {}
-    // struct SINGLE_USE {} // issue single-use permissions on behalf of the organization
+    // struct SINGLE_USE {} // issue single-use actions on behalf of the organization
 
     // ======== Create Organizations ======== 
 
@@ -128,7 +128,7 @@ module ownership::organization {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ) {
-        assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
 
         add_package_internal(receipt, organization, ctx);
     }
@@ -155,7 +155,7 @@ module ownership::organization {
     // objects. To destroy a organization, you must first remove any packages from it; this is to
     // prevent packages from being permanently orphaned without a organization.
     public fun destroy(organization: Organization, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
         assert!(vector::is_empty(&organization.packages), EPACKAGES_MUST_BE_EMPTY);
 
         let Organization { id, packages, rbac: _ } = organization;
@@ -173,7 +173,7 @@ module ownership::organization {
         package_id: ID,
         auth: &TxAuthority
     ): Package {
-        assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
 
         let i = 0;
         while (i < vector::length(&organization.packages)) {
@@ -198,7 +198,7 @@ module ownership::organization {
         package: Package,
         auth: &TxAuthority
     ) {
-        assert!(ownership::has_owner_permission<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&organization.id, auth), ENO_OWNER_AUTHORITY);
 
         vector::push_back(&mut organization.packages, package);
     }
@@ -208,54 +208,54 @@ module ownership::organization {
     // The RBAC editor is private, and can only be accessed via this organization module
 
     public fun set_role_for_agent(org: &mut Organization, agent: address, role: String, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::set_role_for_agent(&mut org.rbac, agent, role);
     }
 
     public fun delete_agent(org: &mut Organization, agent: address, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::delete_agent(&mut org.rbac, agent);
     }
 
-    public fun grant_permission_to_role<Permission>(org: &mut Organization, role: String, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
+    public fun grant_action_to_role<Action>(org: &mut Organization, role: String, auth: &TxAuthority) {
+        assert!(ownership::can_act_as_owner<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::grant_permission_to_role<Permission>(&mut org.rbac, role);
+        rbac::grant_action_to_role<Action>(&mut org.rbac, role);
     }
 
-    public fun revoke_permission_from_role<Permission>(org: &mut Organization, role: String, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
+    public fun revoke_action_from_role<Action>(org: &mut Organization, role: String, auth: &TxAuthority) {
+        assert!(ownership::can_act_as_owner<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
-        rbac::revoke_permission_from_role<Permission>(&mut org.rbac, role);
+        rbac::revoke_action_from_role<Action>(&mut org.rbac, role);
     }
 
     public fun delete_role_and_agents(org: &mut Organization, role: String, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<ADMIN>(&org.id, auth), ENO_OWNER_AUTHORITY);
 
         rbac::delete_role_and_agents(&mut org.rbac, role);
     }
 
     // ======== For Agents ========
-    // Agents should call into this to retrieve any permissions assigned to them and stored within the
-    // organization. These permissions are brought into the current transaction-exeuction to pass validity-
+    // Agents should call into this to retrieve any actions assigned to them and stored within the
+    // organization. These actions are brought into the current transaction-exeuction to pass validity-
     // checks later.
 
-    public fun claim_permissions(organization: &Organization, ctx: &TxContext): TxAuthority {
+    public fun claim_actions(organization: &Organization, ctx: &TxContext): TxAuthority {
         let agent = tx_context::sender(ctx);
         let auth = tx_authority::begin(ctx);
-        auth = claim_permissions_for_agent(organization, agent, &auth);
+        auth = claim_actions_for_agent(organization, agent, &auth);
         let packages = packages(organization);
         tx_authority::add_organization_internal(packages, principal(organization), &auth)
     }
 
-    public fun claim_permissions_(organization: &Organization, auth: &TxAuthority): TxAuthority {
+    public fun claim_actions_(organization: &Organization, auth: &TxAuthority): TxAuthority {
         let (i, auth) = (0, tx_authority::copy_(auth));
         let agents = tx_authority::agents(&auth);
         while (i < vector::length(&agents)) {
             let agent = *vector::borrow(&agents, i);
-            auth = claim_permissions_for_agent(organization, agent, &auth);
+            auth = claim_actions_for_agent(organization, agent, &auth);
             i = i + 1;
         };
         let packages = packages(organization);
@@ -263,63 +263,63 @@ module ownership::organization {
     }
 
     // This function could safely be public, but we want users to use one of the above-two functions
-    fun claim_permissions_for_agent(organization: &Organization, agent: address, auth: &TxAuthority): TxAuthority {
-        let permissions = rbac::get_agent_permissions(&organization.rbac, agent);
+    fun claim_actions_for_agent(organization: &Organization, agent: address, auth: &TxAuthority): TxAuthority {
+        let actions = rbac::get_agent_actions(&organization.rbac, agent);
         let principal = principal(organization);
-        tx_authority::add_permissions_internal(principal, agent, permissions, auth)
+        tx_authority::add_actions_internal(principal, agent, actions, auth)
     }
 
     // Convenience function
-    public fun assert_login<Permission>(organization: &Organization, ctx: &TxContext): TxAuthority {
+    public fun assert_login<Action>(organization: &Organization, ctx: &TxContext): TxAuthority {
         let auth = tx_authority::begin(ctx);
-        assert_login_<Permission>(organization, &auth)
+        assert_login_<Action>(organization, &auth)
     }
 
-    // Log the agent into the organization, and assert that they have the specified permission
-    public fun assert_login_<Permission>(organization: &Organization, auth: &TxAuthority): TxAuthority {
-        let auth = claim_permissions_(organization, auth);
+    // Log the agent into the organization, and assert that they have the specified action
+    public fun assert_login_<Action>(organization: &Organization, auth: &TxAuthority): TxAuthority {
+        let auth = claim_actions_(organization, auth);
         let principal = rbac::principal(&organization.rbac);
-        assert!(tx_authority::has_permission<Permission>(principal, &auth), ENO_PERMISSION);
+        assert!(tx_authority::can_act_as_address<Action>(principal, &auth), ENO_PERMISSION);
 
         auth
     }
 
     // This is helpful if you just want to define this organization within the current TxAuthority,
-    // and you don't care about searching for any stored permissions inside the organization itself.
+    // and you don't care about searching for any stored actions inside the organization itself.
     public fun add_to_tx_authority(organization: &Organization, auth: &TxAuthority): TxAuthority {
         let packages = packages(organization);
         tx_authority::add_organization_internal(packages, principal(organization), auth)
     }
 
-    // ======== Single Use Permissions ========
+    // ======== Single Use Actions ========
 
-    // In order to issue a single-use permission, the agent calling into this must:
-    // (1) have (organization, Permission); the agent already has this permission (or higher), and
-    // (2) have (organization, SINGLE_USE); the agent was granted the authority to issue single-use permissions 
+    // In order to issue a single-use action, the agent calling into this must:
+    // (1) have (organization, Action); the agent already has this action (or higher), and
+    // (2) have (organization, SINGLE_USE); the agent was granted the authority to issue single-use actions 
     // (or is an admin; the manager role is not sufficient)
-    // public fun create_single_use_permission<Permission>(
+    // public fun create_single_use_action<Action>(
     //     auth: &TxAuthority,
     //     ctx: &mut TxContext
-    // ): SingleUsePermission {
-    //     let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Permission>(auth));
+    // ): SingleUseAction {
+    //     let principal = option::destroy_some(tx_authority::lookup_organization_for_package<Action>(auth));
 
     //     assert!(
-    //         tx_authority::has_package_permission_excluding_manager<Permission, SINGLE_USE>(auth),
+    //         tx_authority::has_package_action_excluding_manager<Action, SINGLE_USE>(auth),
     //         ENO_OWNER_AUTHORITY);
-    //     assert!(tx_authority::has_permission<Permission>(principal, auth), ENO_OWNER_AUTHORITY);
+    //     assert!(tx_authority::can_act_as_address<Action>(principal, auth), ENO_OWNER_AUTHORITY);
 
-    //     permission::create_single_use<Permission>(principal, ctx)
+    //     action::create_single_use<Action>(principal, ctx)
     // }
 
     // This is a module-witness pattern; this is equivalent to a storable Witness
-    // public fun create_single_use_permission_from_witness<Witness: drop, Permission>(
+    // public fun create_single_use_action_from_witness<Witness: drop, Action>(
     //     _witness: Witness,
     //     ctx: &mut TxContext
-    // ): SingleUsePermission {
-    //     // This ensures that the Witness supplied is the module-authority Witness corresponding to `Permission`
-    //     assert!(tx_authority::is_module_authority<Witness, Permission>(), ENO_MODULE_AUTHORITY);
+    // ): SingleUseAction {
+    //     // This ensures that the Witness supplied is the module-authority Witness corresponding to `Action`
+    //     assert!(tx_authority::is_module_authority<Witness, Action>(), ENO_MODULE_AUTHORITY);
 
-    //     permission::create_single_use<Permission>(encode::type_into_address<Witness>(), ctx)
+    //     action::create_single_use<Action>(encode::type_into_address<Witness>(), ctx)
     // }
 
     // ======== Getter Functions ========
@@ -351,16 +351,16 @@ module ownership::organization {
     // We use dynamic fields, rather than vectors, because it scales O(1) instead of O(n) for n endorsements.
 
     struct Endorsement has store, copy, drop { from: address }
-    struct ENDORSE {} // permission type
+    struct ENDORSE {} // action type
     
     public fun add_endorsement(org: &mut Organization, from: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<ENDORSE>(from, auth), ENO_PERMISSION);
+        assert!(tx_authority::can_act_as_address<ENDORSE>(from, auth), ENO_PERMISSION);
 
         dynamic_field2::set<Endorsement, bool>(&mut org.id, Endorsement { from }, true);
     }
 
     public fun remove_endorsement(org: &mut Organization, from: address, auth: &TxAuthority) {
-        assert!(tx_authority::has_permission<ENDORSE>(from, auth), ENO_PERMISSION);
+        assert!(tx_authority::can_act_as_address<ENDORSE>(from, auth), ENO_PERMISSION);
 
         dynamic_field2::drop<Endorsement, bool>(&mut org.id, Endorsement { from });
     }
@@ -470,7 +470,7 @@ module ownership::organization {
         ctx: &mut TxContext
     ) {
         let auth = tx_authority::begin(ctx);
-        add_package_from_stored(organization, package, &auth)
+        add_package_from_stored(organization, stored, &auth)
     }
 
     entry fun remove_package_(
@@ -513,22 +513,22 @@ module ownership::organization {
         set_role_for_agent(organization, agent, role, &auth);
     }
 
-    entry fun grant_permission_to_role_<Permission>(
+    entry fun grant_action_to_role_<Action>(
         organization: &mut Organization,
         role: String,
         ctx: &TxContext
     ) {
         let auth = tx_authority::begin(ctx);
-        grant_permission_to_role<Permission>(organization, role, &auth)
+        grant_action_to_role<Action>(organization, role, &auth)
     }
 
-    entry fun revoke_permission_from_role_<Permission>(
+    entry fun revoke_action_from_role_<Action>(
         organization: &mut Organization,
         role: String,
         ctx: &TxContext
     ) {
         let auth = tx_authority::begin(ctx);
-        revoke_permission_from_role<Permission>(organization, role, &auth)
+        revoke_action_from_role<Action>(organization, role, &auth)
     }
 
     entry fun delete_role_and_agents_(
@@ -575,9 +575,9 @@ module ownership::organization {
     // Instead of returning the Organization here, we force you to use a second transaction
     // to edit it; this is a safety measure. If a user were tricked into creating this, the
     // malicious actor will need to trick the user into signing a second transaction after this,
-    // adding permissions to the Organization object created here.
+    // adding actions to the Organization object created here.
     // public fun create_(principal: address, auth: &TxAuthority, ctx: &mut TxContext) {
-    //     assert!(tx_authority::has_admin_permission(principal, auth), ENO_ADMIN_AUTHORITY);
+    //     assert!(tx_authority::has_admin_action(principal, auth), ENO_ADMIN_AUTHORITY);
 
     //     let rbac = rbac::create(principal, &auth);
     //     let organization = Organization { 
