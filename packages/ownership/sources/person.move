@@ -33,7 +33,7 @@
 // This would be too risky and would likely result in users being phished.
 // You may however delegate these actions for types and/or object-ids.
 
-module ownership::delegation {
+module ownership::person {
     use std::option;
     use std::vector;
 
@@ -148,7 +148,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        action_set::add_action_for_objects<Action>(agent_actions_mut(person, agent), types);
+        action_set::add_action_for_objects<Action>(agent_actions_mut(person, agent), objects);
     }
 
     // ======= Remove Agent Actions =======
@@ -160,7 +160,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        action_set::remove_general(agent_actions_mut(person, agent));
+        action_set::remove_general<Action>(agent_actions_mut(person, agent));
     }
 
     public fun remove_all_general_actions_from_agent(
@@ -191,7 +191,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        action_set::remove_action_for_types<Action>(agent_actions_mut(person, agent));
+        action_set::remove_action_for_types<Action>(agent_actions_mut(person, agent), types);
     }
 
     // Convenience function
@@ -223,7 +223,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        action_set::remove_action_for_objects<Action>(agent_actions_mut(person, agent));
+        action_set::remove_action_for_objects<Action>(agent_actions_mut(person, agent), objects);
     }
 
     public fun remove_all_actions_for_objects_from_agent(
@@ -244,7 +244,7 @@ module ownership::delegation {
     ) {
         assert!(tx_authority::can_act_as_address<ADMIN>(person.principal, auth), ENO_ADMIN_AUTHORITY);
 
-        dynamic_field2::drop<address, ActionSet>(&mut person.id, Key { agent });
+        dynamic_field2::drop<Key, ActionSet>(&mut person.id, Key { agent });
     }
 
     // ======= For Agents =======
@@ -282,7 +282,7 @@ module ownership::delegation {
 
     // ======= Getters =======
 
-    public fun address(person: &Person): address {
+    public fun principal(person: &Person): address {
         person.principal
     }
 
@@ -298,7 +298,7 @@ module ownership::delegation {
     // ======= Extend Pattern =======
 
     public fun uid(person: &Person): &UID {
-        person.id
+        &person.id
     }
 
     public fun uid_mut(person: &mut Person): &mut UID {
@@ -310,7 +310,8 @@ module ownership::delegation {
     entry fun create_delegation_person(
         ctx: &mut TxContext
     ) {
-        return_and_share(create(ctx))
+        let guardian = tx_context::sender(ctx);
+        return_and_share(create(guardian, ctx))
     }
 
     entry fun destroy_delegation_person(
