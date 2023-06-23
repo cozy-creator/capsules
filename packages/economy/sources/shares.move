@@ -44,7 +44,9 @@ module economy::shares {
         share_queue: Queue<S>,
         asset_queue: Queue<A>,
         anyone_can_deposit: bool,
-        anyone_can_withdraw: bool
+        anyone_can_withdraw: bool,
+        instant_deposit: bool,
+        instant_withdraw: bool
     }
 
     // action structs
@@ -128,6 +130,9 @@ module economy::shares {
     public fun update_net_assets() { }
 }
 
+// Note that queue itself does not enforce any rules on who can deposit and withdraw; a person with a mutable
+// reference to `Queue<T>` can deposit or withdraw to any address.
+// Should we add these restrictions in? Or should we leave it up to the fund manager to enforce?
 module economy::queue {
     use sui::linked_table::{Self as map, LinkedTable as Map};
 
@@ -138,6 +143,49 @@ module economy::queue {
         incoming: Map<address, Balance<T>>,
         balance: Balance<T>,
         outgoing: Map<address, Balance<T>>
+    }
+
+    public fun deposit(queue: &mut Queue<T>, owner: address, balance: Balance<T>) {
+
+    }
+
+    public fun withdraw(queue: &mut Queue<T>, owner: address, amount: u64) {
+
+    }
+
+    public fun borrow_incoming() {
+
+    }
+
+    public fun borrow_incoming_mut(queue: &mut Queue<T>): &mut Map<address, Balance<T>> {
+
+    }
+
+    public fun borrow_balance(queue: &Queue<T>): &Balance<T> {
+
+    }
+
+    public fun borrow_balance_mut(queue: &mut Queue<T>): &mut Balance<T> {
+
+    }
+
+    public fun borrow_outgoing() {
+
+    }
+
+    public fun borrow_outgoing_mut(queue: &mut Queue<T>): &mut Map<address, Balance<T>> {
+
+    }
+
+    // q_a incoming -> balance, create `S` with `supply` -> q_b outgoing
+    public fun mint_incoming<S, A>(q_a: &mut Queue<A>, q_s: &mut Queue<S>, supply: &mut Supply<S>) {
+
+    }
+
+    // q_s incoming -> burn with `supply`, q_a balance -> q_a outgoing
+    // q_a balance has to be sufficient to cover burning of the shares
+    public fun burn_incoming<S, A>(q_a: &mut Queue<A>, q_s: &mut Queue<S>, supply: &mut Supply<S>) {
+
     }
 }
 
