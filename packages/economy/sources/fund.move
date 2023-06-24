@@ -37,7 +37,7 @@
 // Answer: no
 
 module economy::fund {
-    use sui::balance::{Self, Supply};
+    use sui::balance::{Self, Balance, Supply};
     use sui::coin::{Self, CoinMetadata};
     use sui::object::{Self, UID};
     use sui::transfer;
@@ -45,13 +45,19 @@ module economy::fund {
 
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::admin_transfer::Witness as AdminTransfer;
+    use ownership::org_transfer::Witness as OrgTransfer;
 
     use economy::account::{Self, Account, WITHDRAW};
     use economy::queue::{Self, Queue};
 
     // Error constants
-    const ENO_PURCHASE_AUTHORITY: u64 = 1;
+    const ENO_PURCHASE_AUTHORITY: u64 = 0;
+    const ENO_REDEEM_AUTHORITY: u64 = 1;
+    const ENO_WITHDRAW_AUTHORITY: u64 = 2;
+    const EINSTANT_PURCHASE_DISABLED: u64 = 3;
+    const EINSTANT_REDEEM_DISABLED: u64 = 4;
+    const ENOT_FUND_OWNER: u64 = 5;
+    const ENOT_FUND_MANAGER: u64 = 6;
 
     // `S` is the share-type of the fund, and `T` is the type of currency it is priced in
     // For example 'BITO' might be the fund, and 'USDC' is the currency.
@@ -108,7 +114,7 @@ module economy::fund {
         addr: address,
         auth: &TxAuthority
     ): Balance<A> {
-        assert!(tx_authority::can_act_as_address<WITHDRAW>(addr, auth), ENO_REDEEM_AUTHORITY);
+        assert!(tx_authority::can_act_as_address<WITHDRAW>(addr, auth), ENO_WITHDRAW_AUTHORITY);
 
         queue::cancel_deposit(&mut fund.asset_queue, addr)
     }
@@ -137,7 +143,7 @@ module economy::fund {
         auth: &TxAuthority
     ) { 
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
+            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
         };
 
         queue::deposit(&mut fund.share_queue, addr, shares);
@@ -149,7 +155,7 @@ module economy::fund {
         auth: &TxAuthority
     ): Balance<S> {
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
+            assert!(ownership::can_act_as_owner<WITHDRAW>(&fund.id, auth), ENO_WITHDRAW_AUTHORITY);
         };
 
         queue::cancel_deposit(&mut fund.asset_queue, addr)
@@ -161,7 +167,7 @@ module economy::fund {
         auth: &TxAuthority
     ): Balance<A> {
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
+            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
         };
         assert!(fund.config.instant_redeem, EINSTANT_REDEEM_DISABLED);
 
@@ -234,7 +240,7 @@ module economy::fund {
     public fun return_and_share<S, A>(fund: Fund<S, A>, owner: address) {
         let auth = tx_authority::begin_with_package_witness(&Witness {});
         let typed_id = typed_id::new(&fund);
-        ownership::as_shared_object<Fund, AdminTransfer>(&mut fund.id, typed_id, owner, &auth);
+        ownership::as_shared_object<Fund, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
         transfer::share_object(fund);
     }
 
@@ -304,7 +310,7 @@ module economy::fund {
         public_purchase: bool,
         public_redeems: bool,
         instant_purchase: bool,
-        instant_redeem: bool
+        instant_redeem: bool,
         auth: &TxAuthority
     ) {
         assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
@@ -327,6 +333,8 @@ module economy::fund {
 // Ideally Queue would be a pure data-type; I wish we didn't need to use ctx or generate object-ids
 // to create it.
 module economy::queue {
+    use sui::balance::{Self, Balance};
+    use sui::tx_context::TxContext;
     use sui::linked_table::{Self as map, LinkedTable as Map};
 
     use sui_utils::linked_table2 as map2;
@@ -417,7 +425,7 @@ module economy::queue {
         while (!map::is_empty(&q_a.incoming)) {
             // deposit incoming funds
             let (user, balance) = map::pop_front(&mut q_a.incoming);
-            let balance_value = balance::value(&balance) as u128;
+            let balance_value = balance::value(&balance);
             balance::join(&mut q_a.balance, balance);
             deposits = deposits + balance_value;
 
@@ -445,7 +453,7 @@ module economy::queue {
         while (!map::is_empty(&q_s.incoming)) {
             // withdraw outgoing funds
             let (user, shares) = map::pop_front(&mut q_s.incoming);
-            let shares_value = balance::value(&shares) as u128;
+            let shares_value = balance::value(&shares);
             let asset_amount = ratio_conversion(shares_value, asset_size, share_size);
 
             // Check if we've run out of funds for now; stop rather than abort
@@ -455,7 +463,7 @@ module economy::queue {
             };
             let balance = balance::split(&mut q_a.balance, asset_amount);
             map2::merge_balance(&mut q_a.outgoing, user, balance);
-            withdrawals = withdrawals + balance;
+            withdrawals = withdrawals + asset_amount;
 
             // burn incoming shares
             balance::decrease_supply(supply, shares);
@@ -467,7 +475,7 @@ module economy::queue {
     // ======== Getters =========
 
     public fun ratio_conversion(amount: u64, numerator: u64, denominator: u64): u64 {
-        (amount as u128) * (numerator as u128) / (denominator as u128) as u64
+        ((amount as u128) * (numerator as u128) / (denominator as u128) as u64)
     }
 }
 

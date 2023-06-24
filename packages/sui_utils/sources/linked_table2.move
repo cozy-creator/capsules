@@ -1,6 +1,6 @@
 module sui_utils::linked_table2 {
     use sui::balance::{Self, Balance};
-    use sui::linked_table;
+    use sui::linked_table::{Self, LinkedTable};
 
     public fun merge_balance<K: copy + drop + store, T>(
         table: &mut LinkedTable<K, Balance<T>>,
@@ -17,9 +17,9 @@ module sui_utils::linked_table2 {
 
     public fun collapse_balance<K: copy + drop + store, T>(table: LinkedTable<K, Balance<T>>): Balance<T> {
         let returned_balance = balance::zero();
-        
-        while (!linked_table::is_empty(table)) {
-            let (_, balance) = linked_table::pop_front(table);
+
+        while (!linked_table::is_empty(&table)) {
+            let (_, balance) = linked_table::pop_front(&mut table);
             balance::join(&mut returned_balance, balance);
         };
         linked_table::destroy_empty(table);
