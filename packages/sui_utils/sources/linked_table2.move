@@ -14,4 +14,16 @@ module sui_utils::linked_table2 {
             linked_table::push_back(table, key, balance);
         };
     }
+
+    public fun collapse_balance<K: copy + drop + store, T>(table: LinkedTable<K, Balance<T>>): Balance<T> {
+        let returned_balance = balance::zero();
+        
+        while (!linked_table::is_empty(table)) {
+            let (_, balance) = linked_table::pop_front(table);
+            balance::join(&mut returned_balance, balance);
+        };
+        linked_table::destroy_empty(table);
+
+        returned_balance
+    }
 }
