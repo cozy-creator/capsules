@@ -57,6 +57,7 @@ module economy::fund {
     // Action types
     struct DEPOSIT {}
     struct WITHDRAW {}
+    struct FUND_MANAGER {}
 
     // ============= User Interface =============
 
@@ -66,7 +67,7 @@ module economy::fund {
         amount: u64,
         auth: &TxAuthority
     ) {
-        if (!fund.anyone_can_deposit) {
+        if (!fund.config.anyone_can_deposit) {
             assert!(tx_authority::can_act_as_package<S, DEPOSIT>(auth), ENO_DEPOSIT_AUTHORITY);
         };
 
@@ -175,11 +176,76 @@ module economy::fund {
 
     }
 
-    public fun process_deposits() { }
+    // This adds funds, to meet withdrawal requests
+    public fun manager_deposit() { }
 
-    public fun process_withdrawals() { }
+    // This removes funds, so that the fund-manager can deploy them
+    public fun manager_withdraw() { }
 
-    public fun update_net_assets() { }
+    // TO DO: should fund-managers be allowed to 
+
+    public fun accept_deposits() {
+
+    }
+
+    public fun accept_withdrawals() {
+
+    }
+
+    public fun process_all<S, T>(fund: &mut Fund<S, T>, auth: &TxAuthority) {
+        process_deposits(fund, auth);
+        process_withdrawals(fund, auth);
+    }
+
+    public fun process_deposits<S, T>(fund: &mut Fund<S, T>, auth: &TxAuthority) {
+        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+
+        let total_deposits = queue::deposit_input_mint_output(
+            &mut fund.asset_queue,
+            &mut fund.share_queue,
+            fund.net_assets,
+            balance::supply_value(&fund.supply),
+            &mut fund.supply);
+        
+        fund.net_assets = fund.net_assets + total_deposits;
+    }
+
+    public fun process_withdrawals<S, T>(fund: &mut Fund<S, T>, auth: &TxAuthority) {
+        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+
+        let (_success, total_withdrawals) = queue::burn_input_withdraw_output(
+            &mut fund.asset_queue,
+            &mut fund.share_queue,
+            fund.net_assets,
+            balance::supply_value(&fund.supply),
+            &mut fund.supply);
+        
+        fund.net_assets = fund.net_assets - total_withdrawals;
+    }
+
+    // The total value of net-assets should be updated regularly. This number is not guaranteed
+    // to be correct and the fund manager is not necessarily honest. Net-assets may not be calculated
+    // on-chain; it could be an entirely off-chain value.
+    // - If net_assets is underestimated, then fund-holders redeeming shares will be underpaid, and
+    // people will be able to buy in at a discount.
+    // - If net_assets is overestimated, then fund-holders redeeming shares will be overpaid, and people
+    // will be able to buy in at a premium.
+    public fun update_net_assets<S, T>(fund: &mut Fund<S, T>, net_assets: u64, auth: &TxAuthority) {
+        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+
+        fund.net_assets = net_assets;
+    }
+
+    // =========== Change Config ===========
+
+    public fun update_config(
+        fund: &mut Fund<S, T>,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+
+        fund.config = config;
+    }
 }
 
 // Note that queue itself does not enforce any rules on who can deposit and withdraw; a person with a mutable
@@ -190,6 +256,8 @@ module economy::fund {
 // to create it.
 module economy::queue {
     use sui::linked_table::{Self as map, LinkedTable as Map};
+
+    use sui_utils::linked_table2 as map2;
 
     // Incoming is a map of depositors to deposits to be processed
     // Balance is a pool of active funds
@@ -255,20 +323,64 @@ module economy::queue {
 
     }
 
-    // q_a incoming -> balance, create `S` with `supply` -> q_b outgoing
-    public fun mint_incoming<S, A>(
+    // Moves q_a.incoming -> balance, mint `S` with `supply` -> q_s.outgoing
+    public fun deposit_input_mint_output<S, A>(
         q_a: &mut Queue<A>,
         q_s: &mut Queue<S>,
-        exchange_rate: u64,
+        asset_size: u64,
+        share_size: u64,
         supply: &mut Supply<S>
-    ) {
+    ): u64 {
+        let deposits = 0;
 
+        while (!map::is_empty(&q_a.incoming)) {
+            // deposit incoming funds
+            let (user, balance) = map::pop_front(&mut q_a.incoming);
+            let balance_value = balance::value(&balance) as u128;
+            balance::join(&mut q_a.balance, balance);
+            deposits = deposits + balance_value;
+
+            // mint outgoing shares
+            let share_amount = balance_value * (share_size as u128) / (asset_size as u128) as u64;
+            let shares = balance::increase_supply(supply, share_amount);
+            map2::merge_balance(&mut q_s.outgoing, user, shares);
+        };
+
+        deposits
     }
 
     // q_s incoming -> burn with `supply`, q_a balance -> q_a outgoing
-    // q_a balance has to be sufficient to cover burning of the shares
-    public fun burn_incoming<S, A>(q_a: &mut Queue<A>, q_s: &mut Queue<S>, supply: &mut Supply<S>) {
+    // If q_a.balance is not sufficient to cover redeeming shares, this process will stop
+    // Returns a 'success' boolean, since this will never abort
+    public fun burn_input_withdraw_output<S, A>(
+        q_a: &mut Queue<A>,
+        q_s: &mut Queue<S>,
+        asset_size: u64,
+        share_size: u64,
+        supply: &mut Supply<S>
+    ): (bool, u64) {
+        let withdrawals = 0;
 
+        while (!map::is_empty(&q_s.incoming)) {
+            // withdraw outgoing funds
+            let (user, shares) = map::pop_front(&mut q_s.incoming);
+            let shares_value = balance::value(&shares) as u128;
+            let asset_amount = shares_value * (asset_size as u128) / (share_size as u128) as u64;
+
+            // Check if we've run out of funds for now; stop rather than abort
+            if (balance::value(&q_a.balance) < asset_amount) {
+                map::push_front(&mut q_s.incoming, user, shares);
+                return (false, withdrawals)
+            };
+            let balance = balance::split(&mut q_a.balance, asset_amount);
+            map2::merge_balance(&mut q_a.outgoing, user, balance);
+            withdrawals = withdrawals + balance;
+
+            // burn incoming shares
+            balance::decrease_supply(supply, shares);
+        };
+
+        (true, withdrawals)
     }
 }
 

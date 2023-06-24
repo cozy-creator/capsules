@@ -20,7 +20,7 @@ module ownership::ownership {
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::action::{ADMIN, MANAGER};
+    use ownership::action::ADMIN;
 
     // error enums
     const ENO_PACKAGE_AUTHORITY: u64 = 0;
@@ -51,6 +51,7 @@ module ownership::ownership {
     struct Frozen has store, copy, drop { }
 
     // Action type allowing access to the UID
+    struct INITIALIZE {} // Used to initialize objects
     struct UID_MUT {} // Used to access UID_MUT
     struct TRANSFER {} // Used to perform a transfer (change the owner)
     struct MIGRATE {} // Used to change (migrate) the transfer-authority
@@ -112,7 +113,7 @@ module ownership::ownership {
     public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
         assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
-        assert!(tx_authority::can_act_as_package<T, MANAGER>(auth), ENO_PACKAGE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package<T, INITIALIZE>(auth), ENO_PACKAGE_AUTHORITY);
     }
 
     public fun is_initialized(uid: &UID): bool {
@@ -136,18 +137,23 @@ module ownership::ownership {
 
     // If this is initialized, package authority always exists and is always the native module (the module
     // declaring the object's type). I.e., the package-id corresponding to `0x599::my_module::Witness`.
-    public fun can_act_as_package<Action>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_declaring_package<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let package_id = struct_tag::package_id(&ownership.type);
-            tx_authority::can_act_as_object_package_<Action>(
+            tx_authority::can_act_as_package_on_object_<Action>(
                 package_id, &ownership.type, object::uid_as_inner(uid), auth)
         }
     }
 
-    public fun can_act_as_package() {
-        
+    // Same as above, but uses the object itself, rather than the UID. Note that the UID need not
+    // be initialized.
+    public fun can_act_as_declaring_package_<T: key, Action>(obj: &T, auth: &TxAuthority): bool {
+        let type = struct_tag::get<T>();
+        let package_id = struct_tag::package_id(&type);
+        let id = object::uid_to_inner(obj);
+        tx_authority::can_act_as_package_on_object_<Action>(package_id, type, id, auth)
     }
 
     /// Defaults to `false` if transfer authority is not set.
@@ -175,6 +181,7 @@ module ownership::ownership {
     }
 
     // Checks all instances of why an agent needs mutable access to a UID
+    // TO DO: make this useful
     public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
         if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
         if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
@@ -247,7 +254,7 @@ module ownership::ownership {
     // Transfer-auth must be undefined; i.e., never set before, or ejected.
     // If the new transfer-auth requires initialization, that must be called separately after this.
     public fun set_transfer_auth(uid: &mut UID, new_auth: address, auth: &TxAuthority) {
-        assert!(can_act_as_package<MIGRATE>(uid, auth), ENO_PACKAGE_AUTHORITY);
+        assert!(can_act_as_declaring_package<MIGRATE>(uid, auth), ENO_PACKAGE_AUTHORITY);
         assert!(can_act_as_owner<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });

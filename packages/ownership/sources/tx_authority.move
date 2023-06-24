@@ -206,7 +206,7 @@ module ownership::tx_authority {
     // which makes it more advanced and allows for delegation
 
     // Same as above, except it checks against the type and object_id constraints as well
-    public fun can_act_as_object<Action>(
+    public fun can_act_as_address_on_object<Action>(
         principal: address,
         struct_tag: &StructTag,
         object_id: &ID,
@@ -236,32 +236,35 @@ module ownership::tx_authority {
         false
     }
 
-    public fun can_act_as_object_package<T, Action>(
+    public fun can_act_as_package_on_object<T, Action>(
         struct_tag: &StructTag,
         object_id: &ID,
         auth: &TxAuthority
     ): bool {
         let package_id = encode::package_id<T>();
-        can_act_as_object_package_<Action>(package_id, struct_tag, object_id, auth)
+        can_act_as_package_on_object_<Action>(package_id, struct_tag, object_id, auth)
     }
 
-    public fun can_act_as_object_package_<Action>(
+    public fun can_act_as_package_on_object_<Action>(
         package_id: ID,
         struct_tag: &StructTag,
         object_id: &ID,
         auth: &TxAuthority
     ): bool {
-        // Checks if this package directly added `Action` to `auth``
-        if (can_act_as_object<Action>(
-            object::id_to_address(&package_id), struct_tag, object_id, auth)) {
+        // Check if `package_id` itself added `Action` to `auth`
+        if (can_act_as_address_on_object<Action>(
+                object::id_to_address(&package_id),
+                struct_tag,
+                object_id,
+                auth)) {
             return true
         };
 
-        // Checks if the organization controlling this package added `Action` to `auth`
+        // Check if the organization controlling `package_id` added `Action` to `auth`
         let principal_maybe = lookup_organization_for_package_(package_id, auth);
         if (option::is_none(&principal_maybe)) { return false };
         let principal = option::destroy_some(principal_maybe);
-        can_act_as_object<Action>(principal, struct_tag, object_id, auth)
+        can_act_as_address_on_object<Action>(principal, struct_tag, object_id, auth)
     }
 
 
