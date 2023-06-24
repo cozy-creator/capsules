@@ -58,8 +58,8 @@ module ownership::action_set {
     public(friend) fun merge(self: &mut ActionSet, new: ActionSet) {
         let ActionSet { general, on_types, on_objects } = new;
         action::add(&mut self.general, general);
-        action::vec_map_add(&mut self.on_types, on_types);
-        action::vec_map_add(&mut self.on_objects, on_objects);
+        action::vec_map_join(&mut self.on_types, on_types);
+        action::vec_map_join(&mut self.on_objects, on_objects);
     }
 
     // ======== Modification API ========

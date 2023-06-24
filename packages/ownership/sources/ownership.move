@@ -164,7 +164,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.transfer_auth)) false
             else {
                 let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::can_act_as_object<Action>(
+                tx_authority::can_act_as_address_on_object<Action>(
                     transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -176,7 +176,7 @@ module ownership::ownership {
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let id = object::uid_as_inner(uid);
-            tx_authority::can_act_as_object<Action>(principal, &ownership.type, id, auth)
+            tx_authority::can_act_as_address_on_object<Action>(principal, &ownership.type, id, auth)
         }
     }
 
@@ -188,6 +188,11 @@ module ownership::ownership {
         if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
 
         false
+    }
+
+    // TO DO: make this useful
+    public fun can_borrow_uid_mut(_uid: &UID, _auth: &TxAuthority): bool {
+        true
     }
 
     // ========== Getter Functions =========

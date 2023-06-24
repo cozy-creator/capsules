@@ -135,9 +135,10 @@ module ownership::tx_authority {
         action::can_act_as<Action>(action_set::general(&set))
     }
 
-    // `T` can be any type belong to the package, such as 0x599::my_module::StructName
-    public fun can_act_as_package<T, Action>(auth: &TxAuthority): bool {
-        let package_id = encode::package_id<T>();
+    // `Package` can be any type declared by the package. Example: 0x599::my_module::StructName
+    // will check if you have authority to perform `Action` as address 0x599.
+    public fun can_act_as_package<Package, Action>(auth: &TxAuthority): bool {
+        let package_id = encode::package_id<Package>();
         can_act_as_package_<Action>(package_id, auth)
     }
 
@@ -154,6 +155,12 @@ module ownership::tx_authority {
         can_act_as_address<Action>(principal, auth)
     }
 
+    // Defaults to `true` if the pacakge is not specified (optional)
+    public fun can_act_as_package_opt<Action>(package_maybe: Option<ID>, auth: &TxAuthority): bool {
+        if (option::is_none(&package_maybe)) { return true };
+        can_act_as_package_<Action>(option::destroy_some(package_maybe), auth)
+    }
+
     public fun can_act_as_id<T: key, Action>(obj: &T, auth: &TxAuthority): bool {
         can_act_as_id_<Action>(object::id(obj), auth)
     }
@@ -162,8 +169,8 @@ module ownership::tx_authority {
         can_act_as_address<Action>(object::id_to_address(&id), auth)
     }
 
-    public fun can_act_as_type<T, Action>(auth: &TxAuthority): bool {
-        can_act_as_address<Action>(encode::type_into_address<T>(), auth)
+    public fun can_act_as_type<Type, Action>(auth: &TxAuthority): bool {
+        can_act_as_address<Action>(encode::type_into_address<Type>(), auth)
     }
 
     // ========= Exclude MANAGER Action =========
@@ -208,7 +215,7 @@ module ownership::tx_authority {
     // Same as above, except it checks against the type and object_id constraints as well
     public fun can_act_as_address_on_object<Action>(
         principal: address,
-        struct_tag: &StructTag,
+        type: &StructTag,
         object_id: &ID,
         auth: &TxAuthority
     ): bool {
@@ -220,7 +227,7 @@ module ownership::tx_authority {
         if (action::can_act_as<Action>(action_set::general(&set))) { return true };
 
         // Check against type actions
-        let type_actions_maybe = vec_map2::match_struct_tag_maybe(action_set::on_types(&set), struct_tag);
+        let type_actions_maybe = vec_map2::match_struct_tag_maybe(action_set::on_types(&set), type);
         if (option::is_some(&type_actions_maybe)) {
             let type_actions = option::destroy_some(type_actions_maybe);
             if (action::can_act_as<Action>(&type_actions)) { return true };
@@ -237,12 +244,12 @@ module ownership::tx_authority {
     }
 
     public fun can_act_as_package_on_object<T, Action>(
-        struct_tag: &StructTag,
+        type: &StructTag,
         object_id: &ID,
         auth: &TxAuthority
     ): bool {
         let package_id = encode::package_id<T>();
-        can_act_as_package_on_object_<Action>(package_id, struct_tag, object_id, auth)
+        can_act_as_package_on_object_<Action>(package_id, type, object_id, auth)
     }
 
     public fun can_act_as_package_on_object_<Action>(

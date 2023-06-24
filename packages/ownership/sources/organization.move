@@ -32,12 +32,11 @@ module ownership::organization {
     use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
 
-    use ownership::client;
     use ownership::ownership;
     use ownership::action::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
-    use ownership::org_transfer::Witness as OrgTransfer;
+    use ownership::org_transfer::OrgTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Error enums
@@ -108,7 +107,7 @@ module ownership::organization {
         let rbac = rbac::create(object::uid_to_address(&org_uid));
 
         let organization = Organization { 
-            id: org_id,
+            id: org_uid,
             packages: vector::empty(),
             rbac 
         };
@@ -393,7 +392,7 @@ module ownership::organization {
     }
 
     public fun uid_mut(organization: &mut Organization, auth: &TxAuthority): &mut UID {
-        assert!(client::can_borrow_uid_mut(&organization.id, auth), ENO_PERMISSION);
+        assert!(ownership::can_borrow_uid_mut(&organization.id, auth), ENO_PERMISSION);
 
         &mut organization.id
     }
@@ -416,12 +415,12 @@ module ownership::organization {
     }
 
     public fun package_uid_mut(package: &mut Package): &mut UID {
-        // No need for ownership check because Package is an single-writer object
+        // No need for ownership check because Package is a single-writer object
         &mut package.id
     }
 
     public fun package_uid_mut_(organization: &mut Organization, package_id: ID, auth: &TxAuthority): &mut UID {
-        assert!(client::can_borrow_uid_mut(&organization.id, auth), ENO_PERMISSION);
+        assert!(ownership::can_borrow_uid_mut(&organization.id, auth), ENO_PERMISSION);
 
         let i = 0;
         while (i < vector::length(&organization.packages)) {

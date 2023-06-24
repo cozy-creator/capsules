@@ -25,55 +25,32 @@ module ownership::action {
     friend ownership::rbac;
     friend ownership::tx_authority;
 
-    // Special system-level actions.
-    // If the principal gives an agent the MANAGER action, then they can act as
-    // that agent for all action-types (there is no scope), except for admin.
-    //
-    // With the ADMIN action, an agent is indistinguishable from the delegating principal.
-    // Granting the ADMIN action is potentially dangerous, as the agent can then grant _other_ agents
-    // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
-    // to revoke the rights of the agent and make the principal secure again.
-    //
-    // ANY is intended to be a wild-card, like `can_act_as<*>(actions)` and as long as their at least one
-    // action, it will return 'true'.
-    struct ADMIN {}
-    struct MANAGER {}
-    struct ANY {}
-
     // This has `store` + `copy` which could be dangerous? We need to keep all refs these private
     struct Action has store, copy, drop {
         inner: String
     }
 
-    public(friend) fun admin(): Action {
-        Action { inner: encode::type_name<ADMIN>() }
-    }
-
-    public(friend) fun manager(): Action {
-        Action { inner: encode::type_name<MANAGER>() }
-    }
-
-    public(friend) fun new<P>(): Action {
-        Action { inner: encode::type_name<P>() }
+    public(friend) fun new<Act>(): Action {
+        Action { inner: encode::type_name<Act>() }
     }
     
     // Delegations only extend an agent's power to equal or lower levels, never up.
     //
-    // Example: Alice delegates [CREATE] to Bob--this means Bob can call in and perform a CREATE operation
-    // as if he were Alice. Bob now delegates [CREATE, DELETE] to Charlie. This means Charlie can now call
-    // in and do both CREATE and DELETE as Bob, and by inheritance, can also do CREATE as Alice as well.
+    // Example: Alice delegates [CREATE] to Bob--this means Bob can call in and perform a CREATE action
+    // as if he were Alice. Bob now delegates [CREATE, DELETE] to Charlie. This means Charlie can now
+    // do both CREATE and DELETE as Bob, and by inheritance, can also do CREATE as Alice as well.
     // However, Charlie cannot perform DELETE or any other action as Alice.
     //
     // That is, everything in `actions` that is outside of the `filter` will be removed
     public(friend) fun intersection(actions: &vector<Action>, filter: &vector<Action>): vector<Action> {
-        if (can_act_as_admin(filter)) { return *actions };
+        if (contains_admin_action(filter)) { return *actions };
 
-        if (can_act_as_manager(filter)) {
-            if (can_act_as_admin(actions)) { return vector[manager()] }; // Downgrade to manager
+        if (contains_manager_action(filter)) {
+            if (contains_admin_action(actions)) { return vector[manager()] }; // Downgrade to manager
             return *actions
         };
 
-        if (can_act_as_admin(actions) || can_act_as_manager(actions)) { 
+        if (contains_admin_action(actions) || contains_manager_action(actions)) { 
             return *filter
         };
 
@@ -111,7 +88,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (can_act_as_admin(existing)) { return };
+        if (contains_admin_action(existing)) { return };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -131,7 +108,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (can_act_as_admin(existing)) { return *existing };
+        if (contains_admin_action(existing)) { return *existing };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -144,7 +121,7 @@ module ownership::action {
         vector2::merge_(existing, &new)
     }
 
-    public(friend) fun vec_map_add<K: copy + drop>(
+    public(friend) fun vec_map_join<K: copy + drop>(
         existing: &mut VecMap<K, vector<Action>>,
         new: VecMap<K, vector<Action>>
     ) {
@@ -155,24 +132,70 @@ module ownership::action {
        };
     }
 
-    public fun can_act_as_admin(actions: &vector<Action>): bool {
+    public fun contains_action<Act>(actions: &vector<Action>): bool {
+        if (contains_admin_action(actions) || contains_manager_action(actions)) {
+            return true
+        };
+
+        if (is_any<Act>() && vector::length(actions) > 0) { return true };
+
+        let type_name = encode::type_name<Act>();
+        let i = 0;
+        while (i < vector::length(actions)) {
+            let action = vector::borrow(actions, i);
+            if (action.inner == type_name) {  return true };
+            i = i + 1;
+        };
+
+        false
+    }
+
+    public fun contains_action_excluding_manager<A>(actions: &vector<Action>): bool {
+        if (contains_manager_action(actions)) { return false };
+        contains_action<A>(actions)
+    }
+
+    // ========= Special System-Level Actions =========
+    // If the principal gives an agent the MANAGER action, then they can act as
+    // that agent for all action-types (there is no scope), except for admin.
+    //
+    // With the ADMIN action, an agent is indistinguishable from the delegating principal.
+    // Granting the ADMIN action is potentially dangerous, as the agent can then grant _other_ agents
+    // the rights of the principal as well, ad inifintum. If this occurs, it could be virtually impossible
+    // to revoke the rights of the agent and make the principal secure again.
+    //
+    // ANY is intended to be a wild-card, like `can_act_as<*>(actions)` and as long as their at least one
+    // action, it will return 'true'.
+    struct ADMIN {}
+    struct MANAGER {}
+    struct ANY {}
+
+    public(friend) fun admin(): Action {
+        Action { inner: encode::type_name<ADMIN>() }
+    }
+
+    public(friend) fun manager(): Action {
+        Action { inner: encode::type_name<MANAGER>() }
+    }
+
+    public fun contains_admin_action(actions: &vector<Action>): bool {
         vector::contains(actions, &admin())
     }
 
     public fun is_admin_action<Action>(): bool {
-        encode::type_name<Action>() == encode::type_name<ADMIN>()
+        encode::is_same_type<Action, ADMIN>()
     }
 
     public fun is_admin_action_(action: &Action): bool {
         action.inner == encode::type_name<ADMIN>()
     }
 
-    public fun can_act_as_manager(actions: &vector<Action>): bool {
+    public fun contains_manager_action(actions: &vector<Action>): bool {
         vector::contains(actions, &manager())
     }
 
     public fun is_manager_action<Action>(): bool {
-        encode::type_name<Action>() == encode::type_name<MANAGER>()
+        encode::is_same_type<Action, MANAGER>()
     }
 
     public fun is_manager_action_(action: &Action): bool {
@@ -187,32 +210,9 @@ module ownership::action {
         action.inner == encode::type_name<ANY>()
     }
 
-    public fun can_act_as<P>(actions: &vector<Action>): bool {
-        if (can_act_as_admin(actions) || can_act_as_manager(actions)) {
-            return true
-        };
-
-        if (is_any<P>() && vector::length(actions) > 0) { return true };
-
-        let type_name = encode::type_name<P>();
-        let i = 0;
-        while (i < vector::length(actions)) {
-            let action = vector::borrow(actions, i);
-            if (action.inner == type_name) {  return true };
-            i = i + 1;
-        };
-
-        false
-    }
-
-    public fun can_act_as_excluding_manager<P>(actions: &vector<Action>): bool {
-        if (can_act_as_manager(actions)) { return false };
-        can_act_as<P>(actions)
-    }
-
     #[test_only]
-    public fun new_for_testing<P>(): Action {
-        new<P>()
+    public fun new_for_testing<A>(): Action {
+        new<A>()
     }
 }
 

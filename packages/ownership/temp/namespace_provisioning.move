@@ -5,7 +5,7 @@
 
 // This validity-checks should be used by modules to assert the correct permissions are present.
 
-module ownership::client {
+module ownership::namespace_provisioning {
     use std::vector;
 
     use sui::dynamic_field;
@@ -19,22 +19,6 @@ module ownership::client {
 
     // Error enums
     const ENO_PROVISION_AUTHORITY: u64 = 0;
-
-    // Defaults to `true` if the owner does not exist
-    public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_owner<Action>(uid, auth)
-    }
-
-    // If this is initialized, module authority exists and is always the native module (the module
-    // that issued the object). I.e., the hash-address corresponding to `0x599::my_module::Witness`.
-    public fun can_act_as_package<Action>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_package<Action>(uid, auth)
-    }
-
-    /// Defaults to `false` if transfer authority is not set.
-    public fun can_act_as_transfer_auth<Action>(uid: &UID, auth: &TxAuthority): bool {
-        ownership::can_act_as_transfer_auth<Action>(uid, auth)
-    }
 
     // Also checks to see if a namespace has previously been provisioned in this UID
     public fun can_borrow_uid_mut(uid: &UID, auth: &TxAuthority): bool {

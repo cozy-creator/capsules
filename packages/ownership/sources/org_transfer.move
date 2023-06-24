@@ -1,7 +1,7 @@
-// Same as simple-transfer, but with ADMIN intead of TRANSFER as the requested action.
+// Same as simple-transfer, but with ADMIN intead of TRANSFER as the needed action.
 // This exists for Organization, so that an owner doesn't carelessly grant the 'TRANSFER' action
-// to an agent, and then the TRANSFER agent takes over the Organization object by transfer it to
-// itself.
+// to an agent, and then the TRANSFER agent takes over the Organization object by transfering
+// ownership to itself.
 
 module ownership::org_transfer {
     use std::option;
@@ -17,8 +17,8 @@ module ownership::org_transfer {
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
 
-    // Package Witness
-    struct Witness has drop { } 
+    // Importing modules: please use this type as your transfer authority
+    struct OrgTransfer has drop { }
 
     // Convenience function
     public fun transfer_to_object<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
@@ -36,7 +36,7 @@ module ownership::org_transfer {
     public fun transfer(uid: &mut UID, new_owner: address, auth: &TxAuthority) {
         assert!(ownership::can_act_as_owner<ADMIN>(uid, auth), ENO_OWNER_AUTHORITY);
         
-        let auth = tx_authority::add_type(&Witness {}, auth);
+        let auth = tx_authority::add_type(&OrgTransfer {}, auth);
         ownership::transfer(uid, option::some(new_owner), &auth);
     }
 }
