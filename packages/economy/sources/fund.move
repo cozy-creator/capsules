@@ -37,15 +37,18 @@
 // Answer: no
 
 module economy::fund {
+    use std::option::Option;
+
     use sui::balance::{Self, Balance, Supply};
     use sui::coin::{Self, CoinMetadata};
     use sui::object::{Self, UID};
+    use sui::url::Url;
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    use ownership::ownership;
-    use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::org_transfer::Witness as OrgTransfer;
+    // use ownership::ownership;
+    // use ownership::tx_authority::{Self, TxAuthority};
+    // use ownership::org_transfer::Witness as OrgTransfer;
 
     use economy::account::{Self, Account, WITHDRAW};
     use economy::queue::{Self, Queue};
@@ -100,10 +103,10 @@ module economy::fund {
         fund: &mut Fund<S, A>,
         addr: address,
         asset: Balance<A>,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ) {
         if (!fund.config.public_purchase) {
-            assert!(ownership::can_act_as_owner<PURCHASE>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
+            // assert!(ownership::can_act_as_owner<PURCHASE>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
         };
 
         queue::deposit(&mut fund.asset_queue, addr, asset);
@@ -112,9 +115,9 @@ module economy::fund {
     public fun cancel_purchase<S, A>(
         fund: &mut Fund<S, A>,
         addr: address,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ): Balance<A> {
-        assert!(tx_authority::can_act_as_address<WITHDRAW>(addr, auth), ENO_WITHDRAW_AUTHORITY);
+        // assert!(tx_authority::can_act_as_address<WITHDRAW>(addr, auth), ENO_WITHDRAW_AUTHORITY);
 
         queue::cancel_deposit(&mut fund.asset_queue, addr)
     }
@@ -122,10 +125,10 @@ module economy::fund {
     public fun instant_purchase<S, A>(
         fund: &mut Fund<S, A>,
         asset: Balance<A>,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ): Balance<S> {
         if (!fund.config.public_purchase) {
-            assert!(ownership::can_act_as_owner<PURCHASE>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
+            // assert!(ownership::can_act_as_owner<PURCHASE>(&fund.id, auth), ENO_PURCHASE_AUTHORITY);
         };
         assert!(fund.config.instant_purchase, EINSTANT_PURCHASE_DISABLED);
 
@@ -136,14 +139,14 @@ module economy::fund {
 
     // ============= Redeem Shares =============
 
-    public fun queue_redeem(
+    public fun queue_redeem<S, A>(
         fund: &mut Fund<S, A>,
         addr: address,
         shares: Balance<S>,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ) { 
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
+            // assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
         };
 
         queue::deposit(&mut fund.share_queue, addr, shares);
@@ -152,10 +155,10 @@ module economy::fund {
     public fun cancel_redeem<S, A>(
         fund: &mut Fund<S, A>,
         addr: address,
-        auth: &TxAuthority
-    ): Balance<S> {
+        // auth: &TxAuthority
+    ): Balance<A> {
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<WITHDRAW>(&fund.id, auth), ENO_WITHDRAW_AUTHORITY);
+            // assert!(ownership::can_act_as_owner<WITHDRAW>(&fund.id, auth), ENO_WITHDRAW_AUTHORITY);
         };
 
         queue::cancel_deposit(&mut fund.asset_queue, addr)
@@ -164,10 +167,10 @@ module economy::fund {
     public fun instant_redeem<S, A>(
         fund: &mut Fund<S, A>,
         shares: Balance<S>,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ): Balance<A> {
         if (!fund.config.public_redeems) {
-            assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
+            // assert!(ownership::can_act_as_owner<REDEEM>(&fund.id, auth), ENO_REDEEM_AUTHORITY);
         };
         assert!(fund.config.instant_redeem, EINSTANT_REDEEM_DISABLED);
 
@@ -192,13 +195,13 @@ module economy::fund {
      }
 
     public fun asset_to_shares<S, T>(fund: &Fund<S, T>, asset: u64): u64 { 
-        queue::ratio_conversion(asset, balance::supply_value(&fund.total_shares, fund.net_assets))
+        queue::ratio_conversion(asset, balance::supply_value(&fund.total_shares), fund.net_assets)
     }
 
     // ============= Fund Manager Interface =============
     
     // Can only be called by a package's init function on publish because otw is a one-time-witness
-    public fun create<S: drop>(
+    public fun create<S: drop, A>(
         otw: S,
         decimals: u8,
         symbol: vector<u8>,
@@ -206,13 +209,14 @@ module economy::fund {
         description: vector<u8>,
         icon_url: Option<Url>,
         ctx: &mut TxContext
-    ): (Fund<S>, CoinMetadata<S>) {
+    ): (Fund<S, A>, CoinMetadata<S>) {
         let (treasury_cap, metadata) = 
             coin::create_currency(otw, decimals, symbol, name, description, icon_url, ctx);
         let supply = coin::treasury_into_supply(treasury_cap);
 
         let fund = Fund {
             id: object::new(ctx),
+            net_assets: 0,
             total_shares: supply,
             share_queue: queue::new(ctx),
             asset_queue: queue::new(ctx),
@@ -238,46 +242,54 @@ module economy::fund {
     // inside of another object. In this case, it reverts to referential authority, meaning anyone
     // with access to the fund can do whatever they want to it.
     public fun return_and_share<S, A>(fund: Fund<S, A>, owner: address) {
-        let auth = tx_authority::begin_with_package_witness(&Witness {});
-        let typed_id = typed_id::new(&fund);
-        ownership::as_shared_object<Fund, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
+        // let auth = tx_authority::begin_with_package_witness(&Witness {});
+        // let typed_id = typed_id::new(&fund);
+        // ownership::as_shared_object<Fund, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
         transfer::share_object(fund);
     }
 
-    public fun destroy(fund: Fund<S, A>, auth: &TxAuthority): Balance<A> {
-        assert!(ownership::can_act_as_owner<ADMIN>(&fund.id, auth), ENOT_FUND_OWNER);
+    // public fun destroy<S, A>(
+    //     fund: Fund<S, A>,
+    //     // auth: &TxAuthority
+    // ): Balance<A> {
+    //     // assert!(ownership::can_act_as_owner<ADMIN>(&fund.id, auth), ENOT_FUND_OWNER);
 
-        let Fund { id, total_shares, net_assets: _, share_queue, asset_queue, config: _ } = fund;
-        object::delete(id);
-        let share_balance = queue::destroy(share_queue);
-        balance::decrease_supply(&mut total_shares, share_balance);
-        balance::destroy_supply(total_shares);
-        queue::destroy(asset_queue)
-    }
+    //     let Fund { id, total_shares, net_assets: _, share_queue, asset_queue, config: _ } = fund;
+    //     object::delete(id);
+    //     let share_balance = queue::destroy(share_queue);
+    //     balance::decrease_supply(&mut total_shares, share_balance);
+
+    //     balance::destroy_supply(total_shares);
+
+    //     queue::destroy(asset_queue)
+    // }
 
     // This adds funds, to meet withdrawal requests
-    public fun deposit_assets_as_manager<S, A>(fund: &mut Fund<S, A>, balance: Balance<A>, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+    public fun deposit_assets_as_manager<S, A>(fund: &mut Fund<S, A>, balance: Balance<A>, /* auth: &TxAuthority */) {
+        // assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
 
         queue::deposit_directly(&mut fund.asset_queue, balance);
     }
 
     // This removes funds, so that the fund-manager can deploy them
-    public fun withdraw_assets_as_manager(fund: &mut Fund<S, A>, amount: u64): Balance<T> { 
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+    public fun withdraw_assets_as_manager<S, A>(fund: &mut Fund<S, A>, amount: u64): Balance<A> { 
+        // assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
 
         queue::withdraw_directly(&mut fund.asset_queue, amount)
     }
 
-    public fun process_orders<S, A>(fund: &mut Fund<S, A>, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+    public fun process_orders<S, A>(
+        fund: &mut Fund<S, A>,
+        // auth: &TxAuthority
+    ) {
+        // assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
 
         let total_deposits = queue::deposit_input_mint_output(
             &mut fund.asset_queue,
             &mut fund.share_queue,
             fund.net_assets,
-            balance::supply_value(&fund.supply),
-            &mut fund.supply);
+            balance::supply_value(&fund.total_shares),
+            &mut fund.total_shares);
         
         fund.net_assets = fund.net_assets + total_deposits;
 
@@ -285,8 +297,8 @@ module economy::fund {
             &mut fund.asset_queue,
             &mut fund.share_queue,
             fund.net_assets,
-            balance::supply_value(&fund.supply),
-            &mut fund.supply);
+            balance::supply_value(&fund.total_shares),
+            &mut fund.total_shares);
         
         fund.net_assets = fund.net_assets - total_withdrawals;
     }
@@ -299,21 +311,25 @@ module economy::fund {
     // people will be able to buy in at a discount.
     // - If net_assets is overestimated, then fund-holders redeeming shares will be overpaid, and people
     // will be able to buy in at a premium.
-    public fun update_net_assets<S, T>(fund: &mut Fund<S, T>, net_assets: u64, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+    public fun update_net_assets<S, T>(
+        fund: &mut Fund<S, T>,
+        net_assets: u64,
+        // auth: &TxAuthority
+    ) {
+        // assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
 
         fund.net_assets = net_assets;
     }
 
-    public fun update_config(
-        fund: &mut Fund<S, T>,
+    public fun update_config<S, A>(
+        fund: &mut Fund<S, A>,
         public_purchase: bool,
         public_redeems: bool,
         instant_purchase: bool,
         instant_redeem: bool,
-        auth: &TxAuthority
+        // auth: &TxAuthority
     ) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        // assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
 
         fund.config = Config {
             public_purchase,
@@ -333,7 +349,7 @@ module economy::fund {
 // Ideally Queue would be a pure data-type; I wish we didn't need to use ctx or generate object-ids
 // to create it.
 module economy::queue {
-    use sui::balance::{Self, Balance};
+    use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
     use sui::linked_table::{Self as map, LinkedTable as Map};
 
@@ -376,7 +392,7 @@ module economy::queue {
         let Queue { incoming, balance, outgoing } = queue;
 
         map::destroy_empty(incoming);
-        balance::destroy_empty(balance);
+        balance::destroy_zero(balance);
         map::destroy_empty(outgoing);
     }
 
@@ -403,7 +419,7 @@ module economy::queue {
     // ======== Direct API =========
 
     public fun deposit_directly<T>(queue: &mut Queue<T>, balance: Balance<T>) {
-        balance::join(&mut queue.balance, balance)
+        balance::join(&mut queue.balance, balance);
     }
 
     public fun withdraw_directly<T>(queue: &mut Queue<T>, amount: u64): Balance<T> {
