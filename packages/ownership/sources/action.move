@@ -43,14 +43,14 @@ module ownership::action {
     //
     // That is, everything in `actions` that is outside of the `filter` will be removed
     public(friend) fun intersection(actions: &vector<Action>, filter: &vector<Action>): vector<Action> {
-        if (contains_admin_action(filter)) { return *actions };
+        if (contains_admin(filter)) { return *actions };
 
-        if (contains_manager_action(filter)) {
-            if (contains_admin_action(actions)) { return vector[manager()] }; // Downgrade to manager
+        if (contains_manager(filter)) {
+            if (contains_admin(actions)) { return vector[manager()] }; // Downgrade to manager
             return *actions
         };
 
-        if (contains_admin_action(actions) || contains_manager_action(actions)) { 
+        if (contains_admin(actions) || contains_manager(actions)) { 
             return *filter
         };
 
@@ -88,7 +88,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (contains_admin_action(existing)) { return };
+        if (contains_admin(existing)) { return };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -108,7 +108,7 @@ module ownership::action {
         let (admin, manager) = (admin(), manager());
 
         // This prevents accidental action downgrades
-        if (contains_admin_action(existing)) { return *existing };
+        if (contains_admin(existing)) { return *existing };
 
         // These superseed and replace all existing actions
         if (vector::contains(&new, &admin)) {
@@ -132,8 +132,8 @@ module ownership::action {
        };
     }
 
-    public fun contains_action<Act>(actions: &vector<Action>): bool {
-        if (contains_admin_action(actions) || contains_manager_action(actions)) {
+    public fun contains<Act>(actions: &vector<Action>): bool {
+        if (contains_admin(actions) || contains_manager(actions)) {
             return true
         };
 
@@ -150,9 +150,9 @@ module ownership::action {
         false
     }
 
-    public fun contains_action_excluding_manager<A>(actions: &vector<Action>): bool {
-        if (contains_manager_action(actions)) { return false };
-        contains_action<A>(actions)
+    public fun contains_excluding_manager<Act>(actions: &vector<Action>): bool {
+        if (contains_manager(actions)) { return false };
+        contains<Act>(actions)
     }
 
     // ========= Special System-Level Actions =========
@@ -178,7 +178,7 @@ module ownership::action {
         Action { inner: encode::type_name<MANAGER>() }
     }
 
-    public fun contains_admin_action(actions: &vector<Action>): bool {
+    public fun contains_admin(actions: &vector<Action>): bool {
         vector::contains(actions, &admin())
     }
 
@@ -190,7 +190,7 @@ module ownership::action {
         action.inner == encode::type_name<ADMIN>()
     }
 
-    public fun contains_manager_action(actions: &vector<Action>): bool {
+    public fun contains_manager(actions: &vector<Action>): bool {
         vector::contains(actions, &manager())
     }
 

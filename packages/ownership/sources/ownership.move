@@ -129,7 +129,7 @@ module ownership::ownership {
             if (option::is_none(&ownership.owner)) true
             else {
                 let owner = *option::borrow(&ownership.owner);
-                tx_authority::can_act_as_object<Action>(
+                tx_authority::can_act_as_address_on_object<Action>(
                     owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -152,8 +152,8 @@ module ownership::ownership {
     public fun can_act_as_declaring_package_<T: key, Action>(obj: &T, auth: &TxAuthority): bool {
         let type = struct_tag::get<T>();
         let package_id = struct_tag::package_id(&type);
-        let id = object::uid_to_inner(obj);
-        tx_authority::can_act_as_package_on_object_<Action>(package_id, type, id, auth)
+        let id = object::id(obj);
+        tx_authority::can_act_as_package_on_object_<Action>(package_id, &type, &id, auth)
     }
 
     /// Defaults to `false` if transfer authority is not set.
@@ -182,13 +182,13 @@ module ownership::ownership {
 
     // Checks all instances of why an agent needs mutable access to a UID
     // TO DO: make this useful
-    public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
-        if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
-        if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+    // public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+    //     if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
+    //     if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
+    //     if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
 
-        false
-    }
+    //     false
+    // }
 
     // TO DO: make this useful
     public fun can_borrow_uid_mut(_uid: &UID, _auth: &TxAuthority): bool {
@@ -285,7 +285,7 @@ module ownership::ownership {
     public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
         assert!(can_act_as_transfer_auth<FREEZE>(uid, auth), ENO_TRANSFER_AUTHORITY);
 
-        dynamic_field2::drop(uid, Frozen { });
+        dynamic_field2::drop<Frozen, bool>(uid, Frozen { });
     }
 
     public fun is_frozen(uid: &UID): bool {

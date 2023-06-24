@@ -46,11 +46,15 @@ module economy::fund {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
+    use sui_utils::typed_id;
+    use sui_utils::immutable;
+
+    use ownership::action::ADMIN;
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::org_transfer::OrgTransfer;
 
-    use economy::account::{Self, Account, WITHDRAW};
+    use economy::account::WITHDRAW;
     use economy::queue::{Self, Queue};
 
     // Error constants
@@ -60,7 +64,7 @@ module economy::fund {
     const EINSTANT_PURCHASE_DISABLED: u64 = 3;
     const EINSTANT_REDEEM_DISABLED: u64 = 4;
     const ENOT_FUND_OWNER: u64 = 5;
-    const ENOT_FUND_MANAGER: u64 = 6;
+    const ENOT_MANAGE_FUND: u64 = 6;
 
     // `S` is the share-type of the fund, and `T` is the type of currency it is priced in
     // For example 'BITO' might be the fund, and 'USDC' is the currency.
@@ -238,39 +242,44 @@ module economy::fund {
     // inside of another object. In this case, it reverts to referential authority, meaning anyone
     // with access to the fund can do whatever they want to it.
     public fun return_and_share<S, A>(fund: Fund<S, A>, owner: address) {
-        let auth = tx_authority::begin_with_package_witness(&Witness {});
+        let auth = tx_authority::begin_with_package_witness(Witness { });
         let typed_id = typed_id::new(&fund);
-        ownership::as_shared_object<Fund, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
+        ownership::as_shared_object<Fund<S, A>, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
         transfer::share_object(fund);
     }
 
-    public fun destroy<S, A>(fund: Fund<S, A>,auth: &TxAuthority): Balance<A> {
+    public fun destroy<S, A>(fund: Fund<S, A>,auth: &TxAuthority, ctx: &mut TxContext): Balance<A> {
         assert!(ownership::can_act_as_owner<ADMIN>(&fund.id, auth), ENOT_FUND_OWNER);
 
         let Fund { id, total_shares, net_assets: _, share_queue, asset_queue, config: _ } = fund;
         object::delete(id);
         let share_balance = queue::destroy(share_queue);
         balance::decrease_supply(&mut total_shares, share_balance);
-        balance::destroy_supply(total_shares);
+
+        // We cannot destroy Supply for now. Instead, we will discard it inside of an immutable wrapper.
+        // This way, Supply<T> still exists on-chain, but can never be modified again.
+        // balance::destroy_supply(total_shares);
+        immutable::freeze_(total_shares, true, ctx);
+
         queue::destroy(asset_queue)
     }
 
     // This adds funds, to meet withdrawal requests
     public fun deposit_as_manager<S, A>(fund: &mut Fund<S, A>, balance: Balance<A>, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        assert!(ownership::can_act_as_owner<MANAGE_FUND>(&fund.id, auth), ENOT_MANAGE_FUND);
 
         queue::direct_deposit(&mut fund.asset_queue, balance);
     }
 
     // This removes funds, so that the fund-manager can deploy them
     public fun withdraw_as_manager<S, A>(fund: &mut Fund<S, A>, amount: u64, auth: &TxAuthority): Balance<A> { 
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        assert!(ownership::can_act_as_owner<MANAGE_FUND>(&fund.id, auth), ENOT_MANAGE_FUND);
 
         queue::direct_withdraw(&mut fund.asset_queue, amount)
     }
 
     public fun process_orders<S, A>(fund: &mut Fund<S, A>, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        assert!(ownership::can_act_as_owner<MANAGE_FUND>(&fund.id, auth), ENOT_MANAGE_FUND);
 
         let total_inflows = queue::deposit_input_mint_output(
             &mut fund.asset_queue,
@@ -301,7 +310,7 @@ module economy::fund {
     // - If net_assets is overestimated, then fund-holders redeeming shares will be overpaid, and people
     // will be able to buy in at a premium.
     public fun update_net_assets<S, T>(fund: &mut Fund<S, T>, net_assets: u64, auth: &TxAuthority) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        assert!(ownership::can_act_as_owner<MANAGE_FUND>(&fund.id, auth), ENOT_MANAGE_FUND);
 
         fund.net_assets = net_assets;
     }
@@ -314,7 +323,7 @@ module economy::fund {
         instant_redeem: bool,
         auth: &TxAuthority
     ) {
-        assert!(ownership::can_act_as_owner<FUND_MANAGER>(&fund.id, auth), ENOT_FUND_MANAGER);
+        assert!(ownership::can_act_as_owner<MANAGE_FUND>(&fund.id, auth), ENOT_MANAGE_FUND);
 
         fund.config = Config {
             public_purchase,
@@ -331,6 +340,10 @@ module economy::fund {
     // purchase with coin
     // redeem to account
     // redeem to coin
+}
+
+module economy::fund_helper {
+    
 }
 
 // Stake Pool object: {

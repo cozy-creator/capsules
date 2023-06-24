@@ -1,5 +1,8 @@
 module economy::account {
+    use sui::balance::Balance;
     use sui::object::UID;
+
+    use ownership::tx_authority::{Self, TxAuthority};
 
     // error constants
     const ENO_PACKAGE_AUTHORITY: u64 = 0;
@@ -41,15 +44,15 @@ module economy::account {
     // called by (1) on-chain, by the package-itself, using a Witness struct, or (2) off-chain, by
     // whoever owns the Organization object that contains the package.
 
-    public fun freeze<T>(account: &mut Account<T>, auth: &TxAuthority) {
+    public fun freeze_<T>(account: &mut Account<T>, auth: &TxAuthority) {
         assert!(tx_authority::can_act_as_package<T, FREEZE>(auth), ENO_PACKAGE_AUTHORITY);
 
-        coin.frozen = true;
+        account.frozen = true;
     }
 
     public fun unfreeze<T>(account: &mut Account<T>, auth: &TxAuthority) {
         assert!(tx_authority::can_act_as_package<T, FREEZE>(auth), ENO_PACKAGE_AUTHORITY);
 
-        coin.frozen = false;
+        account.frozen = false;
     }
 }

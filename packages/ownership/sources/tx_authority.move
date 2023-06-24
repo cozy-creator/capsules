@@ -46,14 +46,14 @@ module ownership::tx_authority {
         new_internal(encode::type_into_address<T>())
     }
 
-    public fun begin_with_single_use(single_use: SingleUseAction): TxAuthority {
-        let (principal, action) = action::consume_single_use(single_use);
+    // public fun begin_with_single_use(single_use: SingleUseAction): TxAuthority {
+    //     let (principal, action) = action::consume_single_use(single_use);
 
-        TxAuthority {
-            principal_actions: vec_map2::new(principal, vector[action]),
-            package_org: vec_map::empty() 
-        }
-    }
+    //     TxAuthority {
+    //         principal_actions: vec_map2::new(principal, vector[action]),
+    //         package_org: vec_map::empty() 
+    //     }
+    // }
 
     // A 'package witness' is any struct with the name 'Witness' and the `drop` ability.
     // The module_name is unimportant; only the package_id matters. Effectively this means
@@ -132,7 +132,7 @@ module ownership::tx_authority {
         if (option::is_none(&set_maybe)) { return false };
         let set = option::destroy_some(set_maybe);
 
-        action::can_act_as<Action>(action_set::general(&set))
+        action::contains<Action>(action_set::general(&set))
     }
 
     // `Package` can be any type declared by the package. Example: 0x599::my_module::StructName
@@ -186,7 +186,7 @@ module ownership::tx_authority {
         if (option::is_none(&set_maybe)) { return false };
         let set = option::destroy_some(set_maybe);
 
-        action::can_act_as_manager(action_set::general(&set))
+        action::contains_manager(action_set::general(&set))
     }
 
     public fun can_act_as_package_excluding_manager<T, Action>(auth: &TxAuthority): bool {
@@ -224,20 +224,20 @@ module ownership::tx_authority {
         let set = option::destroy_some(set_maybe);
 
         // Check against general actions
-        if (action::can_act_as<Action>(action_set::general(&set))) { return true };
+        if (action::contains<Action>(action_set::general(&set))) { return true };
 
         // Check against type actions
         let type_actions_maybe = vec_map2::match_struct_tag_maybe(action_set::on_types(&set), type);
         if (option::is_some(&type_actions_maybe)) {
             let type_actions = option::destroy_some(type_actions_maybe);
-            if (action::can_act_as<Action>(&type_actions)) { return true };
+            if (action::contains<Action>(&type_actions)) { return true };
         };
 
         // Check against object actions
         let object_actions_maybe = vec_map2::get_maybe(action_set::on_objects(&set), object_id);
         if (option::is_some(&object_actions_maybe)) {
             let object_actions = option::destroy_some(object_actions_maybe);
-            if (action::can_act_as<Action>(&object_actions)) { return true };
+            if (action::contains<Action>(&object_actions)) { return true };
         };
 
         false
@@ -372,13 +372,11 @@ module ownership::tx_authority {
 
         // Delegation cannot expand the actions that an agent already has; it can merely extend a
         // subset of its existing actions to a new principal
-        let principal_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &agent, fallback);
-        let filtered_actions = action::intersection(
-            &new_actions, action_set::general(principal_actions));
+        let agent_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &agent, fallback);
+        let filtered_actions = action::intersection(&new_actions, action_set::general(agent_actions));
 
-        let principal_actions = vec_map2::borrow_mut_fill(
-            &mut new_auth.principal_actions, &principal, fallback);
-        action::add(action_set::general_mut(principal_actions), filtered_actions);
+        let principal_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &principal, fallback);
+        action_set::add_general_(principal_actions, filtered_actions);
 
         new_auth
     }

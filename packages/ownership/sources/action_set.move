@@ -68,6 +68,10 @@ module ownership::action_set {
         vector2::push_back_unique(&mut set.general, action::new<Action>());
     }
 
+    public(friend) fun add_general_(set: &mut ActionSet, actions: vector<Action>) {
+        vector2::merge(&mut set.general, actions);
+    }
+
     public(friend) fun remove_general<Action>(set: &mut ActionSet) {
         vector2::remove_maybe(&mut set.general, &action::new<Action>());
     }
@@ -154,17 +158,17 @@ module ownership::action_set {
     // In the future, these could also be used to compensate for Sui's lack of native support for
     // multi-party transactions.
 
-    struct SingleUseActions has store, drop {
-        principal: address,
-        actions: ActionSet
-    }
+    // struct SingleUseActions has store, drop {
+    //     principal: address,
+    //     actions: ActionSet
+    // }
 
-    public(friend) fun create_single_use(principal: address, actions: ActionSet): SingleUseActions {
-        SingleUseActions { principal, actions }
-    }
+    // public(friend) fun create_single_use(principal: address, actions: ActionSet): SingleUseActions {
+    //     SingleUseActions { principal, actions }
+    // }
 
-    public(friend) fun consume_single_use(single_use: SingleUseActions): (address, ActionSet) {
-        let SingleUseActions { principal, actions } = single_use;
-        (principal, actions)
-    }
+    // public(friend) fun consume_single_use(single_use: SingleUseActions): (address, ActionSet) {
+    //     let SingleUseActions { principal, actions } = single_use;
+    //     (principal, actions)
+    // }
 }
