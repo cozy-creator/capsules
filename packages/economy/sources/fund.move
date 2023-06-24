@@ -26,7 +26,7 @@
 // issued or destroyed. In the future, at the manager's discrition, they may do a secondary offering
 // or buy-back shares if they are trading at a discount.
 
-module economy::shares {
+module economy::fund {
     // `S` is the share-type of the fund, and `T` is the type of currency it is priced in
     // For example 'BITO' might be the fund, and 'USDC' is the currency.
     // In this case, you would deposit Balance<USDC> to receive Balance<BITO>.
@@ -36,20 +36,25 @@ module economy::shares {
     //
     // Sometimes deposits can be accepted right away, othertimes not
     //
-    // Root-level, shared object
-    struct Fund<phantom S, phantom A> has key {
+    // Root-level, shared object or stored object
+    struct Fund<phantom S, phantom A> has key, store {
         id: UID,
         total_shares: Supply<S>, // also used to issue and redeem shares
         net_assets: u64, // denominated in `T`
         share_queue: Queue<S>,
         asset_queue: Queue<A>,
+        config: Config
+    }
+
+    // Configurations for the fund. Can be changed anytime by the fund-owner
+    struct Config has store, copy, drop {
         anyone_can_deposit: bool,
         anyone_can_withdraw: bool,
         instant_deposit: bool,
         instant_withdraw: bool
     }
 
-    // action structs
+    // Action types
     struct DEPOSIT {}
     struct WITHDRAW {}
 
@@ -118,8 +123,55 @@ module economy::shares {
 
     // ============= Fund Manager Interface =============
     
-    // Can only be called by a package's init function on publish
-    public fun initialize<S: drop>(otw: S, ctx: &mut TxContext) {
+    // Can only be called by a package's init function on publish because otw is a one-time-witness
+    public fun create<S: drop>(
+        otw: S,
+        decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
+        ctx: &mut TxContext
+    ): (Fund<S>, CoinMetadata<S>) {
+        let (treasury_cap, metadata) = 
+            coin::create_currency(otw, decimals, symbol, name, description, icon_url, ctx);
+        let supply = coin::treasury_into_supply(treasury_cap);
+
+        let fund = Fund {
+            id: object::new(ctx),
+            total_shares: supply,
+            share_queue: queue::new(ctx),
+            asset_queue: queue::new(ctx),
+            config: Config {
+                anyone_can_deposit: false,
+                anyone_can_withdraw: false,
+                instant_deposit: false,
+                instant_withdraw: false
+            }
+        };
+
+        (fund, metadata)
+    }
+
+    // Can be called sometime after publish. Funds created with this function cannot be
+    // guaranteed to be unique on `S`; a module can create several Supply<S> and hence
+    // create several funds.
+    public fun create_with_supply() {
+
+    }
+
+    // Adds an owner and shares the fund. Upon creation, a fund-object can either be a root-level
+    // shared object, or it can be a single-writer object, either stored root-level or wrapped
+    // inside of another object. In this case, it reverts to referential authority, meaning anyone
+    // with access to the fund can do whatever they want to it.
+    public fun share() {
+        // TO DO: make sure capsules works even if it's not right...
+
+        let typed_id = typed_id::new(&fund);
+        ownership::as_shared_object<Fund, AdminTransfer>(&mut outlaw.id, typed_id, owner, &auth);
+    }
+
+    public fun destroy() {
 
     }
 
@@ -133,6 +185,9 @@ module economy::shares {
 // Note that queue itself does not enforce any rules on who can deposit and withdraw; a person with a mutable
 // reference to `Queue<T>` can deposit or withdraw to any address.
 // Should we add these restrictions in? Or should we leave it up to the fund manager to enforce?
+//
+// Ideally Queue would be a pure data-type; I wish we didn't need to use ctx or generate object-ids
+// to create it.
 module economy::queue {
     use sui::linked_table::{Self as map, LinkedTable as Map};
 
@@ -144,6 +199,29 @@ module economy::queue {
         balance: Balance<T>,
         outgoing: Map<address, Balance<T>>
     }
+
+    // ======== Creation / Deletion API =========
+
+    public fun new<T>(ctx: &mut TxContext): Queue<T> {
+        Queue {
+            incoming: map::new<address, Balance<T>>(ctx),
+            balance: balance::zero<T>(),
+            outgoing: map::new<address, Balance<T>>(ctx)
+        }
+    }
+
+    public fun destroy_empty<T>(
+        queue: Queue<T>
+    ): (Map<address, Balance<T>>, Balance<T>, Map<address, Balance<T>>) {
+        let Queue { incoming, balance, outgoing } = queue;
+        // TO DO
+    }
+
+    public fun merge_and_destroy<T>(queue: Queue<T>): Balance<T> {
+        // TO DO
+    }
+
+    // ======== Useage API =========
 
     public fun deposit(queue: &mut Queue<T>, owner: address, balance: Balance<T>) {
 
@@ -178,7 +256,12 @@ module economy::queue {
     }
 
     // q_a incoming -> balance, create `S` with `supply` -> q_b outgoing
-    public fun mint_incoming<S, A>(q_a: &mut Queue<A>, q_s: &mut Queue<S>, supply: &mut Supply<S>) {
+    public fun mint_incoming<S, A>(
+        q_a: &mut Queue<A>,
+        q_s: &mut Queue<S>,
+        exchange_rate: u64,
+        supply: &mut Supply<S>
+    ) {
 
     }
 

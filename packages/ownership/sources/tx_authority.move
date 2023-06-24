@@ -205,7 +205,7 @@ module ownership::tx_authority {
     // Ownership calls into these; they use types and object-ids in addition to general actions,
     // which makes it more advanced and allows for delegation
 
-        // Same as above, except it checks against the type and object_id constraints as well
+    // Same as above, except it checks against the type and object_id constraints as well
     public fun can_act_as_object<Action>(
         principal: address,
         struct_tag: &StructTag,

@@ -119,9 +119,10 @@ module ownership::ownership {
         dynamic_field::exists_(uid, Key { })
     }
 
-    // Defaults to `true` if the owner does not exist
+    // Defaults to `true` if the owner does not exist, or if it is not initialized.
+    // That is, without an assigned owner, the reference itself _is_the owner. (Referential authority)
     public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
+        if (!is_initialized(uid)) true
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.owner)) true
@@ -143,6 +144,10 @@ module ownership::ownership {
             tx_authority::can_act_as_object_package_<Action>(
                 package_id, &ownership.type, object::uid_as_inner(uid), auth)
         }
+    }
+
+    public fun can_act_as_package() {
+        
     }
 
     /// Defaults to `false` if transfer authority is not set.
