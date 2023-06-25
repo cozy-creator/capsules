@@ -51,9 +51,9 @@ module ownership::ownership {
     struct Frozen has store, copy, drop { }
 
     // Action type allowing access to the UID
-    struct INITIALIZE {} // Used to initialize objects
+    struct INITIALIZE {} // Used by packages to initialize object they create
     struct UID_MUT {} // Used to access UID_MUT
-    struct TRANSFER {} // Used to perform a transfer (change the owner)
+    struct TRANSFER {} // Used by an object's transfer-authority to transfer the object (change owner).
     struct MIGRATE {} // Used to change (migrate) the transfer-authority
     struct FREEZE {} // Used to freeze the transfer-authority
 

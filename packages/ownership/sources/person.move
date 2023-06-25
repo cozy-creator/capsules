@@ -302,7 +302,7 @@ module ownership::person {
     }
 }
 
-// ======= Helper Functions =======
+// ======= Helper Module =======
 // These are simple pass-through functions; they don't add any new functionality, but they make it
 // easier for external applications to call in without doing client-side composition
 // We call these helper, or convenience functions

@@ -50,7 +50,7 @@ module economy::fund {
     use sui_utils::immutable;
 
     use ownership::action::ADMIN;
-    use ownership::ownership;
+    use ownership::ownership::{Self, INITIALIZE};
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::org_transfer::OrgTransfer;
 
@@ -188,12 +188,13 @@ module economy::fund {
 
     // ============= Getters =============
 
-    // Calculates the value of a share, priced in `T`.
-    public fun shares_to_asset<S, T>(fund: &Fund<S, T>, shares: u64): u64 {
+    // Calculates the value of a share, priced in `A`.
+    public fun shares_to_asset<S, A>(fund: &Fund<S, A>, shares: u64): u64 {
         queue::ratio_conversion(shares, fund.net_assets, balance::supply_value(&fund.total_shares))
-     }
+    }
 
-    public fun asset_to_shares<S, T>(fund: &Fund<S, T>, asset: u64): u64 { 
+    // Calculates the number of shares that can be purchased with `asset`
+    public fun asset_to_shares<S, A>(fund: &Fund<S, A>, asset: u64): u64 { 
         queue::ratio_conversion(asset, balance::supply_value(&fund.total_shares), fund.net_assets)
     }
 
@@ -242,7 +243,7 @@ module economy::fund {
     // inside of another object. In this case, it reverts to referential authority, meaning anyone
     // with access to the fund can do whatever they want to it.
     public fun return_and_share<S, A>(fund: Fund<S, A>, owner: address) {
-        let auth = tx_authority::begin_with_package_witness(Witness { });
+        let auth = tx_authority::begin_with_package_witness<Witness, INITIALIZE>(Witness { });
         let typed_id = typed_id::new(&fund);
         ownership::as_shared_object<Fund<S, A>, OrgTransfer>(&mut fund.id, typed_id, owner, &auth);
         transfer::share_object(fund);
@@ -333,17 +334,19 @@ module economy::fund {
         };
     }
 
-    // ============= Helpers =============
-    // This makes it easier for end-users to work with a fund.
+
+}
+
+// ============= Helper Module =============
+// This makes it easier for end-users to work with a fund.
+
+module economy::fund_helper {
 
     // purchase from account
     // purchase with coin
     // redeem to account
     // redeem to coin
-}
 
-module economy::fund_helper {
-    
 }
 
 // Stake Pool object: {

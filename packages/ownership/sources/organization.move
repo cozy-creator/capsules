@@ -32,10 +32,10 @@ module ownership::organization {
     use sui_utils::typed_id;
     use sui_utils::dynamic_field2;
 
-    use ownership::ownership;
     use ownership::action::ADMIN;
     use ownership::publish_receipt::{Self, PublishReceipt};
     use ownership::rbac::{Self, RBAC};
+    use ownership::ownership::{Self, INITIALIZE};
     use ownership::org_transfer::OrgTransfer;
     use ownership::tx_authority::{Self, TxAuthority};
 
@@ -114,7 +114,7 @@ module ownership::organization {
 
         // Initialize ownership
         let typed_id = typed_id::new(&organization);
-        let auth = tx_authority::begin_with_package_witness(Witness { });
+        let auth = tx_authority::begin_with_package_witness<Witness, INITIALIZE>(Witness { });
         ownership::as_shared_object<Organization, OrgTransfer>(&mut organization.id, typed_id, owner, &auth);
 
         organization

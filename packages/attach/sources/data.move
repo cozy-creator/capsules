@@ -28,7 +28,6 @@ module attach::data {
     use sui_utils::dynamic_field2;
     use sui_utils::encode;
 
-    use ownership::server;
     use ownership::tx_authority::{Self, TxAuthority};
 
     use attach::schema;
@@ -47,16 +46,15 @@ module attach::data {
     struct WRITE {}
 
     // Convenience function using a Witness pattern. 'witness' is the Namespace, and must have
-    // struct-name `Witness
-    public fun set<Namespace: drop, T: store + copy + drop>(
-        witness: Namespace,
+    // struct-name `Witness`
+    public fun set<Namespace, T: store + copy + drop>(
         uid: &mut UID,
         keys: vector<String>,
-        values: vector<T>
+        values: vector<T>,
+        auth: &TxAuthority
     ) {
-        let auth = tx_authority::begin_with_package_witness(witness);
         let namespace_addr = encode::package_id<Namespace>();
-        set_(uid, option::some(namespace_addr), keys, values, &auth);
+        set_(uid, option::some(namespace_addr), keys, values, auth);
     }
 
     // Because of the ergonomics of Sui, all values added must be the same Type. If you have to add mixed types,
@@ -69,7 +67,7 @@ module attach::data {
         values: vector<T>,
         auth: &TxAuthority
     ) {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
         assert!(vector::length(&keys) == vector::length(&values), EINCORRECT_DATA_LENGTH);
 
         let type = schema::simple_type_name<T>();
@@ -85,15 +83,14 @@ module attach::data {
     }
 
     // Convenience function using a Witness pattern. 'witness' is the Namespace
-    public fun deserialize_and_set<Namespace: drop>(
-        witness: Namespace,
+    public fun deserialize_and_set<Namespace>(
         uid: &mut UID,
         data: vector<vector<u8>>,
         fields: vector<vector<String>>,
+        auth: &TxAuthority
     ) {
-        let auth = tx_authority::begin_with_package_witness(witness);
         let namespace_addr = encode::package_id<Namespace>();
-        deserialize_and_set_(uid, option::some(namespace_addr), data, fields, &auth);
+        deserialize_and_set_(uid, option::some(namespace_addr), data, fields, auth);
     }
 
     // This is a powerful function that allows client applications to serialize arbitrary objects
@@ -107,7 +104,7 @@ module attach::data {
         fields: vector<vector<String>>,
         auth: &TxAuthority
     ) {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
         assert!(vector::length(&data) == vector::length(&fields), EINCORRECT_DATA_LENGTH);
         
         let old_types_to_drop = schema::update_object_schema(uid, namespace, fields);
@@ -125,14 +122,13 @@ module attach::data {
     }
 
     // Convenience function using a Witness pattern. 'witness' is the Namespace
-    public fun remove<Namespace: drop>(
-        witness: Namespace,
+    public fun remove<Namespace>(
         uid: &mut UID,
-        keys: vector<String>
+        keys: vector<String>,
+        auth: &TxAuthority
     ) {
-        let auth = tx_authority::begin_with_package_witness(witness);
         let namespace_addr = encode::package_id<Namespace>();
-        remove_(uid, option::some(namespace_addr), keys, &auth);
+        remove_(uid, option::some(namespace_addr), keys, auth);
     }
 
     public fun remove_(
@@ -141,7 +137,7 @@ module attach::data {
         keys: vector<String>,
         auth: &TxAuthority
     ) {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let old_types = schema::remove(uid, namespace, keys);
 
@@ -159,13 +155,12 @@ module attach::data {
     }
 
     // Convenience function using a Witness pattern. 'witness' is the Namespace
-    public fun remove_all<Namespace: drop>(
-        witness: Namespace,
-        uid: &mut UID
+    public fun remove_all<Namespace>(
+        uid: &mut UID,
+        auth: &TxAuthority
     ) {
-        let auth = tx_authority::begin_with_package_witness(witness);
         let namespace_addr = encode::package_id<Namespace>();
-        remove_all_(uid, option::some(namespace_addr), &auth);
+        remove_all_(uid, option::some(namespace_addr), auth);
     }
 
     public fun remove_all_(
@@ -173,7 +168,7 @@ module attach::data {
         namespace: Option<ID>,
         auth: &TxAuthority
     ) {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::remove_all(uid, namespace);
 
@@ -207,40 +202,28 @@ module attach::data {
         dynamic_field::borrow<Key, T>(uid, Key { namespace, key })
     }
 
-    // Convenience function
-    public fun borrow_mut<Namespace: drop, T: store>(
-        _witness: Namespace,
-        uid: &mut UID,
-        key: String
-    ): &mut T {
-        let namespace = option::some(encode::package_id<Namespace>());
-        dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
-    }
-
     // Requires namespace authority to write.
     // The caller must correctly specify the type `T` of the value, and the value must exist, otherwise this
     // will abort.
-    public fun borrow_mut_<T: store>(
+    public fun borrow_mut<T: store>(
         uid: &mut UID,
         namespace: Option<ID>,
         key: String,
         auth: &TxAuthority
     ): &mut T {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field::borrow_mut<Key, T>(uid, Key { namespace, key })
     }
 
-    // Convenience function
-    public fun borrow_mut_fill<Namespace: drop, T: store + drop>(
-        witness: Namespace,
+    public fun borrow_mut_fill<Namespace, T: store + drop>(
         uid: &mut UID,
         key: String,
-        default: T
+        default: T,
+        auth: &TxAuthority
     ): &mut T {
-        let auth = tx_authority::begin_with_package_witness(witness);
-        let namespace_addr = encode::package_id<Namespace>();
-        borrow_mut_fill_(uid, option::some(namespace_addr), key, default, &auth)
+        let package_id = encode::package_id<Namespace>();
+        borrow_mut_fill_(uid, option::some(package_id), key, default, auth)
     }
 
     // Ensures that the specified value exists and is of the specified type by filling it with the default value
@@ -252,7 +235,7 @@ module attach::data {
         default: T,
         auth: &TxAuthority
     ): &mut T {
-        assert!(server::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(namespace, auth), ENO_NAMESPACE_AUTHORITY);
 
         dynamic_field2::borrow_mut_fill<Key, T>(uid, Key { namespace, key }, default)
     }
@@ -273,7 +256,7 @@ module attach::data {
         destination_uid: &mut UID,
         auth: &TxAuthority
     ) {
-        assert!(server::can_act_as_package_opt<WRITE>(destination, auth), ENO_NAMESPACE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package_opt<WRITE>(destination, auth), ENO_NAMESPACE_AUTHORITY);
 
         let (keys, types) = schema::into_keys_types(source_uid, source);
         let i = 0;
@@ -476,8 +459,6 @@ module attach::data_tests {
 
     use sui_utils::typed_id;
 
-    use ownership::client;
-    use ownership::server;
     use ownership::ownership;
     use ownership::tx_authority::{Self, TxAuthority};
 
@@ -501,7 +482,7 @@ module attach::data_tests {
     }
 
     public fun uid_mut(test_object: &mut TestObject, auth: &TxAuthority): &mut UID {
-        assert!(client::can_borrow_uid_mut(&test_object.id, auth), ENOT_OWNER);
+        assert!(ownership::can_borrow_uid_mut(&test_object.id, auth), ENOT_OWNER);
 
         &mut test_object.id
     }

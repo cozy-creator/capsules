@@ -14,8 +14,8 @@ module transfer_system::simple_transfer {
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
 
-    // Witness type
-    struct Witness has drop { } 
+    // Point to this struct as your transfer authority
+    struct SimpleTransfer has drop { } 
 
     // Convenience function
     public fun transfer_to_object<T: key>(uid: &mut UID, obj: &T, auth: &TxAuthority) {
@@ -31,9 +31,9 @@ module transfer_system::simple_transfer {
 
     // Transfer ownership to an arbitrary address
     public fun transfer(uid: &mut UID, new_owner: address, auth: &TxAuthority) {
-        assert!(ownership::has_owner_permission<TRANSFER>(uid, auth), ENO_OWNER_AUTHORITY);
+        assert!(ownership::can_act_as_owner<TRANSFER>(uid, auth), ENO_OWNER_AUTHORITY);
         
-        let auth = tx_authority::add_type(&Witness {}, auth);
+        let auth = tx_authority::add_type(&SimpleTransfer {}, auth);
         ownership::transfer(uid, option::some(new_owner), &auth);
     }
 }

@@ -58,11 +58,11 @@ module ownership::tx_authority {
     // A 'package witness' is any struct with the name 'Witness' and the `drop` ability.
     // The module_name is unimportant; only the package_id matters. Effectively this means
     // that any module within a package can produce the same package Witness.
-    public fun begin_with_package_witness<Witness: drop>(_witness: Witness): TxAuthority {
+    public fun begin_with_package_witness<Witness: drop, Action>(_: Witness): TxAuthority {
         let (package_id, _, struct_name, _)= encode::type_name_decomposed<Witness>();
         assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
 
-        new_internal(object::id_to_address(&package_id))
+        new_internal_<Action>(object::id_to_address(&package_id))
     }
 
     public fun empty(): TxAuthority {
@@ -105,15 +105,18 @@ module ownership::tx_authority {
     //     new_auth
     // }
 
-    public fun add_package_witness<Witness: drop>(_witness: Witness, auth: &TxAuthority): TxAuthority {
-        let (package_id, _, struct_name, _)= encode::type_name_decomposed<Witness>();
+    // We scope this by Action; if you want to pass full permission, give this function the ADMIN
+    // action
+    public fun add_package_witness<Witness: drop, Action>(_: Witness, auth: &TxAuthority): TxAuthority {
+        let (package_id, _, struct_name, _) = encode::type_name_decomposed<Witness>();
         assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
 
         let new_auth = copy_(auth);
         let package_addr = object::id_to_address(&package_id);
-        let actions = action_set::new(vector[action::admin()]);
+        let package_actions = vec_map2::borrow_mut_fill(
+            &mut new_auth.principal_actions, &package_addr, action_set::new(vector[]));
 
-        vec_map2::set(&mut new_auth.principal_actions, &package_addr, actions);
+        action_set::add_general<Action>(package_actions);
 
         new_auth
     }
@@ -338,6 +341,14 @@ module ownership::tx_authority {
     fun new_internal(principal: address): TxAuthority {
         TxAuthority {
             principal_actions: vec_map2::new(principal, action_set::new(vector[action::admin()])),
+            package_org: vec_map::empty()
+        }
+    }
+
+    // Same as above, but scoped to a specific action rather than ADMIN by default
+    fun new_internal_<Action>(principal: address): TxAuthority {
+        TxAuthority {
+            principal_actions: vec_map2::new(principal, action_set::new(vector[action::new<Action>()])),
             package_org: vec_map::empty()
         }
     }
