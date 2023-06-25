@@ -1,30 +1,25 @@
-// Example: I deposit $100 into a pool with $900, now $1,000. I get 10% of the pool's share,
-// that is share = 100.
-// The pool's value increases to $2,000. If I redeem my share, I get $200.
+// NAV (Net Asset Value) = net_assets / total_shares. This is the value of 1 share priced in `A`
 
-// What happens if the net_asset calculation is wrong? Over or under estimate?
-// Can someone else arbitrage it into the right number?
-// We don't want someone to drain it to 0 exploiting a miscalculation
+// - Users purchase shares from a Fund; they exchange their asset `A` for shares `S`
+// - Users can redeem assets from the fund using shares; the exchange shares `S` for asset `A`
+// - The asset <-> share exchange rate is determined by the fund's NAV (Net Asset Value)
 
-// NAV (Net Asset Value) = net_assets / total_shares. This is the redemption value of 1 share,
-// price in `A`
+// - Fund managers can set the rules of the fund. Allowing for public purchases and redemptions,
+// or keep them closed forever, or restrict them to certain parties.
+// - Fund managers can optionally allow for instant purcahses and redemptions, or require a queue
+// and process orders on their own schedule.
+// - Fund managers set the net_assets of the fund, and make funds available for buying back shares
 
-// TO DO: restrict who can deposit into a fund
-// Users deposit currency into a Fund, and receive shares in return
-// Shares can be bought and sold on an orderbook.
-// Shares may trade at a premium or discount versus the fund's NAV
-// Shares can be redeemed for the underlying currency at the fund's current NAV
-// Fund-managers can restrict deposits or withdrawals
-// They may restrict deposits + withdrawals to just certain parties, or they may restrict them
-// altogether.
-//
+// - Shares act like any other Balance<T>; they can be bought and sold an orderbook.
+// - Shares may trade at a premium or discount versus the fund's NAV
+
 // Compared to TradeFi:
-// - Mutual funds: anyone can deposit, anyone can withdraw. Occurs at end of trading day
-// - Open-ended ETFs: only authorized participants (APs) can deposit or withdraw. APs acquire or sell
+// - Mutual funds: anyone can purchase or redeem shares. Orders fulfilled at end of trading day
+// - Open-ended ETFs: only authorized participants (APs) can purchase or redeem. APs acquire or sell
 // shares on an open-market. Deposits and withdrawals occur at end of trading day.
-// - Close-ended ETFs: after the initial IPO (deposits) no one can deposit or withdraw. Shares are not
+// - Close-ended ETFs: after the initial IPO (purchases) no one can purchase or redeem. Shares are not
 // issued or destroyed. In the future, at the manager's discretion, they may do a secondary offering
-// or buy-back shares if they are trading at a discount.
+// to raise more funds, or buy-back shares if their ETF is trading at a discount.
 
 // Decisions:
 // - Should fund-creators be allowed to use their own Supply<S>? This would be more flexible, but would open
@@ -35,6 +30,11 @@
 // - Should fund-managers be allowed to process deposits, but not withdrawals? This gives them more
 // flexibility, but also opens up to potential abuse by fund-managers (again).
 // Answer: no
+
+// TO DO Thoughts:
+// What happens if the net_asset calculation is wrong? Over or under estimate?
+// Can someone else arbitrage it into the right number?
+// We don't want someone to drain it to 0 exploiting a miscalculation
 
 module economy::fund {
     use std::option::Option;
