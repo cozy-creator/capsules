@@ -1,4 +1,4 @@
-import { RawSigner, TransactionBlock } from "@mysten/sui.js";
+import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js";
 import {
   addActionForObjects,
   addActionForType,
@@ -25,6 +25,8 @@ interface EditBabyWithAction {
   agent: RawSigner;
 }
 
+type CallArg = string | TransactionArgument;
+
 async function createAndSharePerson({ signer, guardian }: CreatePerson) {
   const txb = new TransactionBlock();
   const [person] = createPerson(txb, guardian);
@@ -43,72 +45,58 @@ async function createAndDestroyPerson({ signer, guardian }: CreatePerson) {
 }
 
 async function editBabyWithGeneralAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+  const agentAddress = await agent.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addGeneralAction(txb, EDITOR.$typeName, { agent: await agent.getAddress(), auth, person });
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    addGeneralAction(txb, EDITOR.$typeName, { agent: agentAddress, auth, person });
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithTypeAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+  const agentAddress = await agent.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], {
-      agent: await agent.getAddress(),
-      auth,
-      person,
-    });
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], { agent: agentAddress, auth, person });
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithObjectAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+  const agentAddress = await agent.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
-
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
@@ -116,64 +104,45 @@ async function editBabyWithObjectAction({ owner, agent }: EditBabyWithAction) {
   {
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
-
-    addActionForObjects(txb, EDITOR.$typeName, {
-      agent: await agent.getAddress(),
-      auth,
-      person: personId,
-      objects: [babyId],
-    });
+    addActionForObjects(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId, objects: [babyId] });
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithEmptyAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
-
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithRemovedGeneralAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+  const agentAddress = await agent.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addGeneralAction(txb, EDITOR.$typeName, { agent: await agent.getAddress(), auth, person });
-
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    addGeneralAction(txb, EDITOR.$typeName, { agent: agentAddress, auth, person });
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
@@ -182,36 +151,28 @@ async function editBabyWithRemovedGeneralAction({ owner, agent }: EditBabyWithAc
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    removeGeneralActionFromAgent(txb, EDITOR.$typeName, { agent: await agent.getAddress(), auth, person: personId });
+    removeGeneralActionFromAgent(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId });
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithRemovedTypeAction({ owner, agent }: EditBabyWithAction) {
+  const ownerAddress = await owner.getAddress();
+  const agentAddress = await agent.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
+
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], {
-      agent: await agent.getAddress(),
-      auth,
-      person,
-    });
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], { agent: agentAddress, auth, person });
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
@@ -228,26 +189,21 @@ async function editBabyWithRemovedTypeAction({ owner, agent }: EditBabyWithActio
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
-
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+  claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithRemovedObjectAction({ owner, agent }: EditBabyWithAction) {
+  const agentAddress = await agent.getAddress();
+  const ownerAddress = await owner.getAddress();
+
   let personId: string = "",
     babyId: string = "";
 
   {
     const txb = new TransactionBlock();
-    const [person] = createPerson(txb, await owner.getAddress());
-    const [baby] = createBaby(txb, "Initial Baby Name");
+    const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
 
-    returnAndSharePerson(txb, person);
-    returnAndShareBaby(txb, baby);
+    returnAndSharePersonAndBaby(txb, person, baby);
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
@@ -257,10 +213,10 @@ async function editBabyWithRemovedObjectAction({ owner, agent }: EditBabyWithAct
     const [auth] = beginTxAuth(txb);
 
     removeActionForObjectsFromAgent(txb, EDITOR.$typeName, {
-      agent: await agent.getAddress(),
       auth,
       person: personId,
       objects: [babyId],
+      agent: agentAddress,
     });
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
@@ -269,21 +225,30 @@ async function editBabyWithRemovedObjectAction({ owner, agent }: EditBabyWithAct
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    addActionForObjects(txb, EDITOR.$typeName, {
-      agent: await agent.getAddress(),
-      auth,
-      person: personId,
-      objects: [babyId],
-    });
+    addActionForObjects(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId, objects: [babyId] });
 
     const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
   }
 
-  {
-    const txb = new TransactionBlock();
-    const [auth] = claimDelegation(txb, personId);
+  claimDelegationAndEditBaby(agent, personId, babyId);
+}
 
-    editBabyName(txb, { auth, baby: babyId, newName: "New Baby Name" });
-    const _tx = await agent.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
-  }
+function createPersonAndBaby(txb: TransactionBlock, guardian: string, babyName: string) {
+  const [person] = createPerson(txb, guardian);
+  const [baby] = createBaby(txb, babyName);
+
+  return [person, baby];
+}
+
+function returnAndSharePersonAndBaby(txb: TransactionBlock, person: CallArg, baby: CallArg) {
+  returnAndSharePerson(txb, person);
+  returnAndShareBaby(txb, baby);
+}
+
+async function claimDelegationAndEditBaby(signer: RawSigner, person: CallArg, baby: CallArg) {
+  const txb = new TransactionBlock();
+  const [auth] = claimDelegation(txb, person);
+
+  editBabyName(txb, { auth, baby, newName: "New Baby Name" });
+  const _tx = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
 }
