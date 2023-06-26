@@ -1,0 +1,6 @@
+[config]
+rpc = "https://fullnode.devnet.sui.io:443"
+
+[packages]
+CapsuleBaby = { local = "../package" }
+Ownership = { local = "../../../packages/ownership" }

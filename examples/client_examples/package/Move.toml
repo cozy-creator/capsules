@@ -1,0 +1,11 @@
+[package]
+name = "CapsuleBaby"
+version = "0.0.1"
+
+[dependencies]
+SuiUtils = { local = "../../../packages/sui_utils" }
+Ownership = { local = "../../../packages/ownership" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+
+[addresses]
+capsule_baby = "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6"
