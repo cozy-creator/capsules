@@ -13,7 +13,7 @@ export function contains(
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         actions
       ),
     ],
@@ -39,12 +39,12 @@ export function add(txb: TransactionBlock, args: AddArgs) {
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.existing
       ),
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.new
       ),
     ],
@@ -62,12 +62,12 @@ export function intersection(txb: TransactionBlock, args: IntersectionArgs) {
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.actions
       ),
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.filter
       ),
     ],
@@ -85,12 +85,12 @@ export function add_(txb: TransactionBlock, args: Add_Args) {
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.existing
       ),
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.new
       ),
     ],
@@ -113,7 +113,7 @@ export function containsAdmin(
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         actions
       ),
     ],
@@ -131,7 +131,7 @@ export function containsExcludingManager(
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         actions
       ),
     ],
@@ -147,7 +147,7 @@ export function containsManager(
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         actions
       ),
     ],
@@ -224,7 +224,7 @@ export function vecMapIntersection(
       obj(txb, args.self),
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.generalFilter
       ),
       obj(txb, args.specificFilter),

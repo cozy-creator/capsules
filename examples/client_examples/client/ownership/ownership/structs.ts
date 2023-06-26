@@ -1,5 +1,5 @@
 import { Option } from "../../_dependencies/source/0x1/option/structs";
-import { StructTag } from "../../_dependencies/source/0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173/struct-tag/structs";
+import { StructTag } from "../../_dependencies/source/0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946/struct-tag/structs";
 import { bcsSource as bcs } from "../../_framework/bcs";
 import { FieldsWithTypes, Type } from "../../_framework/util";
 import { Encoding } from "@mysten/bcs";
@@ -7,18 +7,18 @@ import { Encoding } from "@mysten/bcs";
 /* ============================== Ownership =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Ownership",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Ownership",
   {
     owner: `0x1::option::Option<address>`,
     transfer_auth: `0x1::option::Option<address>`,
-    type: `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+    type: `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
   }
 );
 
 export function isOwnership(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Ownership"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Ownership"
   );
 }
 
@@ -30,7 +30,7 @@ export interface OwnershipFields {
 
 export class Ownership {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Ownership";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Ownership";
   static readonly $numTypeParams = 0;
 
   readonly owner: string | null;
@@ -84,7 +84,7 @@ export class Ownership {
 /* ============================== Key =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Key",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Key",
   {
     dummy_field: `bool`,
   }
@@ -93,7 +93,7 @@ bcs.registerStructType(
 export function isKey(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Key"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Key"
   );
 }
 
@@ -103,7 +103,7 @@ export interface KeyFields {
 
 export class Key {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Key";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Key";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -131,7 +131,7 @@ export class Key {
 /* ============================== FREEZE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::FREEZE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::FREEZE",
   {
     dummy_field: `bool`,
   }
@@ -140,7 +140,7 @@ bcs.registerStructType(
 export function isFREEZE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::FREEZE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::FREEZE"
   );
 }
 
@@ -150,7 +150,7 @@ export interface FREEZEFields {
 
 export class FREEZE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::FREEZE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::FREEZE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -178,7 +178,7 @@ export class FREEZE {
 /* ============================== Frozen =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Frozen",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Frozen",
   {
     dummy_field: `bool`,
   }
@@ -187,7 +187,7 @@ bcs.registerStructType(
 export function isFrozen(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Frozen"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Frozen"
   );
 }
 
@@ -197,7 +197,7 @@ export interface FrozenFields {
 
 export class Frozen {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::Frozen";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::Frozen";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -225,7 +225,7 @@ export class Frozen {
 /* ============================== INITIALIZE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::INITIALIZE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::INITIALIZE",
   {
     dummy_field: `bool`,
   }
@@ -234,7 +234,7 @@ bcs.registerStructType(
 export function isINITIALIZE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::INITIALIZE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::INITIALIZE"
   );
 }
 
@@ -244,7 +244,7 @@ export interface INITIALIZEFields {
 
 export class INITIALIZE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::INITIALIZE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::INITIALIZE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -274,7 +274,7 @@ export class INITIALIZE {
 /* ============================== MIGRATE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::MIGRATE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::MIGRATE",
   {
     dummy_field: `bool`,
   }
@@ -283,7 +283,7 @@ bcs.registerStructType(
 export function isMIGRATE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::MIGRATE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::MIGRATE"
   );
 }
 
@@ -293,7 +293,7 @@ export interface MIGRATEFields {
 
 export class MIGRATE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::MIGRATE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::MIGRATE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -321,7 +321,7 @@ export class MIGRATE {
 /* ============================== TRANSFER =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::TRANSFER",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::TRANSFER",
   {
     dummy_field: `bool`,
   }
@@ -330,7 +330,7 @@ bcs.registerStructType(
 export function isTRANSFER(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::TRANSFER"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::TRANSFER"
   );
 }
 
@@ -340,7 +340,7 @@ export interface TRANSFERFields {
 
 export class TRANSFER {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::TRANSFER";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::TRANSFER";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -368,7 +368,7 @@ export class TRANSFER {
 /* ============================== UID_MUT =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::UID_MUT",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::UID_MUT",
   {
     dummy_field: `bool`,
   }
@@ -377,7 +377,7 @@ bcs.registerStructType(
 export function isUID_MUT(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::UID_MUT"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::UID_MUT"
   );
 }
 
@@ -387,7 +387,7 @@ export interface UID_MUTFields {
 
 export class UID_MUT {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::ownership::UID_MUT";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::ownership::UID_MUT";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

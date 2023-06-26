@@ -2,13 +2,6 @@ import { PUBLISHED_AT } from "..";
 import { ObjectArg, obj, pure } from "../../_framework/util";
 import { TransactionArgument, TransactionBlock } from "@mysten/sui.js";
 
-export function returnAndShare(txb: TransactionBlock, baby: ObjectArg) {
-  return txb.moveCall({
-    target: `${PUBLISHED_AT}::capsule_baby::return_and_share`,
-    arguments: [obj(txb, baby)],
-  });
-}
-
 export function createBaby(
   txb: TransactionBlock,
   name: string | TransactionArgument
@@ -55,5 +48,12 @@ export function init(txb: TransactionBlock, genesis: ObjectArg) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::capsule_baby::init`,
     arguments: [obj(txb, genesis)],
+  });
+}
+
+export function returnAndShare(txb: TransactionBlock, baby: ObjectArg) {
+  return txb.moveCall({
+    target: `${PUBLISHED_AT}::capsule_baby::return_and_share`,
+    arguments: [obj(txb, baby)],
   });
 }

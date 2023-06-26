@@ -8,7 +8,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-  "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::Witness",
+  "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::Witness",
   {
     dummy_field: `bool`,
   }
@@ -17,7 +17,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
   return (
     type ===
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::Witness"
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::Witness"
   );
 }
 
@@ -27,7 +27,7 @@ export interface WitnessFields {
 
 export class Witness {
   static readonly $typeName =
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::Witness";
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::Witness";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -55,7 +55,7 @@ export class Witness {
 /* ============================== CAPSULE_BABY =============================== */
 
 bcs.registerStructType(
-  "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CAPSULE_BABY",
+  "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CAPSULE_BABY",
   {
     dummy_field: `bool`,
   }
@@ -64,7 +64,7 @@ bcs.registerStructType(
 export function isCAPSULE_BABY(type: Type): boolean {
   return (
     type ===
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CAPSULE_BABY"
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CAPSULE_BABY"
   );
 }
 
@@ -74,7 +74,7 @@ export interface CAPSULE_BABYFields {
 
 export class CAPSULE_BABY {
   static readonly $typeName =
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CAPSULE_BABY";
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CAPSULE_BABY";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -104,7 +104,7 @@ export class CAPSULE_BABY {
 /* ============================== CapsuleBaby =============================== */
 
 bcs.registerStructType(
-  "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CapsuleBaby",
+  "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CapsuleBaby",
   {
     id: `0x2::object::UID`,
     name: `0x1::string::String`,
@@ -114,7 +114,7 @@ bcs.registerStructType(
 export function isCapsuleBaby(type: Type): boolean {
   return (
     type ===
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CapsuleBaby"
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CapsuleBaby"
   );
 }
 
@@ -125,7 +125,7 @@ export interface CapsuleBabyFields {
 
 export class CapsuleBaby {
   static readonly $typeName =
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::CapsuleBaby";
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::CapsuleBaby";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;
@@ -196,7 +196,7 @@ export class CapsuleBaby {
 /* ============================== EDITOR =============================== */
 
 bcs.registerStructType(
-  "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::EDITOR",
+  "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::EDITOR",
   {
     dummy_field: `bool`,
   }
@@ -205,7 +205,7 @@ bcs.registerStructType(
 export function isEDITOR(type: Type): boolean {
   return (
     type ===
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::EDITOR"
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::EDITOR"
   );
 }
 
@@ -215,7 +215,7 @@ export interface EDITORFields {
 
 export class EDITOR {
   static readonly $typeName =
-    "0xef314c6493ec267f9d39bc78895aa30fa254c7fbd49685559cb4d0a98bb9dda6::capsule_baby::EDITOR";
+    "0xc5eb31472393e288d757e8837fc54364487ae649e4abca380de1046e546517bd::capsule_baby::EDITOR";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

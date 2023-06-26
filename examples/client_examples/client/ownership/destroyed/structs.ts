@@ -5,7 +5,7 @@ import { Encoding } from "@mysten/bcs";
 /* ============================== IsDestroyed =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::destroyed::IsDestroyed",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::destroyed::IsDestroyed",
   {
     dummy_field: `bool`,
   }
@@ -14,7 +14,7 @@ bcs.registerStructType(
 export function isIsDestroyed(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::destroyed::IsDestroyed"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::destroyed::IsDestroyed"
   );
 }
 
@@ -24,7 +24,7 @@ export interface IsDestroyedFields {
 
 export class IsDestroyed {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::destroyed::IsDestroyed";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::destroyed::IsDestroyed";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

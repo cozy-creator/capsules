@@ -7,18 +7,18 @@ import { Encoding } from "@mysten/bcs";
 /* ============================== RBAC =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::rbac::RBAC",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::rbac::RBAC",
   {
     principal: `address`,
     agent_role: `0x2::vec_map::VecMap<address, 0x1::string::String>`,
-    role_actions: `0x2::vec_map::VecMap<0x1::string::String, vector<0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action>>`,
+    role_actions: `0x2::vec_map::VecMap<0x1::string::String, vector<0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action>>`,
   }
 );
 
 export function isRBAC(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::rbac::RBAC"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::rbac::RBAC"
   );
 }
 
@@ -30,7 +30,7 @@ export interface RBACFields {
 
 export class RBAC {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::rbac::RBAC";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::rbac::RBAC";
   static readonly $numTypeParams = 0;
 
   readonly principal: string;
@@ -53,7 +53,7 @@ export class RBAC {
       roleActions: VecMap.fromFields<string, Array<Action>>(
         [
           `0x1::string::String`,
-          `vector<0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action>`,
+          `vector<0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action>`,
         ],
         fields.role_actions
       ),

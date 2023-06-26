@@ -22,7 +22,7 @@ export function new_(
     arguments: [
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         contents
       ),
     ],
@@ -90,7 +90,7 @@ export function addActionForTypes(
       obj(txb, args.set),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
     ],
@@ -121,7 +121,7 @@ export function addGeneral_(txb: TransactionBlock, args: AddGeneral_Args) {
       obj(txb, args.set),
       vector(
         txb,
-        `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action`,
+        `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action`,
         args.actions
       ),
     ],
@@ -186,7 +186,7 @@ export function removeActionForTypes(
       obj(txb, args.set),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
     ],
@@ -226,7 +226,7 @@ export function removeAllActionsForTypes(
       obj(txb, args.set),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
     ],

@@ -6,7 +6,7 @@ import { Encoding } from "@mysten/bcs";
 /* ============================== ADMIN =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ADMIN",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ADMIN",
   {
     dummy_field: `bool`,
   }
@@ -15,7 +15,7 @@ bcs.registerStructType(
 export function isADMIN(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ADMIN"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ADMIN"
   );
 }
 
@@ -25,7 +25,7 @@ export interface ADMINFields {
 
 export class ADMIN {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ADMIN";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ADMIN";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -53,7 +53,7 @@ export class ADMIN {
 /* ============================== ANY =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ANY",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ANY",
   {
     dummy_field: `bool`,
   }
@@ -62,7 +62,7 @@ bcs.registerStructType(
 export function isANY(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ANY"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ANY"
   );
 }
 
@@ -72,7 +72,7 @@ export interface ANYFields {
 
 export class ANY {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::ANY";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::ANY";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -100,7 +100,7 @@ export class ANY {
 /* ============================== Action =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action",
   {
     inner: `0x1::string::String`,
   }
@@ -109,7 +109,7 @@ bcs.registerStructType(
 export function isAction(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action"
   );
 }
 
@@ -119,7 +119,7 @@ export interface ActionFields {
 
 export class Action {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::Action";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::Action";
   static readonly $numTypeParams = 0;
 
   readonly inner: string;
@@ -151,7 +151,7 @@ export class Action {
 /* ============================== MANAGER =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::MANAGER",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::MANAGER",
   {
     dummy_field: `bool`,
   }
@@ -160,7 +160,7 @@ bcs.registerStructType(
 export function isMANAGER(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::MANAGER"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::MANAGER"
   );
 }
 
@@ -170,7 +170,7 @@ export interface MANAGERFields {
 
 export class MANAGER {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action::MANAGER";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action::MANAGER";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

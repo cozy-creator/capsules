@@ -86,7 +86,7 @@ export function addActionForTypes(
       pure(txb, args.agent, `address`),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
       obj(txb, args.auth),
@@ -311,7 +311,7 @@ export function removeActionForTypesFromAgent(
       pure(txb, args.agent, `address`),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
       obj(txb, args.auth),
@@ -398,7 +398,7 @@ export function removeAllActionsForTypesFromAgent(
       pure(txb, args.agent, `address`),
       vector(
         txb,
-        `0x3a73bc0427056f5ed45c5689af50415c55b5a2ff31e47939859a2fbece79a173::struct_tag::StructTag`,
+        `0xfcb0f4008277fc0703d09b7e1245918ce5c9b6f9f65a42eed806430903d72946::struct_tag::StructTag`,
         args.types
       ),
       obj(txb, args.auth),

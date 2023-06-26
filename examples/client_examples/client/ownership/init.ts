@@ -18,6 +18,7 @@ export function registerClasses(loader: StructClassLoader) {
   loader.register(action.MANAGER);
   loader.register(actionSet.ActionSet);
   loader.register(txAuthority.TxAuthority);
+  loader.register(publishReceipt.PublishReceipt);
   loader.register(ownership.Ownership);
   loader.register(ownership.Key);
   loader.register(ownership.FREEZE);
@@ -28,10 +29,9 @@ export function registerClasses(loader: StructClassLoader) {
   loader.register(ownership.UID_MUT);
   loader.register(orgTransfer.OrgTransfer);
   loader.register(rbac.RBAC);
-  loader.register(publishReceipt.PublishReceipt);
-  loader.register(organization.Key);
   loader.register(organization.Witness);
   loader.register(organization.Package);
+  loader.register(organization.Key);
   loader.register(organization.ADD_PACKAGE);
   loader.register(organization.ENDORSE);
   loader.register(organization.Endorsement);

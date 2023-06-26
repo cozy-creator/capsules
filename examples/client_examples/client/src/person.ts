@@ -13,7 +13,10 @@ import {
 } from "../ownership/person/functions";
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions";
 import { createBaby, editBabyName, returnAndShare as returnAndShareBaby } from "../capsule-baby/capsule-baby/functions";
-import { CAPSULE_BABY, EDITOR } from "../capsule-baby/capsule-baby/structs";
+import { CapsuleBaby, EDITOR } from "../capsule-baby/capsule-baby/structs";
+import { createdObjects } from "./util";
+import { Person } from "../ownership/person/structs";
+import { baseGasBudget } from "./config";
 
 interface CreatePerson {
   signer: RawSigner;
@@ -27,29 +30,35 @@ interface EditBabyWithAction {
 
 type CallArg = string | TransactionArgument;
 
-async function createAndSharePerson({ signer, guardian }: CreatePerson) {
+export async function createAndSharePerson({ signer, guardian }: CreatePerson) {
   const txb = new TransactionBlock();
   const [person] = createPerson(txb, guardian);
   returnAndSharePerson(txb, person);
 
-  const _tx = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
+  txb.setGasBudget(baseGasBudget);
+  const response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+    options: { showEffects: true },
+  });
 }
 
-async function createAndDestroyPerson({ signer, guardian }: CreatePerson) {
+export async function createAndDestroyPerson({ signer, guardian }: CreatePerson) {
   const txb = new TransactionBlock();
   const [person] = createPerson(txb, guardian);
   const [auth] = beginTxAuth(txb);
   destroyPerson(txb, { person, auth });
 
-  const _tx = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
+  const _tx = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+  });
 }
 
-async function editBabyWithGeneralAction({ owner, agent }: EditBabyWithAction) {
+export async function editBabyWithGeneralAction({ owner, agent }: EditBabyWithAction) {
   const ownerAddress = await owner.getAddress();
   const agentAddress = await agent.getAddress();
 
-  let personId: string = "",
-    babyId: string = "";
+  let personId = "",
+    babyId = "";
 
   {
     const txb = new TransactionBlock();
@@ -59,13 +68,22 @@ async function editBabyWithGeneralAction({ owner, agent }: EditBabyWithAction) {
     addGeneralAction(txb, EDITOR.$typeName, { agent: agentAddress, auth, person });
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
-  claimDelegationAndEditBaby(agent, personId, babyId);
+  await claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
-async function editBabyWithTypeAction({ owner, agent }: EditBabyWithAction) {
+export async function editBabyWithTypeAction({ owner, agent }: EditBabyWithAction) {
   const ownerAddress = await owner.getAddress();
   const agentAddress = await agent.getAddress();
 
@@ -77,16 +95,29 @@ async function editBabyWithTypeAction({ owner, agent }: EditBabyWithAction) {
     const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], { agent: agentAddress, auth, person });
+    addActionForType(txb, [CapsuleBaby.$typeName, EDITOR.$typeName], {
+      agent: agentAddress,
+      auth,
+      person,
+    });
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
-  claimDelegationAndEditBaby(agent, personId, babyId);
+  await claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
-async function editBabyWithObjectAction({ owner, agent }: EditBabyWithAction) {
+export async function editBabyWithObjectAction({ owner, agent }: EditBabyWithAction) {
   const ownerAddress = await owner.getAddress();
   const agentAddress = await agent.getAddress();
 
@@ -98,21 +129,38 @@ async function editBabyWithObjectAction({ owner, agent }: EditBabyWithAction) {
     const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   {
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
-    addActionForObjects(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId, objects: [babyId] });
+    addActionForObjects(txb, EDITOR.$typeName, {
+      agent: agentAddress,
+      auth,
+      person: personId,
+      objects: [babyId],
+    });
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
   }
 
-  claimDelegationAndEditBaby(agent, personId, babyId);
+  await claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
-async function editBabyWithEmptyAction({ owner, agent }: EditBabyWithAction) {
+export async function editBabyWithEmptyAction({ owner, agent }: EditBabyWithAction) {
   const ownerAddress = await owner.getAddress();
 
   let personId: string = "",
@@ -123,10 +171,19 @@ async function editBabyWithEmptyAction({ owner, agent }: EditBabyWithAction) {
     const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
-  claimDelegationAndEditBaby(agent, personId, babyId);
+  await claimDelegationAndEditBaby(agent, personId, babyId);
 }
 
 async function editBabyWithRemovedGeneralAction({ owner, agent }: EditBabyWithAction) {
@@ -141,18 +198,45 @@ async function editBabyWithRemovedGeneralAction({ owner, agent }: EditBabyWithAc
     const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addGeneralAction(txb, EDITOR.$typeName, { agent: agentAddress, auth, person });
+    addGeneralAction(txb, EDITOR.$typeName, {
+      agent: agentAddress,
+      auth,
+      person,
+    });
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   {
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    removeGeneralActionFromAgent(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId });
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    removeGeneralActionFromAgent(txb, EDITOR.$typeName, {
+      agent: agentAddress,
+      auth,
+      person: personId,
+    });
+
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   claimDelegationAndEditBaby(agent, personId, babyId);
@@ -171,22 +255,45 @@ async function editBabyWithRemovedTypeAction({ owner, agent }: EditBabyWithActio
     const [person, baby] = createPersonAndBaby(txb, ownerAddress, "Initial Baby name");
     const [auth] = beginTxAuth(txb);
 
-    addActionForType(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], { agent: agentAddress, auth, person });
+    addActionForType(txb, [CapsuleBaby.$typeName, EDITOR.$typeName], {
+      agent: agentAddress,
+      auth,
+      person,
+    });
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   {
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    removeActionForTypeFromAgent(txb, [CAPSULE_BABY.$typeName, EDITOR.$typeName], {
+    removeActionForTypeFromAgent(txb, [CapsuleBaby.$typeName, EDITOR.$typeName], {
       agent: await agent.getAddress(),
       auth,
       person: personId,
     });
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   claimDelegationAndEditBaby(agent, personId, babyId);
@@ -205,7 +312,16 @@ async function editBabyWithRemovedObjectAction({ owner, agent }: EditBabyWithAct
 
     returnAndSharePersonAndBaby(txb, person, baby);
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   {
@@ -218,16 +334,40 @@ async function editBabyWithRemovedObjectAction({ owner, agent }: EditBabyWithAct
       objects: [babyId],
       agent: agentAddress,
     });
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   {
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    addActionForObjects(txb, EDITOR.$typeName, { agent: agentAddress, auth, person: personId, objects: [babyId] });
+    addActionForObjects(txb, EDITOR.$typeName, {
+      agent: agentAddress,
+      auth,
+      person: personId,
+      objects: [babyId],
+    });
 
-    const _tx = await owner.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+    txb.setGasBudget(baseGasBudget);
+    const response = await owner.signAndExecuteTransactionBlock({
+      transactionBlock: txb,
+      options: { showEffects: true },
+    });
+
+    const objects = await createdObjects(response);
+
+    babyId = objects.get(CapsuleBaby.$typeName);
+    personId = objects.get(Person.$typeName);
   }
 
   claimDelegationAndEditBaby(agent, personId, babyId);
@@ -248,7 +388,13 @@ function returnAndSharePersonAndBaby(txb: TransactionBlock, person: CallArg, bab
 async function claimDelegationAndEditBaby(signer: RawSigner, person: CallArg, baby: CallArg) {
   const txb = new TransactionBlock();
   const [auth] = claimDelegation(txb, person);
-
   editBabyName(txb, { auth, baby, newName: "New Baby Name" });
-  const _tx = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb, options: { showEffects: true } });
+
+  txb.setGasBudget(baseGasBudget);
+  const response = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: txb,
+    options: { showEffects: true },
+  });
+
+  console.log(response);
 }

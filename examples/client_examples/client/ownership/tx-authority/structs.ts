@@ -8,9 +8,9 @@ import { ObjectId } from "@mysten/sui.js";
 /* ============================== TxAuthority =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::tx_authority::TxAuthority",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::tx_authority::TxAuthority",
   {
-    principal_actions: `0x2::vec_map::VecMap<address, 0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action_set::ActionSet>`,
+    principal_actions: `0x2::vec_map::VecMap<address, 0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action_set::ActionSet>`,
     package_org: `0x2::vec_map::VecMap<0x2::object::ID, address>`,
   }
 );
@@ -18,7 +18,7 @@ bcs.registerStructType(
 export function isTxAuthority(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::tx_authority::TxAuthority"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::tx_authority::TxAuthority"
   );
 }
 
@@ -29,7 +29,7 @@ export interface TxAuthorityFields {
 
 export class TxAuthority {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::tx_authority::TxAuthority";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::tx_authority::TxAuthority";
   static readonly $numTypeParams = 0;
 
   readonly principalActions: VecMap<string, ActionSet>;
@@ -45,7 +45,7 @@ export class TxAuthority {
       principalActions: VecMap.fromFields<string, ActionSet>(
         [
           `address`,
-          `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::action_set::ActionSet`,
+          `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::action_set::ActionSet`,
         ],
         fields.principal_actions
       ),

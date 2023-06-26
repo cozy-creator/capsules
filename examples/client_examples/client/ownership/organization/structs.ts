@@ -5,57 +5,10 @@ import { RBAC } from "../rbac/structs";
 import { Encoding } from "@mysten/bcs";
 import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 
-/* ============================== Key =============================== */
-
-bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Key",
-  {
-    dummy_field: `bool`,
-  }
-);
-
-export function isKey(type: Type): boolean {
-  return (
-    type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Key"
-  );
-}
-
-export interface KeyFields {
-  dummyField: boolean;
-}
-
-export class Key {
-  static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Key";
-  static readonly $numTypeParams = 0;
-
-  readonly dummyField: boolean;
-
-  constructor(dummyField: boolean) {
-    this.dummyField = dummyField;
-  }
-
-  static fromFields(fields: Record<string, any>): Key {
-    return new Key(fields.dummy_field);
-  }
-
-  static fromFieldsWithTypes(item: FieldsWithTypes): Key {
-    if (!isKey(item.type)) {
-      throw new Error("not a Key type");
-    }
-    return new Key(item.fields.dummy_field);
-  }
-
-  static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
-    return Key.fromFields(bcs.de([Key.$typeName], data, encoding));
-  }
-}
-
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Witness",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Witness",
   {
     dummy_field: `bool`,
   }
@@ -64,7 +17,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Witness"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Witness"
   );
 }
 
@@ -74,7 +27,7 @@ export interface WitnessFields {
 
 export class Witness {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Witness";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Witness";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -102,7 +55,7 @@ export class Witness {
 /* ============================== Package =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Package",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Package",
   {
     id: `0x2::object::UID`,
     package_id: `0x2::object::ID`,
@@ -112,7 +65,7 @@ bcs.registerStructType(
 export function isPackage(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Package"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Package"
   );
 }
 
@@ -123,7 +76,7 @@ export interface PackageFields {
 
 export class Package {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Package";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Package";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;
@@ -188,10 +141,57 @@ export class Package {
   }
 }
 
+/* ============================== Key =============================== */
+
+bcs.registerStructType(
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Key",
+  {
+    dummy_field: `bool`,
+  }
+);
+
+export function isKey(type: Type): boolean {
+  return (
+    type ===
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Key"
+  );
+}
+
+export interface KeyFields {
+  dummyField: boolean;
+}
+
+export class Key {
+  static readonly $typeName =
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Key";
+  static readonly $numTypeParams = 0;
+
+  readonly dummyField: boolean;
+
+  constructor(dummyField: boolean) {
+    this.dummyField = dummyField;
+  }
+
+  static fromFields(fields: Record<string, any>): Key {
+    return new Key(fields.dummy_field);
+  }
+
+  static fromFieldsWithTypes(item: FieldsWithTypes): Key {
+    if (!isKey(item.type)) {
+      throw new Error("not a Key type");
+    }
+    return new Key(item.fields.dummy_field);
+  }
+
+  static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
+    return Key.fromFields(bcs.de([Key.$typeName], data, encoding));
+  }
+}
+
 /* ============================== ADD_PACKAGE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ADD_PACKAGE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ADD_PACKAGE",
   {
     dummy_field: `bool`,
   }
@@ -200,7 +200,7 @@ bcs.registerStructType(
 export function isADD_PACKAGE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ADD_PACKAGE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ADD_PACKAGE"
   );
 }
 
@@ -210,7 +210,7 @@ export interface ADD_PACKAGEFields {
 
 export class ADD_PACKAGE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ADD_PACKAGE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ADD_PACKAGE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -240,7 +240,7 @@ export class ADD_PACKAGE {
 /* ============================== ENDORSE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ENDORSE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ENDORSE",
   {
     dummy_field: `bool`,
   }
@@ -249,7 +249,7 @@ bcs.registerStructType(
 export function isENDORSE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ENDORSE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ENDORSE"
   );
 }
 
@@ -259,7 +259,7 @@ export interface ENDORSEFields {
 
 export class ENDORSE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::ENDORSE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::ENDORSE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -287,7 +287,7 @@ export class ENDORSE {
 /* ============================== Endorsement =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Endorsement",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Endorsement",
   {
     from: `address`,
   }
@@ -296,7 +296,7 @@ bcs.registerStructType(
 export function isEndorsement(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Endorsement"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Endorsement"
   );
 }
 
@@ -306,7 +306,7 @@ export interface EndorsementFields {
 
 export class Endorsement {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Endorsement";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Endorsement";
   static readonly $numTypeParams = 0;
 
   readonly from: string;
@@ -336,18 +336,18 @@ export class Endorsement {
 /* ============================== Organization =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Organization",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Organization",
   {
     id: `0x2::object::UID`,
-    packages: `vector<0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Package>`,
-    rbac: `0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::rbac::RBAC`,
+    packages: `vector<0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Package>`,
+    rbac: `0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::rbac::RBAC`,
   }
 );
 
 export function isOrganization(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Organization"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Organization"
   );
 }
 
@@ -359,7 +359,7 @@ export interface OrganizationFields {
 
 export class Organization {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::Organization";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::Organization";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;
@@ -437,7 +437,7 @@ export class Organization {
 /* ============================== REMOVE_PACKAGE =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::REMOVE_PACKAGE",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::REMOVE_PACKAGE",
   {
     dummy_field: `bool`,
   }
@@ -446,7 +446,7 @@ bcs.registerStructType(
 export function isREMOVE_PACKAGE(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::REMOVE_PACKAGE"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::REMOVE_PACKAGE"
   );
 }
 
@@ -456,7 +456,7 @@ export interface REMOVE_PACKAGEFields {
 
 export class REMOVE_PACKAGE {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::organization::REMOVE_PACKAGE";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::organization::REMOVE_PACKAGE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

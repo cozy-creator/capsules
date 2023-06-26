@@ -7,7 +7,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== PublishReceipt =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::publish_receipt::PublishReceipt",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::publish_receipt::PublishReceipt",
   {
     id: `0x2::object::UID`,
     package: `0x2::object::ID`,
@@ -17,7 +17,7 @@ bcs.registerStructType(
 export function isPublishReceipt(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::publish_receipt::PublishReceipt"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::publish_receipt::PublishReceipt"
   );
 }
 
@@ -28,7 +28,7 @@ export interface PublishReceiptFields {
 
 export class PublishReceipt {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::publish_receipt::PublishReceipt";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::publish_receipt::PublishReceipt";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;

@@ -7,7 +7,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Key =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Key",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Key",
   {
     agent: `address`,
   }
@@ -16,7 +16,7 @@ bcs.registerStructType(
 export function isKey(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Key"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Key"
   );
 }
 
@@ -26,7 +26,7 @@ export interface KeyFields {
 
 export class Key {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Key";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Key";
   static readonly $numTypeParams = 0;
 
   readonly agent: string;
@@ -54,7 +54,7 @@ export class Key {
 /* ============================== Person =============================== */
 
 bcs.registerStructType(
-  "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Person",
+  "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Person",
   {
     id: `0x2::object::UID`,
     principal: `address`,
@@ -65,7 +65,7 @@ bcs.registerStructType(
 export function isPerson(type: Type): boolean {
   return (
     type ===
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Person"
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Person"
   );
 }
 
@@ -77,7 +77,7 @@ export interface PersonFields {
 
 export class Person {
   static readonly $typeName =
-    "0xe94495c751b3227f6855aba6917acb9b46ff07b887290d614768ab6c36d5d1fc::person::Person";
+    "0xf167c2f8449be4da16dcf9633206228068d672f2dd2d8d8d06c5cac90dc3d1ac::person::Person";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;
