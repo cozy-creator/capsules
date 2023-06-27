@@ -2,7 +2,7 @@
 name = "Capsule"
 version = "0.1.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
-published-at = "0x93adf37dee95d7640fc881d644591674846b58f6510ce66dbd082c8fa9585113"
+published-at = "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -11,4 +11,4 @@ Ownership = { local = "../ownership" }
 
 [addresses]
 # capsule =  "0x9ea11f1ad56df5d10450efafc35b142bae28677456701430712cd38ced31e60c" # Testnet
-capsule =  "0x93adf37dee95d7640fc881d644591674846b58f6510ce66dbd082c8fa9585113"
+capsule =  "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4"

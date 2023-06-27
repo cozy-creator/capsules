@@ -9,6 +9,15 @@
   dependencies:
     regenerator-runtime "^0.13.11"
 
+"@capsulecraft/serializer@^0.1.13":
+  version "0.1.13"
+  resolved "https://registry.yarnpkg.com/@capsulecraft/serializer/-/serializer-0.1.13.tgz#615676ae89ed29a22d069a2bc1de36251b7d09d2"
+  integrity sha512-3+0zfh1y7aErmX5hW75CxcGcXuH0SEZLC0/JGg/x5gQbsCbZ2JTRLlLpb30dNVaTWcchxVKH/c38rQ9ZLQlLsQ==
+  dependencies:
+    "@mysten/bcs" "^0.7.0"
+    "@mysten/sui.js" "^0.30.0"
+    superstruct "^1.0.3"
+
 "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
   resolved "https://registry.yarnpkg.com/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz#00629c35a688e05a88b1cda684fb9d5e73f000a1"
@@ -45,6 +54,13 @@
   version "0.7.0"
   resolved "https://registry.yarnpkg.com/@mysten/bcs/-/bcs-0.7.0.tgz#141cbaba8ccb89215747d9ca1296c20c5b4fe4a1"
   integrity sha512-AFNnTClmc1XuxWZOzrzqVPDnujgN5AF2oNUyPYbLfvwqAj+qH7CrE3Rxhuf7et+k8M1Ff55CDgF58vPDMIhIrA==
+  dependencies:
+    bs58 "^5.0.0"
+
+"@mysten/bcs@^0.7.0":
+  version "0.7.2"
+  resolved "https://registry.yarnpkg.com/@mysten/bcs/-/bcs-0.7.2.tgz#3d680c3dd39ee5c4dfd4022699ae60d962489e3b"
+  integrity sha512-M8aUGFwoBEj9XPCJcYuVlv8UbqBINAYhrDGLavdCYZwGlN5saGgrBcnGpXk+D2/Vp+aEUFh3RCyKudn7H0G9hQ==
   dependencies:
     bs58 "^5.0.0"
 

@@ -6,6 +6,7 @@
   "author": "bytedeveloper <abdulrahmanyusuf125@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@capsulecraft/serializer": "^0.1.13",
     "@mysten/sui.js": "^0.30.0",
     "dotenv": "^16.3.1",
     "sui-carton": "^0.0.2-alpha",
