@@ -1,6 +1,6 @@
 import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
 import { CREATOR, OTHER, USER } from "../outlaw-sky/outlaw-sky/structs"
-import { create } from "../outlaw-sky/outlaw-sky/functions"
+import { create, rename } from "../outlaw-sky/outlaw-sky/functions"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 import { adminSigner, agentSigner, baseGasBudget, fakeAgentSigner } from "./config"
 import { claimActions } from "../ownership/organization/functions"
@@ -9,22 +9,26 @@ import { grantOrgActionToRole, revokeActionFromOrgRole, setOrgRoleForAgent } fro
 import { sleep } from "./utils"
 
 interface CreateOutlaw {
-    signer: RawSigner
     fields: string[][]
     data: number[][]
     owner: string
-    org?: TransactionArgument | string
+    org?: string
 }
 
-async function createOutlaw({ org, signer, owner, data, fields }: CreateOutlaw) {
-    const txb = new TransactionBlock()
-    const auth = !!org ? claimActions(txb, org) : beginTxAuth(txb)
+interface RenameOutlaw {
+    outlawId: string
+    newName: string
+}
+
+function createOutlaw(txb: TransactionBlock, { org, owner, data, fields }: CreateOutlaw) {
+    const [auth] = !!org ? claimActions(txb, org) : beginTxAuth(txb)
     create(txb, { auth, owner, data, fields })
-
     txb.setGasBudget(baseGasBudget * 10)
+}
 
-    const response = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
-    console.log(response)
+function renameOutlaw(txb: TransactionBlock, { outlawId, newName }: RenameOutlaw) {
+    const auth = beginTxAuth(txb)
+    rename(txb, { auth, newName, outlaw: outlawId })
 }
 
 async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
@@ -55,11 +59,9 @@ async function main() {
     // setup all roles and actions
     {
         const txb = new TransactionBlock()
-        const auth = beginTxAuth(txb)
-
-        grantOrgActionToRole(txb, { action: CREATOR_TY, auth, role: CREATOR_ROLE, org })
-        grantOrgActionToRole(txb, { action: USER_TY, auth, role: USER_ROLE, org })
-        grantOrgActionToRole(txb, { action: OTHER_TY, auth, role: OTHER_ROLE, org })
+        grantOrgActionToRole(txb, { action: CREATOR_TY, role: CREATOR_ROLE, org })
+        grantOrgActionToRole(txb, { action: USER_TY, role: USER_ROLE, org })
+        grantOrgActionToRole(txb, { action: OTHER_TY, role: OTHER_ROLE, org })
 
         await executeTxb(adminSigner, txb)
         sleep()
@@ -68,9 +70,7 @@ async function main() {
     // Delegate the OTHER action to agent as the organization - must succeed
     {
         const txb = new TransactionBlock()
-        const auth = beginTxAuth(txb)
-
-        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: OTHER_ROLE, auth })
+        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: OTHER_ROLE })
         await executeTxb(adminSigner, txb)
 
         sleep()
@@ -78,16 +78,17 @@ async function main() {
 
     // Create an outlaw with the agent delegation other than CREATOR (OTHER) - must fail
     {
-        await createOutlaw({ org, signer: agentSigner, fields, data, owner: agentAddr })
+        const txb = new TransactionBlock()
+        createOutlaw(txb, { org, fields, data, owner: agentAddr })
+        await executeTxb(agentSigner, txb)
+
         sleep()
     }
 
     // Delegate the CREATOR action to agent as the organization - must succeed
     {
         const txb = new TransactionBlock()
-        const auth = beginTxAuth(txb)
-
-        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: CREATOR_ROLE, auth })
+        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: CREATOR_ROLE })
         await executeTxb(adminSigner, txb)
 
         sleep()
@@ -95,22 +96,26 @@ async function main() {
 
     // Create an outlaw with the agent delegation - must succeed
     {
-        await createOutlaw({ org, signer: agentSigner, fields, data, owner: agentAddr })
+        const txb = new TransactionBlock()
+        createOutlaw(txb, { org, fields, data, owner: agentAddr })
+        await executeTxb(agentSigner, txb)
+
         sleep()
     }
 
     // Create an outlaw with the fake agent (agent without delegation) - must fail
     {
-        await createOutlaw({ org, signer: fakeAgentSigner, fields, data, owner: fakeAgentAddr })
+        const txb = new TransactionBlock()
+        createOutlaw(txb, { fields, data, owner: fakeAgentAddr })
+        await executeTxb(fakeAgentSigner, txb)
+
         sleep()
     }
 
     // Revoke the CREATOR action from the role
     {
         const txb = new TransactionBlock()
-        const auth = beginTxAuth(txb)
-
-        revokeActionFromOrgRole(txb, { action: CREATOR_TY, auth, org, role: CREATOR_ROLE })
+        revokeActionFromOrgRole(txb, { action: CREATOR_TY, org, role: CREATOR_ROLE })
         await executeTxb(adminSigner, txb)
 
         sleep()
@@ -118,7 +123,34 @@ async function main() {
 
     // Create an outlaw with the agent delegation - must fail
     {
-        await createOutlaw({ org, signer: agentSigner, fields, data, owner: agentAddr })
+        const txb = new TransactionBlock()
+        createOutlaw(txb, { org, fields, data, owner: agentAddr })
+        await executeTxb(agentSigner, txb)
+
+        sleep()
+    }
+
+    // Rename outlaw by owner - must succeed
+    {
+        const txb = new TransactionBlock()
+        renameOutlaw(txb, {
+            newName: "Rahman",
+            outlawId: "0x1f88fefc2f85174b96b44f35a3bb86690562d870dc283f3447da15ac3632fff6",
+        })
+        await executeTxb(agentSigner, txb)
+
+        sleep()
+    }
+
+    // Rename outlaw by non-owner - must fail
+    {
+        const txb = new TransactionBlock()
+        renameOutlaw(txb, {
+            newName: "Yusuf",
+            outlawId: "0x1f88fefc2f85174b96b44f35a3bb86690562d870dc283f3447da15ac3632fff6",
+        })
+        await executeTxb(fakeAgentSigner, txb)
+
         sleep()
     }
 }

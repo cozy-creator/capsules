@@ -11,7 +11,6 @@ import { CREATOR, USER } from "../outlaw-sky/outlaw-sky/structs"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 
 interface ActionRole {
-    auth: TransactionArgument
     org: string
     role: string
     action: string
@@ -19,7 +18,7 @@ interface ActionRole {
 
 interface SetRoleForAgent {
     agent: string
-    auth: TransactionArgument
+
     org: string
     role: string
 }
@@ -36,23 +35,17 @@ export async function createOrgFromReceipt(signer: RawSigner, receipt: string) {
     })
 }
 
-export function grantOrgActionToRole(
-    txb: TransactionBlock,
-    { action, auth, org, role }: ActionRole
-) {
+export function grantOrgActionToRole(txb: TransactionBlock, { action, org, role }: ActionRole) {
+    const [auth] = beginTxAuth(txb)
     grantActionToRole(txb, action, { auth, org, role })
 }
 
-export function setOrgRoleForAgent(
-    txb: TransactionBlock,
-    { agent, auth, org, role }: SetRoleForAgent
-) {
+export function setOrgRoleForAgent(txb: TransactionBlock, { agent, org, role }: SetRoleForAgent) {
+    const [auth] = beginTxAuth(txb)
     setRoleForAgent(txb, { agent, auth, org, role })
 }
 
-export function revokeActionFromOrgRole(
-    txb: TransactionBlock,
-    { action, auth, org, role }: ActionRole
-) {
+export function revokeActionFromOrgRole(txb: TransactionBlock, { action, org, role }: ActionRole) {
+    const [auth] = beginTxAuth(txb)
     revokeActionFromRole(txb, action, { auth, org, role })
 }
