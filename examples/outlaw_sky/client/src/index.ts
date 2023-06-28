@@ -152,7 +152,7 @@ async function main() {
 
     {
         console.log("Create an outlaw with the fake agent (agent without delegation)")
-        await createOutlaw_(fakeAgentSigner, { org, fields, data, owner: fakeAgentAddr })
+        await createOutlaw_(fakeAgentSigner, { fields, data, owner: fakeAgentAddr })
         sleep()
     }
 

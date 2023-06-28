@@ -1,4 +1,4 @@
-import { RawSigner, TransactionBlock } from "@mysten/sui.js"
+import { TransactionBlock } from "@mysten/sui.js"
 import {
     createFromReceipt,
     grantActionToRole,
@@ -6,7 +6,6 @@ import {
     revokeActionFromRole,
     setRoleForAgent,
 } from "../ownership/organization/functions"
-import { baseGasBudget } from "./config"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 
 export interface RoleAction {
