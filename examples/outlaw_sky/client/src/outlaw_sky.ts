@@ -1,12 +1,15 @@
-import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
+import { TransactionBlock } from "@mysten/sui.js"
 import { CREATOR, OTHER, Outlaw, USER } from "../outlaw-sky/outlaw-sky/structs"
 import { create, rename } from "../outlaw-sky/outlaw-sky/functions"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
-import { adminSigner, agentSigner, baseGasBudget, fakeAgentSigner } from "./config"
+import { adminSigner, agentSigner, baseGasBudget, delegateSigner, fakeAgentSigner } from "./config"
 import { claimActions } from "../ownership/organization/functions"
 import { bcs, serializeByField } from "@capsulecraft/serializer"
 import { grantOrgActionToRole, revokeActionFromOrgRole, setOrgRoleForAgent } from "./organization"
-import { createdObjectsMap, sleep } from "./utils"
+import { createdObjectsMap, executeTxb, sleep } from "./utils"
+import { createPerson, delegateObjectAction } from "./person"
+import { Person } from "../ownership/person/structs"
+import { claimDelegation } from "../ownership/person/functions"
 
 interface CreateOutlaw {
     fields: string[][]
@@ -17,6 +20,7 @@ interface CreateOutlaw {
 
 interface RenameOutlaw {
     outlawId: string
+    personId?: string
     newName: string
 }
 
@@ -26,21 +30,10 @@ function createOutlaw(txb: TransactionBlock, { org, owner, data, fields }: Creat
     txb.setGasBudget(baseGasBudget * 10)
 }
 
-function renameOutlaw(txb: TransactionBlock, { outlawId, newName }: RenameOutlaw) {
-    const auth = beginTxAuth(txb)
+function renameOutlaw(txb: TransactionBlock, { personId, outlawId, newName }: RenameOutlaw) {
+    const [auth] = !!personId ? claimDelegation(txb, personId) : beginTxAuth(txb)
     rename(txb, { auth, newName, outlaw: outlawId })
     txb.setGasBudget(baseGasBudget)
-}
-
-async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
-    const response = await signer.signAndExecuteTransactionBlock({
-        transactionBlock: txb,
-        options: { showEffects: true },
-    })
-
-    console.log({ digest: response.digest })
-
-    return response
 }
 
 async function main() {
@@ -63,7 +56,7 @@ async function main() {
     const fields = Object.keys(schema).map((val: string) => [val, schema[<keyof typeof schema>val]])
     const data = serializeByField(bcs, rawData, schema).map((fields) => Array.from(fields))
 
-    let outlawId: string
+    let outlawId: string, personId: string
 
     // setup all roles and actions
     {
@@ -156,6 +149,45 @@ async function main() {
         const txb = new TransactionBlock()
         renameOutlaw(txb, { newName: "Yusuf", outlawId })
         await executeTxb(fakeAgentSigner, txb)
+
+        sleep()
+    }
+
+    // Create person object for the owner
+    {
+        const txb = new TransactionBlock()
+        createPerson(txb, agentAddr)
+        const resp = await executeTxb(agentSigner, txb)
+
+        const objects = await createdObjectsMap(resp)
+        personId = objects.get(Person.$typeName)
+
+        sleep()
+    }
+
+    // Delegate outlaw
+    {
+        const delegateAddr = await delegateSigner.getAddress()
+        const txb = new TransactionBlock()
+
+        delegateObjectAction(txb, {
+            action: USER_TY,
+            agent: delegateAddr,
+            objectId: outlawId,
+            personId,
+        })
+
+        await executeTxb(agentSigner, txb)
+
+        sleep()
+    }
+
+    // Rename outlaw
+    {
+        const txb = new TransactionBlock()
+
+        renameOutlaw(txb, { personId, outlawId, newName: "Some othername" })
+        await executeTxb(delegateSigner, txb)
 
         sleep()
     }

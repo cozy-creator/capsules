@@ -1,4 +1,4 @@
-import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
+import { RawSigner, TransactionBlock } from "@mysten/sui.js"
 import {
     createFromReceipt,
     grantActionToRole,
@@ -6,8 +6,7 @@ import {
     revokeActionFromRole,
     setRoleForAgent,
 } from "../ownership/organization/functions"
-import { adminSigner, agentSigner, baseGasBudget, publishReceiptId } from "./config"
-import { CREATOR, USER } from "../outlaw-sky/outlaw-sky/structs"
+import { baseGasBudget } from "./config"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 
 interface ActionRole {
@@ -18,21 +17,16 @@ interface ActionRole {
 
 interface SetRoleForAgent {
     agent: string
-
     org: string
     role: string
 }
 
-export async function createOrgFromReceipt(signer: RawSigner, receipt: string) {
-    const txb = new TransactionBlock()
-    const [org] = createFromReceipt(txb, { owner: await signer.getAddress(), receipt })
+export async function createOrgFromReceipt(
+    txb: TransactionBlock,
+    { receipt, owner }: { receipt: string; owner: string }
+) {
+    const [org] = createFromReceipt(txb, { owner, receipt })
     returnAndShare(txb, org)
-    txb.setGasBudget(baseGasBudget)
-
-    return await signer.signAndExecuteTransactionBlock({
-        transactionBlock: txb,
-        options: { showEffects: true },
-    })
 }
 
 export function grantOrgActionToRole(txb: TransactionBlock, { action, org, role }: ActionRole) {

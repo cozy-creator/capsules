@@ -1,4 +1,4 @@
-import { SuiTransactionBlockResponse } from "@mysten/sui.js"
+import { RawSigner, SuiTransactionBlockResponse, TransactionBlock } from "@mysten/sui.js"
 import { provider } from "./config"
 
 export async function createdObjectsMap(txb: SuiTransactionBlockResponse) {
@@ -23,4 +23,15 @@ export async function createdObjectsMap(txb: SuiTransactionBlockResponse) {
 
 export function sleep(ms = 3000) {
     return new Promise((r) => setTimeout(r, ms))
+}
+
+export async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
+    const response = await signer.signAndExecuteTransactionBlock({
+        transactionBlock: txb,
+        options: { showEffects: true },
+    })
+
+    console.log({ digest: response.digest })
+
+    return response
 }
