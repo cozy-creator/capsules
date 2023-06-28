@@ -55,10 +55,7 @@ export class Counter {
         }
         const { typeArgs } = parseTypeName(item.type)
 
-        return new Counter(typeArgs[0], {
-            id: item.fields.id.id,
-            value: BigInt(item.fields.value),
-        })
+        return new Counter(typeArgs[0], { id: item.fields.id.id, value: BigInt(item.fields.value) })
     }
 
     static fromBcs(typeArg: Type, data: Uint8Array | string, encoding?: Encoding): Counter {
@@ -76,10 +73,7 @@ export class Counter {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Counter> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Counter object at id ${id}: ${res.error.code}`)
         }

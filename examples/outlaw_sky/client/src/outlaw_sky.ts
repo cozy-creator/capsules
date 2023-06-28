@@ -1,9 +1,9 @@
 import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
-import { CREATOR, USER } from "../outlaw-sky/outlaw-sky/structs"
+import { CREATOR, OTHER, USER } from "../outlaw-sky/outlaw-sky/structs"
 import { create } from "../outlaw-sky/outlaw-sky/functions"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 import { adminSigner, agentSigner, baseGasBudget, fakeAgentSigner } from "./config"
-import { assertLogin, claimActions, grantActionToRole } from "../ownership/organization/functions"
+import { claimActions } from "../ownership/organization/functions"
 import { bcs, serializeByField } from "@capsulecraft/serializer"
 import { grantOrgActionToRole, revokeActionFromOrgRole, setOrgRoleForAgent } from "./organization"
 import { sleep } from "./utils"
@@ -23,9 +23,12 @@ async function createOutlaw({ org, signer, owner, data, fields }: CreateOutlaw) 
 
     txb.setGasBudget(baseGasBudget * 10)
 
-    const response = await signer.signAndExecuteTransactionBlock({
-        transactionBlock: txb,
-    })
+    const response = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
+    console.log(response)
+}
+
+async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
+    const response = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
     console.log(response)
 }
 
@@ -42,39 +45,38 @@ async function main() {
     const USER_TY = USER.$typeName
     const CREATOR_TY = CREATOR.$typeName
 
+    const OTHER_ROLE = "other"
+    const OTHER_TY = OTHER.$typeName
+
     const org = <string>process.env.ORGANIZATION_ID
     const fields = Object.keys(schema).map((val: string) => [val, schema[<keyof typeof schema>val]])
     const data = serializeByField(bcs, rawData, schema).map((fields) => Array.from(fields))
 
-    // Create and grant CREATOR action to role 'creator'
+    // setup all roles and actions
     {
-        await grantOrgActionToRole({
-            action: CREATOR_TY,
-            signer: adminSigner,
-            role: CREATOR_ROLE,
-            org,
-        })
+        const txb = new TransactionBlock()
+        const auth = beginTxAuth(txb)
+
+        grantOrgActionToRole(txb, { action: CREATOR_TY, auth, role: CREATOR_ROLE, org })
+        grantOrgActionToRole(txb, { action: USER_TY, auth, role: USER_ROLE, org })
+        grantOrgActionToRole(txb, { action: OTHER_TY, auth, role: OTHER_ROLE, org })
+
+        await executeTxb(adminSigner, txb)
         sleep()
     }
 
-    // Create and grant USER action to role 'user'
+    // Delegate the OTHER action to agent as the organization - must succeed
     {
-        await grantOrgActionToRole({
-            action: USER_TY,
-            signer: adminSigner,
-            role: USER_ROLE,
-            org,
-        })
+        const txb = new TransactionBlock()
+        const auth = beginTxAuth(txb)
+
+        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: OTHER_ROLE, auth })
+        await executeTxb(adminSigner, txb)
+
         sleep()
     }
 
-    // Delegate the USER action to agent as the organization - must succeed
-    {
-        await setOrgRoleForAgent({ agent: agentAddr, org, role: USER_ROLE, signer: adminSigner })
-        sleep()
-    }
-
-    // Create an outlaw with the agent delegation other than CREATOR (USER) - must fail
+    // Create an outlaw with the agent delegation other than CREATOR (OTHER) - must fail
     {
         await createOutlaw({ org, signer: agentSigner, fields, data, owner: agentAddr })
         sleep()
@@ -82,12 +84,12 @@ async function main() {
 
     // Delegate the CREATOR action to agent as the organization - must succeed
     {
-        await setOrgRoleForAgent({
-            agent: agentAddr,
-            org,
-            role: CREATOR_ROLE,
-            signer: adminSigner,
-        })
+        const txb = new TransactionBlock()
+        const auth = beginTxAuth(txb)
+
+        setOrgRoleForAgent(txb, { agent: agentAddr, org, role: CREATOR_ROLE, auth })
+        await executeTxb(adminSigner, txb)
+
         sleep()
     }
 
@@ -105,12 +107,12 @@ async function main() {
 
     // Revoke the CREATOR action from the role
     {
-        await revokeActionFromOrgRole({
-            action: CREATOR_TY,
-            signer: adminSigner,
-            org,
-            role: CREATOR_ROLE,
-        })
+        const txb = new TransactionBlock()
+        const auth = beginTxAuth(txb)
+
+        revokeActionFromOrgRole(txb, { action: CREATOR_TY, auth, org, role: CREATOR_ROLE })
+        await executeTxb(adminSigner, txb)
+
         sleep()
     }
 

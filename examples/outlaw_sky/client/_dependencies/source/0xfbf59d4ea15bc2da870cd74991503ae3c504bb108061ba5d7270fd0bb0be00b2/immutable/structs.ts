@@ -91,10 +91,7 @@ export class Immutable<T> {
     }
 
     static async fetch<T>(provider: JsonRpcProvider, id: ObjectId): Promise<Immutable<T>> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Immutable object at id ${id}: ${res.error.code}`)
         }

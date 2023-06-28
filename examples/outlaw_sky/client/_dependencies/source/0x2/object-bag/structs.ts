@@ -33,20 +33,14 @@ export class ObjectBag {
     }
 
     static fromFields(fields: Record<string, any>): ObjectBag {
-        return new ObjectBag({
-            id: UID.fromFields(fields.id).id,
-            size: BigInt(fields.size),
-        })
+        return new ObjectBag({ id: UID.fromFields(fields.id).id, size: BigInt(fields.size) })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): ObjectBag {
         if (!isObjectBag(item.type)) {
             throw new Error("not a ObjectBag type")
         }
-        return new ObjectBag({
-            id: item.fields.id.id,
-            size: BigInt(item.fields.size),
-        })
+        return new ObjectBag({ id: item.fields.id.id, size: BigInt(item.fields.size) })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): ObjectBag {
@@ -64,10 +58,7 @@ export class ObjectBag {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<ObjectBag> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching ObjectBag object at id ${id}: ${res.error.code}`)
         }

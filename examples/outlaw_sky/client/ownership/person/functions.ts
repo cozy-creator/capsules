@@ -3,10 +3,7 @@ import { ObjectArg, Type, obj, pure, vector } from "../../_framework/util"
 import { ObjectId, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
 
 export function uid(txb: TransactionBlock, person: ObjectArg) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::person::uid`,
-        arguments: [obj(txb, person)],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::person::uid`, arguments: [obj(txb, person)] })
 }
 
 export interface DestroyArgs {
@@ -32,23 +29,6 @@ export function uidMut(txb: TransactionBlock, person: ObjectArg) {
     return txb.moveCall({
         target: `${PUBLISHED_AT}::person::uid_mut`,
         arguments: [obj(txb, person)],
-    })
-}
-
-export interface Create_Args {
-    principal: string | TransactionArgument
-    guardian: string | TransactionArgument
-    auth: ObjectArg
-}
-
-export function create_(txb: TransactionBlock, args: Create_Args) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::person::create_`,
-        arguments: [
-            pure(txb, args.principal, `address`),
-            pure(txb, args.guardian, `address`),
-            obj(txb, args.auth),
-        ],
     })
 }
 
@@ -210,6 +190,23 @@ export function guardian(txb: TransactionBlock, person: ObjectArg) {
     return txb.moveCall({
         target: `${PUBLISHED_AT}::person::guardian`,
         arguments: [obj(txb, person)],
+    })
+}
+
+export interface Create_Args {
+    principal: string | TransactionArgument
+    guardian: string | TransactionArgument
+    auth: ObjectArg
+}
+
+export function create_(txb: TransactionBlock, args: Create_Args) {
+    return txb.moveCall({
+        target: `${PUBLISHED_AT}::person::create_`,
+        arguments: [
+            pure(txb, args.principal, `address`),
+            pure(txb, args.guardian, `address`),
+            obj(txb, args.auth),
+        ],
     })
 }
 

@@ -80,10 +80,7 @@ export class DynamicFields<K> {
     }
 
     static async fetch<K>(provider: JsonRpcProvider, id: ObjectId): Promise<DynamicFields<K>> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching DynamicFields object at id ${id}: ${res.error.code}`)
         }
@@ -166,10 +163,7 @@ export class Ownership {
     }
 
     static fromFields(fields: Record<string, any>): Ownership {
-        return new Ownership({
-            owner: `0x${fields.owner}`,
-            status: BigInt(fields.status),
-        })
+        return new Ownership({ owner: `0x${fields.owner}`, status: BigInt(fields.status) })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Ownership {
@@ -197,10 +191,7 @@ export class Ownership {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Ownership> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Ownership object at id ${id}: ${res.error.code}`)
         }

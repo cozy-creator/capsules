@@ -38,6 +38,8 @@ module outlaw_sky::outlaw_sky {
     struct CREATOR {} // used by the package-id / org owning the package to create and edit Outlaws
     struct USER {} // used by the Outlaw owner to edit properties of the Outlaw
 
+    struct OTHER {}
+
     // ==== Creator Functions ====
     // In production, you would gate each of these functions to make sure they're being called by an
     // authorized party rather than just anyone.

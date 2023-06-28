@@ -29,10 +29,7 @@ export type PureArg =
     | Array<PureArg>
 export type GenericArg = ObjectArg | PureArg | Array<ObjectArg> | Array<PureArg> | Array<GenericArg>
 
-export function parseTypeName(name: Type): {
-    typeName: string
-    typeArgs: Type[]
-} {
+export function parseTypeName(name: Type): { typeName: string; typeArgs: Type[] } {
     const parsed = bcs.parseTypeName(name)
     return { typeName: parsed.name, typeArgs: parsed.params as string[] }
 }

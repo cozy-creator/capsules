@@ -37,10 +37,7 @@ export class Table {
     }
 
     static fromFields(typeArgs: [Type, Type], fields: Record<string, any>): Table {
-        return new Table(typeArgs, {
-            id: UID.fromFields(fields.id).id,
-            size: BigInt(fields.size),
-        })
+        return new Table(typeArgs, { id: UID.fromFields(fields.id).id, size: BigInt(fields.size) })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Table {
@@ -70,10 +67,7 @@ export class Table {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Table> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Table object at id ${id}: ${res.error.code}`)
         }

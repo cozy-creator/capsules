@@ -35,10 +35,7 @@ export class Borrow {
     }
 
     static fromFields(fields: Record<string, any>): Borrow {
-        return new Borrow({
-            ref: `0x${fields.ref}`,
-            obj: ID.fromFields(fields.obj).bytes,
-        })
+        return new Borrow({ ref: `0x${fields.ref}`, obj: ID.fromFields(fields.obj).bytes })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Borrow {

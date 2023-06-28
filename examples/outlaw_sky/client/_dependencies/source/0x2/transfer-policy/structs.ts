@@ -128,10 +128,7 @@ export class TransferPolicy {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<TransferPolicy> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching TransferPolicy object at id ${id}: ${res.error.code}`)
         }
@@ -218,10 +215,7 @@ export class TransferPolicyCap {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<TransferPolicyCap> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(
                 `error fetching TransferPolicyCap object at id ${id}: ${res.error.code}`

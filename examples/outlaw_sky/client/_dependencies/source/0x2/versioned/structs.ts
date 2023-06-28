@@ -83,20 +83,14 @@ export class Versioned {
     }
 
     static fromFields(fields: Record<string, any>): Versioned {
-        return new Versioned({
-            id: UID.fromFields(fields.id).id,
-            version: BigInt(fields.version),
-        })
+        return new Versioned({ id: UID.fromFields(fields.id).id, version: BigInt(fields.version) })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Versioned {
         if (!isVersioned(item.type)) {
             throw new Error("not a Versioned type")
         }
-        return new Versioned({
-            id: item.fields.id.id,
-            version: BigInt(item.fields.version),
-        })
+        return new Versioned({ id: item.fields.id.id, version: BigInt(item.fields.version) })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Versioned {
@@ -114,10 +108,7 @@ export class Versioned {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Versioned> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Versioned object at id ${id}: ${res.error.code}`)
         }

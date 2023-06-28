@@ -106,10 +106,7 @@ export function init(txb: TransactionBlock, genesis: ObjectArg) {
 }
 
 export function loadDispenser(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::outlaw_sky::load_dispenser`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::outlaw_sky::load_dispenser`, arguments: [] })
 }
 
 export interface RemoveAttributeArgs {

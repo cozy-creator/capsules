@@ -43,10 +43,7 @@ export class Clock {
         if (!isClock(item.type)) {
             throw new Error("not a Clock type")
         }
-        return new Clock({
-            id: item.fields.id.id,
-            timestampMs: BigInt(item.fields.timestamp_ms),
-        })
+        return new Clock({ id: item.fields.id.id, timestampMs: BigInt(item.fields.timestamp_ms) })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Clock {
@@ -64,10 +61,7 @@ export class Clock {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Clock> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Clock object at id ${id}: ${res.error.code}`)
         }

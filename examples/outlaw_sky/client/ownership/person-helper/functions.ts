@@ -10,10 +10,7 @@ export function destroy(txb: TransactionBlock, person: ObjectArg) {
 }
 
 export function create(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::person_helper::create`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::person_helper::create`, arguments: [] })
 }
 
 export interface AddActionForObjectsArgs {

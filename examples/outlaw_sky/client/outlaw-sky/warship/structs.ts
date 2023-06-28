@@ -7,7 +7,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-    "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Witness",
+    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness",
     {
         dummy_field: `bool`,
     }
@@ -16,7 +16,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
     return (
         type ===
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Witness"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness"
     )
 }
 
@@ -26,7 +26,7 @@ export interface WitnessFields {
 
 export class Witness {
     static readonly $typeName =
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Witness"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness"
     static readonly $numTypeParams = 0
 
     readonly dummyField: boolean
@@ -54,7 +54,7 @@ export class Witness {
 /* ============================== Warship =============================== */
 
 bcs.registerStructType(
-    "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Warship",
+    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship",
     {
         id: `0x2::object::UID`,
     }
@@ -63,7 +63,7 @@ bcs.registerStructType(
 export function isWarship(type: Type): boolean {
     return (
         type ===
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Warship"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship"
     )
 }
 
@@ -73,7 +73,7 @@ export interface WarshipFields {
 
 export class Warship {
     static readonly $typeName =
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::warship::Warship"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship"
     static readonly $numTypeParams = 0
 
     readonly id: ObjectId
@@ -108,10 +108,7 @@ export class Warship {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Warship> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Warship object at id ${id}: ${res.error.code}`)
         }

@@ -50,10 +50,7 @@ export class PublishReceipt {
         if (!isPublishReceipt(item.type)) {
             throw new Error("not a PublishReceipt type")
         }
-        return new PublishReceipt({
-            id: item.fields.id.id,
-            package: item.fields.package,
-        })
+        return new PublishReceipt({ id: item.fields.id.id, package: item.fields.package })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): PublishReceipt {
@@ -71,10 +68,7 @@ export class PublishReceipt {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<PublishReceipt> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching PublishReceipt object at id ${id}: ${res.error.code}`)
         }

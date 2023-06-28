@@ -108,10 +108,7 @@ export class LinkedTable<K> {
     }
 
     static async fetch<K>(provider: JsonRpcProvider, id: ObjectId): Promise<LinkedTable<K>> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching LinkedTable object at id ${id}: ${res.error.code}`)
         }

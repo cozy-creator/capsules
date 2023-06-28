@@ -8,9 +8,9 @@ import * as vecSet2 from "./vec-set2/structs"
 import { StructClassLoader } from "../../../_framework/loader"
 
 export function registerClasses(loader: StructClassLoader) {
-    loader.register(counter.Counter)
     loader.register(structTag.StructTag)
     loader.register(typedId.TypedID)
+    loader.register(counter.Counter)
     loader.register(immutable.Immutable)
     loader.register(map.Iter)
     loader.register(map.Map)

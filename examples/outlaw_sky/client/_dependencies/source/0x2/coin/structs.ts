@@ -74,10 +74,7 @@ export class Coin {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Coin> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Coin object at id ${id}: ${res.error.code}`)
         }
@@ -193,10 +190,7 @@ export class CoinMetadata {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<CoinMetadata> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching CoinMetadata object at id ${id}: ${res.error.code}`)
         }
@@ -328,10 +322,7 @@ export class TreasuryCap {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<TreasuryCap> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching TreasuryCap object at id ${id}: ${res.error.code}`)
         }

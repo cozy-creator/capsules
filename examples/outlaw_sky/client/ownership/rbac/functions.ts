@@ -10,10 +10,7 @@ export function create(txb: TransactionBlock, principal: string | TransactionArg
 }
 
 export function principal(txb: TransactionBlock, rbac: ObjectArg) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::rbac::principal`,
-        arguments: [obj(txb, rbac)],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::rbac::principal`, arguments: [obj(txb, rbac)] })
 }
 
 export function agentRole(txb: TransactionBlock, rbac: ObjectArg) {
@@ -118,8 +115,5 @@ export function setRoleForAgent(txb: TransactionBlock, args: SetRoleForAgentArgs
 }
 
 export function toFields(txb: TransactionBlock, rbac: ObjectArg) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::rbac::to_fields`,
-        arguments: [obj(txb, rbac)],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::rbac::to_fields`, arguments: [obj(txb, rbac)] })
 }

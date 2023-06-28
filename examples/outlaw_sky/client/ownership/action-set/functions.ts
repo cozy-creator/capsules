@@ -3,10 +3,7 @@ import { ObjectArg, Type, obj, pure, vector } from "../../_framework/util"
 import { ObjectId, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
 
 export function empty(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::action_set::empty`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::action_set::empty`, arguments: [] })
 }
 
 export function new_(txb: TransactionBlock, contents: Array<ObjectArg> | TransactionArgument) {

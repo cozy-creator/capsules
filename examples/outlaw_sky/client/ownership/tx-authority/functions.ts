@@ -3,10 +3,7 @@ import { GenericArg, ObjectArg, Type, generic, obj, pure, vector } from "../../_
 import { ObjectId, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
 
 export function empty(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::tx_authority::empty`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::tx_authority::empty`, arguments: [] })
 }
 
 export interface AddActionsInternalArgs {
@@ -106,10 +103,7 @@ export function agents(txb: TransactionBlock, auth: ObjectArg) {
 }
 
 export function begin(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::tx_authority::begin`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::tx_authority::begin`, arguments: [] })
 }
 
 export function beginWithObjectId(txb: TransactionBlock, uid: ObjectArg) {

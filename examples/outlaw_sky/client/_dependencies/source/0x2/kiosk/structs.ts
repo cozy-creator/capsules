@@ -44,10 +44,7 @@ export class Borrow {
         if (!isBorrow(item.type)) {
             throw new Error("not a Borrow type")
         }
-        return new Borrow({
-            kioskId: item.fields.kiosk_id,
-            itemId: item.fields.item_id,
-        })
+        return new Borrow({ kioskId: item.fields.kiosk_id, itemId: item.fields.item_id })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Borrow {
@@ -140,10 +137,7 @@ export class ItemDelisted {
         }
         const { typeArgs } = parseTypeName(item.type)
 
-        return new ItemDelisted(typeArgs[0], {
-            kiosk: item.fields.kiosk,
-            id: item.fields.id,
-        })
+        return new ItemDelisted(typeArgs[0], { kiosk: item.fields.kiosk, id: item.fields.id })
     }
 
     static fromBcs(typeArg: Type, data: Uint8Array | string, encoding?: Encoding): ItemDelisted {
@@ -362,10 +356,7 @@ export class Kiosk {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Kiosk> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Kiosk object at id ${id}: ${res.error.code}`)
         }
@@ -433,10 +424,7 @@ export class KioskOwnerCap {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<KioskOwnerCap> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching KioskOwnerCap object at id ${id}: ${res.error.code}`)
         }
@@ -479,20 +467,14 @@ export class Listing {
     }
 
     static fromFields(fields: Record<string, any>): Listing {
-        return new Listing({
-            id: ID.fromFields(fields.id).bytes,
-            isExclusive: fields.is_exclusive,
-        })
+        return new Listing({ id: ID.fromFields(fields.id).bytes, isExclusive: fields.is_exclusive })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Listing {
         if (!isListing(item.type)) {
             throw new Error("not a Listing type")
         }
-        return new Listing({
-            id: item.fields.id,
-            isExclusive: item.fields.is_exclusive,
-        })
+        return new Listing({ id: item.fields.id, isExclusive: item.fields.is_exclusive })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Listing {
@@ -621,10 +603,7 @@ export class PurchaseCap {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<PurchaseCap> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching PurchaseCap object at id ${id}: ${res.error.code}`)
         }

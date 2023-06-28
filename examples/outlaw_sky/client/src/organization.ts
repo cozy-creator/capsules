@@ -1,4 +1,4 @@
-import { RawSigner, TransactionBlock } from "@mysten/sui.js"
+import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
 import {
     createFromReceipt,
     grantActionToRole,
@@ -10,8 +10,8 @@ import { adminSigner, agentSigner, baseGasBudget, publishReceiptId } from "./con
 import { CREATOR, USER } from "../outlaw-sky/outlaw-sky/structs"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 
-interface GrantActionToRole {
-    signer: RawSigner
+interface ActionRole {
+    auth: TransactionArgument
     org: string
     role: string
     action: string
@@ -19,7 +19,7 @@ interface GrantActionToRole {
 
 interface SetRoleForAgent {
     agent: string
-    signer: RawSigner
+    auth: TransactionArgument
     org: string
     role: string
 }
@@ -36,26 +36,23 @@ export async function createOrgFromReceipt(signer: RawSigner, receipt: string) {
     })
 }
 
-export async function grantOrgActionToRole({ action, signer, org, role }: GrantActionToRole) {
-    const txb = new TransactionBlock()
-    const [auth] = beginTxAuth(txb)
-
+export function grantOrgActionToRole(
+    txb: TransactionBlock,
+    { action, auth, org, role }: ActionRole
+) {
     grantActionToRole(txb, action, { auth, org, role })
-    return await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
 }
 
-export async function setOrgRoleForAgent({ agent, signer, org, role }: SetRoleForAgent) {
-    const txb = new TransactionBlock()
-    const [auth] = beginTxAuth(txb)
-
+export function setOrgRoleForAgent(
+    txb: TransactionBlock,
+    { agent, auth, org, role }: SetRoleForAgent
+) {
     setRoleForAgent(txb, { agent, auth, org, role })
-    return await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
 }
 
-export async function revokeActionFromOrgRole({ action, signer, org, role }: GrantActionToRole) {
-    const txb = new TransactionBlock()
-    const [auth] = beginTxAuth(txb)
-
+export function revokeActionFromOrgRole(
+    txb: TransactionBlock,
+    { action, auth, org, role }: ActionRole
+) {
     revokeActionFromRole(txb, action, { auth, org, role })
-    return await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
 }

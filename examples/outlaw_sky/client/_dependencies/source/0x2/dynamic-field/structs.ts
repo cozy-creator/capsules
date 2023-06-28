@@ -92,10 +92,7 @@ export class Field<Name, Value> {
         provider: JsonRpcProvider,
         id: ObjectId
     ): Promise<Field<Name, Value>> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Field object at id ${id}: ${res.error.code}`)
         }

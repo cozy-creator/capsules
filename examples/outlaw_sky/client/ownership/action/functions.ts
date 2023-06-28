@@ -98,10 +98,7 @@ export function add_(txb: TransactionBlock, args: Add_Args) {
 }
 
 export function admin(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::action::admin`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::action::admin`, arguments: [] })
 }
 
 export function containsAdmin(
@@ -200,10 +197,7 @@ export function isManagerAction_(txb: TransactionBlock, action: ObjectArg) {
 }
 
 export function manager(txb: TransactionBlock) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::action::manager`,
-        arguments: [],
-    })
+    return txb.moveCall({ target: `${PUBLISHED_AT}::action::manager`, arguments: [] })
 }
 
 export interface VecMapIntersectionArgs {

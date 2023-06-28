@@ -10,17 +10,17 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 /* ============================== MetadataUpdated =============================== */
 
 bcs.registerStructType(
-    "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::MetadataUpdated",
+    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::MetadataUpdated",
     {
         for: `0x2::object::ID`,
-        metadata: `0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::OutlawMetadata`,
+        metadata: `0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::OutlawMetadata`,
     }
 )
 
 export function isMetadataUpdated(type: Type): boolean {
     return (
         type ===
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::MetadataUpdated"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::MetadataUpdated"
     )
 }
 
@@ -31,7 +31,7 @@ export interface MetadataUpdatedFields {
 
 export class MetadataUpdated {
     static readonly $typeName =
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::MetadataUpdated"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::MetadataUpdated"
     static readonly $numTypeParams = 0
 
     readonly for: ObjectId
@@ -67,7 +67,7 @@ export class MetadataUpdated {
 /* ============================== Outlaw =============================== */
 
 bcs.registerStructType(
-    "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::Outlaw",
+    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::Outlaw",
     {
         id: `0x2::object::UID`,
         name: `0x1::string::String`,
@@ -79,7 +79,7 @@ bcs.registerStructType(
 export function isOutlaw(type: Type): boolean {
     return (
         type ===
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::Outlaw"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::Outlaw"
     )
 }
 
@@ -92,7 +92,7 @@ export interface OutlawFields {
 
 export class Outlaw {
     static readonly $typeName =
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::Outlaw"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::Outlaw"
     static readonly $numTypeParams = 0
 
     readonly id: ObjectId
@@ -147,10 +147,7 @@ export class Outlaw {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Outlaw> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Outlaw object at id ${id}: ${res.error.code}`)
         }
@@ -164,7 +161,7 @@ export class Outlaw {
 /* ============================== OutlawMetadata =============================== */
 
 bcs.registerStructType(
-    "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::OutlawMetadata",
+    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::OutlawMetadata",
     {
         attributes: `0x2::vec_map::VecMap<0x1::string::String, 0x1::string::String>`,
         url: `0x1::string::String`,
@@ -174,7 +171,7 @@ bcs.registerStructType(
 export function isOutlawMetadata(type: Type): boolean {
     return (
         type ===
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::OutlawMetadata"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::OutlawMetadata"
     )
 }
 
@@ -185,7 +182,7 @@ export interface OutlawMetadataFields {
 
 export class OutlawMetadata {
     static readonly $typeName =
-        "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b::demo_factory::OutlawMetadata"
+        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::demo_factory::OutlawMetadata"
     static readonly $numTypeParams = 0
 
     readonly attributes: VecMap<string, string>

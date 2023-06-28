@@ -5,6 +5,53 @@ import { RBAC } from "../rbac/structs"
 import { Encoding } from "@mysten/bcs"
 import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 
+/* ============================== Key =============================== */
+
+bcs.registerStructType(
+    "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key",
+    {
+        dummy_field: `bool`,
+    }
+)
+
+export function isKey(type: Type): boolean {
+    return (
+        type ===
+        "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key"
+    )
+}
+
+export interface KeyFields {
+    dummyField: boolean
+}
+
+export class Key {
+    static readonly $typeName =
+        "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key"
+    static readonly $numTypeParams = 0
+
+    readonly dummyField: boolean
+
+    constructor(dummyField: boolean) {
+        this.dummyField = dummyField
+    }
+
+    static fromFields(fields: Record<string, any>): Key {
+        return new Key(fields.dummy_field)
+    }
+
+    static fromFieldsWithTypes(item: FieldsWithTypes): Key {
+        if (!isKey(item.type)) {
+            throw new Error("not a Key type")
+        }
+        return new Key(item.fields.dummy_field)
+    }
+
+    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
+        return Key.fromFields(bcs.de([Key.$typeName], data, encoding))
+    }
+}
+
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
@@ -98,10 +145,7 @@ export class Package {
         if (!isPackage(item.type)) {
             throw new Error("not a Package type")
         }
-        return new Package({
-            id: item.fields.id.id,
-            packageId: item.fields.package_id,
-        })
+        return new Package({ id: item.fields.id.id, packageId: item.fields.package_id })
     }
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Package {
@@ -119,10 +163,7 @@ export class Package {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Package> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Package object at id ${id}: ${res.error.code}`)
         }
@@ -130,53 +171,6 @@ export class Package {
             throw new Error(`object at id ${id} is not a Package object`)
         }
         return Package.fromFieldsWithTypes(res.data.content)
-    }
-}
-
-/* ============================== Key =============================== */
-
-bcs.registerStructType(
-    "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key",
-    {
-        dummy_field: `bool`,
-    }
-)
-
-export function isKey(type: Type): boolean {
-    return (
-        type ===
-        "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key"
-    )
-}
-
-export interface KeyFields {
-    dummyField: boolean
-}
-
-export class Key {
-    static readonly $typeName =
-        "0x98eff0617dfece5a417af4e2d2338afdfc5124e35a337c530161e8f3d7ac3e96::organization::Key"
-    static readonly $numTypeParams = 0
-
-    readonly dummyField: boolean
-
-    constructor(dummyField: boolean) {
-        this.dummyField = dummyField
-    }
-
-    static fromFields(fields: Record<string, any>): Key {
-        return new Key(fields.dummy_field)
-    }
-
-    static fromFieldsWithTypes(item: FieldsWithTypes): Key {
-        if (!isKey(item.type)) {
-            throw new Error("not a Key type")
-        }
-        return new Key(item.fields.dummy_field)
-    }
-
-    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
-        return Key.fromFields(bcs.de([Key.$typeName], data, encoding))
     }
 }
 
@@ -394,10 +388,7 @@ export class Organization {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Organization> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Organization object at id ${id}: ${res.error.code}`)
         }

@@ -33,10 +33,7 @@ export class Bag {
     }
 
     static fromFields(fields: Record<string, any>): Bag {
-        return new Bag({
-            id: UID.fromFields(fields.id).id,
-            size: BigInt(fields.size),
-        })
+        return new Bag({ id: UID.fromFields(fields.id).id, size: BigInt(fields.size) })
     }
 
     static fromFieldsWithTypes(item: FieldsWithTypes): Bag {
@@ -61,10 +58,7 @@ export class Bag {
     }
 
     static async fetch(provider: JsonRpcProvider, id: ObjectId): Promise<Bag> {
-        const res = await provider.getObject({
-            id,
-            options: { showContent: true },
-        })
+        const res = await provider.getObject({ id, options: { showContent: true } })
         if (res.error) {
             throw new Error(`error fetching Bag object at id ${id}: ${res.error.code}`)
         }

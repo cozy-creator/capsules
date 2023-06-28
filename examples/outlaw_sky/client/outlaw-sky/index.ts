@@ -1,2 +1,2 @@
-export const PACKAGE_ID = "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b"
-export const PUBLISHED_AT = "0x68a9f976274713af12540aef96feedc90b8ffbfd8b50a85322e43fba1336992b"
+export const PACKAGE_ID = "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b"
+export const PUBLISHED_AT = "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b"
