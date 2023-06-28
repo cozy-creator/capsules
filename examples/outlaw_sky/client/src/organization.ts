@@ -9,13 +9,13 @@ import {
 import { baseGasBudget } from "./config"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 
-interface ActionRole {
+export interface RoleAction {
     org: string
     role: string
     action: string
 }
 
-interface SetRoleForAgent {
+export interface SetRoleForAgent {
     agent: string
     org: string
     role: string
@@ -29,7 +29,7 @@ export async function createOrgFromReceipt(
     returnAndShare(txb, org)
 }
 
-export function grantOrgActionToRole(txb: TransactionBlock, { action, org, role }: ActionRole) {
+export function grantOrgActionToRole(txb: TransactionBlock, { action, org, role }: RoleAction) {
     const [auth] = beginTxAuth(txb)
     grantActionToRole(txb, action, { auth, org, role })
 }
@@ -39,7 +39,7 @@ export function setOrgRoleForAgent(txb: TransactionBlock, { agent, org, role }: 
     setRoleForAgent(txb, { agent, auth, org, role })
 }
 
-export function revokeActionFromOrgRole(txb: TransactionBlock, { action, org, role }: ActionRole) {
+export function revokeActionFromOrgRole(txb: TransactionBlock, { action, org, role }: RoleAction) {
     const [auth] = beginTxAuth(txb)
     revokeActionFromRole(txb, action, { auth, org, role })
 }

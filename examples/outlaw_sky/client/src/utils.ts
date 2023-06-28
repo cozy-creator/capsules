@@ -31,7 +31,14 @@ export async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
         options: { showEffects: true },
     })
 
-    console.log({ digest: response.digest })
+    console.log(
+        {
+            digest: response.digest,
+            status: response.effects?.status.status,
+            error: response.effects?.status.error || "No Error",
+        },
+        "\n"
+    )
 
     return response
 }
