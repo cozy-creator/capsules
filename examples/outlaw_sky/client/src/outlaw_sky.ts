@@ -1,12 +1,12 @@
 import { RawSigner, TransactionArgument, TransactionBlock } from "@mysten/sui.js"
-import { CREATOR, OTHER, USER } from "../outlaw-sky/outlaw-sky/structs"
+import { CREATOR, OTHER, Outlaw, USER } from "../outlaw-sky/outlaw-sky/structs"
 import { create, rename } from "../outlaw-sky/outlaw-sky/functions"
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions"
 import { adminSigner, agentSigner, baseGasBudget, fakeAgentSigner } from "./config"
 import { claimActions } from "../ownership/organization/functions"
 import { bcs, serializeByField } from "@capsulecraft/serializer"
 import { grantOrgActionToRole, revokeActionFromOrgRole, setOrgRoleForAgent } from "./organization"
-import { sleep } from "./utils"
+import { createdObjectsMap, sleep } from "./utils"
 
 interface CreateOutlaw {
     fields: string[][]
@@ -29,11 +29,18 @@ function createOutlaw(txb: TransactionBlock, { org, owner, data, fields }: Creat
 function renameOutlaw(txb: TransactionBlock, { outlawId, newName }: RenameOutlaw) {
     const auth = beginTxAuth(txb)
     rename(txb, { auth, newName, outlaw: outlawId })
+    txb.setGasBudget(baseGasBudget)
 }
 
 async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
-    const response = await signer.signAndExecuteTransactionBlock({ transactionBlock: txb })
-    console.log(response)
+    const response = await signer.signAndExecuteTransactionBlock({
+        transactionBlock: txb,
+        options: { showEffects: true },
+    })
+
+    console.log({ digest: response.digest })
+
+    return response
 }
 
 async function main() {
@@ -55,6 +62,8 @@ async function main() {
     const org = <string>process.env.ORGANIZATION_ID
     const fields = Object.keys(schema).map((val: string) => [val, schema[<keyof typeof schema>val]])
     const data = serializeByField(bcs, rawData, schema).map((fields) => Array.from(fields))
+
+    let outlawId: string
 
     // setup all roles and actions
     {
@@ -98,7 +107,10 @@ async function main() {
     {
         const txb = new TransactionBlock()
         createOutlaw(txb, { org, fields, data, owner: agentAddr })
-        await executeTxb(agentSigner, txb)
+        const resp = await executeTxb(agentSigner, txb)
+
+        const objects = await createdObjectsMap(resp)
+        outlawId = objects.get(Outlaw.$typeName)
 
         sleep()
     }
@@ -133,10 +145,7 @@ async function main() {
     // Rename outlaw by owner - must succeed
     {
         const txb = new TransactionBlock()
-        renameOutlaw(txb, {
-            newName: "Rahman",
-            outlawId: "0x1f88fefc2f85174b96b44f35a3bb86690562d870dc283f3447da15ac3632fff6",
-        })
+        renameOutlaw(txb, { newName: "Rahman", outlawId })
         await executeTxb(agentSigner, txb)
 
         sleep()
@@ -145,10 +154,7 @@ async function main() {
     // Rename outlaw by non-owner - must fail
     {
         const txb = new TransactionBlock()
-        renameOutlaw(txb, {
-            newName: "Yusuf",
-            outlawId: "0x1f88fefc2f85174b96b44f35a3bb86690562d870dc283f3447da15ac3632fff6",
-        })
+        renameOutlaw(txb, { newName: "Yusuf", outlawId })
         await executeTxb(fakeAgentSigner, txb)
 
         sleep()
