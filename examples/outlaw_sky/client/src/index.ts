@@ -21,9 +21,9 @@ async function createOutlaw_(signer: RawSigner, { org, fields, owner, data }: Cr
     return await executeTxb(signer, txb)
 }
 
-async function renameOutlaw_(signer: RawSigner, { newName, outlawId }: RenameOutlaw) {
+async function renameOutlaw_(signer: RawSigner, { personId, newName, outlawId }: RenameOutlaw) {
     const txb = new TransactionBlock()
-    renameOutlaw(txb, { newName, outlawId })
+    renameOutlaw(txb, { personId, newName, outlawId })
 
     return await executeTxb(signer, txb)
 }
