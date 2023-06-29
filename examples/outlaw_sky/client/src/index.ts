@@ -9,7 +9,7 @@ import {
     revokeActionFromOrgRole,
     setOrgRoleForAgent,
 } from "./organization"
-import { createdObjectsMap, executeTxb, sleep } from "./utils"
+import { createdObjectsMap, executeTxb } from "./utils"
 import { CreateOutlaw, RenameOutlaw, createOutlaw, renameOutlaw } from "./outlaw_sky"
 import { ObjectAction, createPerson, delegateObjectAction, undelegateObjectAction } from "./person"
 import { Person } from "../ownership/person/structs"
@@ -111,25 +111,21 @@ async function main() {
         ]
 
         await setupRoles(adminSigner, org, data)
-        sleep()
     }
 
     {
         console.log('Grant the "USER" action to agent as the organization')
         await setOrgRoleForAgent_(adminSigner, { agent: agentAddr, org, role: USER_ROLE })
-        sleep()
     }
 
     {
         console.log('Create an outlaw with the agent using the "USER" action')
         await createOutlaw_(agentSigner, { org, fields, data, owner: agentAddr })
-        sleep()
     }
 
     {
         console.log('Delegate the "CREATOR" action to agent as the organization')
         await setOrgRoleForAgent_(adminSigner, { agent: agentAddr, org, role: CREATOR_ROLE })
-        sleep()
     }
 
     {
@@ -137,7 +133,6 @@ async function main() {
         const resp = await createOutlaw_(agentSigner, { org, fields, data, owner: agentAddr })
         const objects = await createdObjectsMap(resp)
         outlawId = objects.get(Outlaw.$typeName)
-        sleep()
     }
 
     {
@@ -145,37 +140,31 @@ async function main() {
         const resp = await createOutlaw_(agentSigner, { org, fields, data, owner: agentAddr })
         const objects = await createdObjectsMap(resp)
         otherOutlawId = objects.get(Outlaw.$typeName)
-        sleep()
     }
 
     {
         console.log("Create an outlaw with the fake agent (agent without delegation)")
         await createOutlaw_(fakeAgentSigner, { fields, data, owner: fakeAgentAddr })
-        sleep()
     }
 
     {
         console.log('Revoke the "CREATOR" action from the role delegated to the agent')
         await revokeActionFromOrgRole_(adminSigner, { action: CREATOR_TY, org, role: CREATOR_ROLE })
-        sleep()
     }
 
     {
         console.log('Create an outlaw with the agent after the "CREATOR" action is revoked')
         await createOutlaw_(agentSigner, { org, fields, data, owner: agentAddr })
-        sleep()
     }
 
     {
         console.log("Rename an outlaw by the outlaw owner")
         await renameOutlaw_(agentSigner, { newName: "Rahman", outlawId })
-        sleep()
     }
 
     {
         console.log("Rename an outlaw by the outlaw fake owner")
         await renameOutlaw_(fakeAgentSigner, { newName: "Yusuf", outlawId })
-        sleep()
     }
 
     {
@@ -183,7 +172,6 @@ async function main() {
         const resp = await createPerson_(agentSigner, agentAddr)
         const objects = await createdObjectsMap(resp)
         personId = objects.get(Person.$typeName)
-        sleep()
     }
 
     {
@@ -194,14 +182,11 @@ async function main() {
             objectId: outlawId,
             personId,
         })
-
-        sleep()
     }
 
     {
         console.log("Rename outlaw by the outlaw delegate recipient")
         await renameOutlaw_(delegateSigner, { personId, outlawId, newName: "Some othername" })
-        sleep()
     }
 
     {
@@ -211,8 +196,6 @@ async function main() {
             outlawId: otherOutlawId,
             newName: "Some othername",
         })
-
-        sleep()
     }
 
     {
@@ -223,14 +206,11 @@ async function main() {
             objectId: outlawId,
             personId,
         })
-
-        sleep()
     }
 
     {
         console.log("Rename outlaw by the outlaw delegate recipient after delegation is revoked")
         await renameOutlaw_(delegateSigner, { personId, outlawId, newName: "Some othername" })
-        sleep()
     }
 }
 

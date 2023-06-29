@@ -40,5 +40,6 @@ export async function executeTxb(signer: RawSigner, txb: TransactionBlock) {
         "\n"
     )
 
+    sleep()
     return response
 }
