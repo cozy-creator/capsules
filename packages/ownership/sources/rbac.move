@@ -13,9 +13,9 @@
 // Example: a game-studio runs a number of servers, and gives their keypairs actions to edit
 // its game objects.
 
-// For safety, we are limiting RBACs to only namespaces for now.
+// For safety, we are limiting RBACs to only organizations for now.
 // Previously considered functionality:
-// - Allow any user to create an RBAC / namespace so other people can use their account
+// - Allow any user to create an RBAC / organizations so other people can use their account
 // - Allow RBAC to be stored inside of objects, and grant actions to that object on behalf of
 // owners.
 // We removed this functionality for now because it's too dangerous and complex.
@@ -25,9 +25,10 @@
 // you should instead use the grant_admin_role_for_agent() and grant_manager_role_for_agent() functions.
 // These give special reserved role-names, as defined in ownership::actions.
 
-// For safety, this module is only callable by ownership::organization
+// For security, this module is only callable by ownership::organization
 
 module ownership::rbac {
+    use std::option;
     use std::string::String;
     use std::vector;
 
@@ -36,7 +37,7 @@ module ownership::rbac {
     use sui_utils::vector2;
     use sui_utils::vec_map2;
 
-    use ownership::action::{Self, Action};
+    use ownership::action::{Self, Action, ADMIN};
 
     friend ownership::organization;
 
@@ -74,18 +75,6 @@ module ownership::rbac {
         // Ensure that role exists in rbac.role_actions
         vec_map2::borrow_mut_fill(&mut rbac.role_actions, &role, vector::empty());
     }
-
-    // The agent is now indistinguishable from the principal during transaction execution.
-    // This is a dangerous role to grant, as the agent can now grant and edit actions as well
-    // Use this with caution.
-    // public(friend) fun grant_admin_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_role, &agent, utf8(ADMIN_ROLE));
-    // }
-
-    // // Grants all actions, except for admin
-    // public(friend) fun grant_manager_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_role, &agent, utf8(MANAGER_ROLE));
-    // }
 
     public(friend) fun delete_agent(rbac: &mut RBAC, agent: address) {
         vec_map2::remove_maybe(&mut rbac.agent_role, &agent);
@@ -137,9 +126,24 @@ module ownership::rbac {
         &rbac.role_actions
     }
 
+    // The principal always has ADMIN action over themselves; there is no need to give the principal
+    // a role within the RBAC.
     public(friend) fun get_agent_actions(rbac: &RBAC, agent: address): vector<Action> {
-        let role = vec_map::get(&rbac.agent_role, &agent);
-        *vec_map::get(&rbac.role_actions, role)
+        if (agent == rbac.principal) {
+            return vector[action::new<ADMIN>()]
+        };
+
+        let role_maybe = vec_map2::get_maybe(&rbac.agent_role, &agent);
+        if (option::is_some(&role_maybe)) {
+            let role = option::destroy_some(role_maybe);
+            *vec_map::get(&rbac.role_actions, &role)
+        } else {
+            vector[]
+        }
+    }
+
+    public(friend) fun get_admin(): vector<Action> {
+        vector[action::new<ADMIN>()]
     }
 }
 

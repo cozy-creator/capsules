@@ -379,15 +379,19 @@ module ownership::tx_authority {
         auth: &TxAuthority
     ): TxAuthority {
         let new_auth = copy_(auth);
-        let fallback = action_set::new(vector[]);
 
         // Delegation cannot expand the actions that an agent already has; it can merely extend a
-        // subset of its existing actions to a new principal
-        let agent_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &agent, fallback);
-        let filtered_actions = action::intersection(&new_actions, action_set::general(agent_actions));
+        // subset of its existing actions to a new principal. We filter actions here.
+        let agent_actions_maybe = vec_map2::get_maybe(&new_auth.principal_actions, &agent);
+        if (option::is_some(&agent_actions_maybe)) {
+            let agent_actions = option::destroy_some(agent_actions_maybe);
+            let filtered_actions = action::intersection(&new_actions, action_set::general(&agent_actions));
 
-        let principal_actions = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &principal, fallback);
-        action_set::add_general_(principal_actions, filtered_actions);
+            let fallback = action_set::new(vector[]);
+            let principal = vec_map2::borrow_mut_fill(&mut new_auth.principal_actions, &principal, fallback);
+
+            action_set::add_general_(principal, filtered_actions);
+        };
 
         new_auth
     }

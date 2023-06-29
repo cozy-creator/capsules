@@ -19,8 +19,20 @@
 //
 // If you want to rotate the master-key for a organization, you can simply send the organization to a new
 // address using OrgTransfer.
+// 
+// Note that 'Organization' is distinct and separate from 'Person'; although they accomplish similar goals,
+// namely they both act as a store of delegated actions on behalf of a principal, they accomplish this
+// in different ways. For a 'Person' object, we delegate using 'action sets', meaning the end-user can
+// delegate control of specific types and object-ids, in addition to just actions. This allows for
+// very granular control. Organizations have less granular control, but use an RBAC (role based access control)
+// scheme instead, allowing them to delegate actions to a large number of agents (keypairs) at one time
+// efficiently.
+// Additionally, Organization is built generally assuming that the user is more sophisticated and has
+// better security practices, although for more potentially dangerous actions. Whereas Person is built with
+// the assumption that the end-user may be easily phished.
 
 module ownership::organization {
+    use std::option;
     use std::string::String;
     use std::vector;
 
@@ -262,8 +274,15 @@ module ownership::organization {
     }
 
     // This function could safely be public, but we want users to use one of the above-two functions
+    // The owner-address of an Organization automatically gets an ADMIN role over the organization;
+    // there's no need to add a special role for the owner
     fun claim_actions_for_agent(organization: &Organization, agent: address, auth: &TxAuthority): TxAuthority {
-        let actions = rbac::get_agent_actions(&organization.rbac, agent);
+        let actions = if (ownership::get_owner(&organization.id) == option::some(agent)) {
+            rbac::get_admin()
+        } else {
+            rbac::get_agent_actions(&organization.rbac, agent)
+        };
+        
         let principal = principal(organization);
         tx_authority::add_actions_internal(principal, agent, actions, auth)
     }
@@ -438,7 +457,7 @@ module ownership::organization {
     // These improve usability by making organization functions callable directly by the Sui CLI; no need
     // for client-side composition to construct a TxAuthority object.
 
-    entry fun create_from_receipt_(
+    public entry fun create_from_receipt_(
         receipt: &mut PublishReceipt,
         ctx: &mut TxContext
     ) {
@@ -446,7 +465,7 @@ module ownership::organization {
         return_and_share(organization);
     }
 
-    entry fun create_from_package_(
+    public entry fun create_from_package_(
         stored: Package,
         ctx: &mut TxContext
     ) {
@@ -454,7 +473,7 @@ module ownership::organization {
         return_and_share(organization);
     }
 
-    entry fun add_package_(
+    public entry fun add_package_(
         organization: &mut Organization,
         receipt: &mut PublishReceipt,
         ctx: &mut TxContext
@@ -463,7 +482,7 @@ module ownership::organization {
         add_package(receipt, organization, &auth, ctx)
     }
 
-    entry fun add_package_from_stored_(
+    public entry fun add_package_from_stored_(
         organization: &mut Organization,
         stored: Package,
         ctx: &mut TxContext
@@ -472,7 +491,7 @@ module ownership::organization {
         add_package_from_stored(organization, stored, &auth)
     }
 
-    entry fun remove_package_(
+    public entry fun remove_package_(
         organization: &mut Organization,
         package_id: ID,
         recipient: address,
@@ -483,7 +502,7 @@ module ownership::organization {
         transfer::transfer(package, recipient);
     }
 
-    entry fun destroy_(
+    public entry fun destroy_(
         organization: Organization,
         ctx: &mut TxContext
     ) {
@@ -493,7 +512,7 @@ module ownership::organization {
 
     // ========== Agent & Roles conenience ntry functions ==========
 
-    entry fun delete_agent_(
+    public entry fun delete_agent_(
         organization: &mut Organization,
         agent: address,
         ctx: &TxContext
@@ -502,7 +521,7 @@ module ownership::organization {
         delete_agent(organization, agent, &auth);
     }
 
-    entry fun set_role_for_agent_(
+    public entry fun set_role_for_agent_(
         organization: &mut Organization,
         agent: address,
         role: String,
@@ -512,7 +531,7 @@ module ownership::organization {
         set_role_for_agent(organization, agent, role, &auth);
     }
 
-    entry fun grant_action_to_role_<Action>(
+    public entry fun grant_action_to_role_<Action>(
         organization: &mut Organization,
         role: String,
         ctx: &TxContext
@@ -521,7 +540,7 @@ module ownership::organization {
         grant_action_to_role<Action>(organization, role, &auth)
     }
 
-    entry fun revoke_action_from_role_<Action>(
+    public entry fun revoke_action_from_role_<Action>(
         organization: &mut Organization,
         role: String,
         ctx: &TxContext
@@ -530,7 +549,7 @@ module ownership::organization {
         revoke_action_from_role<Action>(organization, role, &auth)
     }
 
-    entry fun delete_role_and_agents_(
+    public entry fun delete_role_and_agents_(
         organization: &mut Organization,
         role: String,
         ctx: &TxContext
@@ -541,7 +560,7 @@ module ownership::organization {
 
     // ========== Endorsements convenience entry functions ==========
 
-    entry fun add_endorsement_(
+    public entry fun add_endorsement_(
         organization: &mut Organization,
         from: address,
         ctx: &TxContext
@@ -550,7 +569,7 @@ module ownership::organization {
         add_endorsement(organization, from, &auth)
     }
 
-    entry fun remove_endorsement_(
+    public entry fun remove_endorsement_(
         organization: &mut Organization,
         from: address,
         ctx: &TxContext
@@ -559,38 +578,3 @@ module ownership::organization {
         remove_endorsement(organization, from, &auth)
     }
 }
-
-
-    // UPDATE: I think it's simply too dangerous to allow regular users to create Organizations.
-    // We restrict organizations to only projects who are deploying packages, since they can be
-    // assumed to have tighter security and greater security knowledge.
-
-    // Convenience entry function
-    // public entry fun create(ctx: &mut TxContext) {
-    //     create_(tx_context::sender(ctx), &tx_authority::begin(ctx), ctx);
-    // }
-
-    // Create a organization object for an address; packages will be empty but can be added later
-    // Instead of returning the Organization here, we force you to use a second transaction
-    // to edit it; this is a safety measure. If a user were tricked into creating this, the
-    // malicious actor will need to trick the user into signing a second transaction after this,
-    // adding actions to the Organization object created here.
-    // public fun create_(principal: address, auth: &TxAuthority, ctx: &mut TxContext) {
-    //     assert!(tx_authority::has_admin_action(principal, auth), ENO_ADMIN_AUTHORITY);
-
-    //     let rbac = rbac::create(principal, &auth);
-    //     let organization = Organization { 
-    //         id: object::new(ctx),
-    //         packages: vector::empty(), 
-    //         rbac 
-    //     };
-
-    //     // Initialize ownership
-    //     let typed_id = typed_id::new(&organization);
-    //     let auth = tx_authority::begin_with_type(&Witness { });
-    //     // Owner == principal, and ownership of this object can never be changed since we do not
-    //     // assign any transfer function here
-    //     ownership::as_shared_object_(&mut organization.id, typed_id, principal, vector::empty(), &auth);
-
-    //     transfer::share_object(organization);
-    // }
