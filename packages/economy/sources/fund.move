@@ -186,18 +186,6 @@ module economy::fund {
         queue::direct_withdraw(&mut fund.asset_queue, asset)
     }
 
-    // ============= Getters =============
-
-    // Calculates the value of a share, priced in `A`.
-    public fun shares_to_asset<S, A>(fund: &Fund<S, A>, shares: u64): u64 {
-        queue::ratio_conversion(shares, fund.net_assets, balance::supply_value(&fund.total_shares))
-    }
-
-    // Calculates the number of shares that can be purchased with `asset`
-    public fun asset_to_shares<S, A>(fund: &Fund<S, A>, asset: u64): u64 { 
-        queue::ratio_conversion(asset, balance::supply_value(&fund.total_shares), fund.net_assets)
-    }
-
     // ============= Fund Manager Interface =============
     
     // Can only be called by a package's init function on publish because otw is a one-time-witness
@@ -334,7 +322,41 @@ module economy::fund {
         };
     }
 
+    // ============= Getters =============
 
+    // The amount of asset `A` available in the fund's reserve currently
+    public fun reserves_available<S, A>(fund: &Fund<S, A>): u64 {
+        queue::reserves_available(&fund.asset_queue)
+    }
+
+    // Amount of `S` you will get in exchange for amount of asset `A`
+    // This is useful for on-chain logic looking to avoid aborting
+    public fun instant_purchase_result<S, A>(fund: &Fund<S, A>, asset: u64): (bool, u64) {
+        if (!fund.config.instant_purchase) { return (false, 0) };
+
+        (true, asset_to_shares(fund, asset))
+    }
+
+    // Amount of `A` you will get for `amount` of `S`
+    // Returns '(false, 0)' if instant redeem is not allowed, or if sufficient `A` is unavailable
+    // in the fund's reserve to meet the redemption.
+    public fun instant_redeem_result<S, A>(fund: &Fund<S, A>, shares: u64): (bool, u64) {
+        if (!fund.config.instant_redeem) { return (false, 0) };
+
+        let asset = shares_to_asset(fund, shares);
+        if (asset <= reserves_available(fund)) return (true, asset)
+        else return (false, 0)
+    }
+
+    // Calculates the value of a share, priced in `A`.
+    public fun shares_to_asset<S, A>(fund: &Fund<S, A>, shares: u64): u64 {
+        queue::ratio_conversion(shares, fund.net_assets, balance::supply_value(&fund.total_shares))
+    }
+
+    // Calculates the number of shares that can be purchased with `asset`
+    public fun asset_to_shares<S, A>(fund: &Fund<S, A>, asset: u64): u64 { 
+        queue::ratio_conversion(asset, balance::supply_value(&fund.total_shares), fund.net_assets)
+    }
 }
 
 // ============= Helper Module =============
@@ -346,6 +368,8 @@ module economy::fund_helper {
     // purchase with coin
     // redeem to account
     // redeem to coin
+
+    // Get exact amount out (purchase and redeem)
 
 }
 
