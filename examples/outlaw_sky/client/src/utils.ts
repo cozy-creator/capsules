@@ -2,7 +2,7 @@ import { RawSigner, SuiTransactionBlockResponse, TransactionBlock } from "@myste
 import { provider } from "./config"
 
 export async function createdObjectsMap(txb: SuiTransactionBlockResponse) {
-    if (!txb.effects?.created) throw new Error("")
+    if (!txb.effects?.created) throw new Error("Cannot find created objects")
 
     const objects = new Map()
     const ids = txb.effects.created.map((obj) => obj.reference.objectId)

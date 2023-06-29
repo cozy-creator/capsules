@@ -7,7 +7,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness",
+    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Witness",
     {
         dummy_field: `bool`,
     }
@@ -16,7 +16,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
     return (
         type ===
-        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness"
+        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Witness"
     )
 }
 
@@ -26,7 +26,7 @@ export interface WitnessFields {
 
 export class Witness {
     static readonly $typeName =
-        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Witness"
+        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Witness"
     static readonly $numTypeParams = 0
 
     readonly dummyField: boolean
@@ -54,7 +54,7 @@ export class Witness {
 /* ============================== Warship =============================== */
 
 bcs.registerStructType(
-    "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship",
+    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Warship",
     {
         id: `0x2::object::UID`,
     }
@@ -63,7 +63,7 @@ bcs.registerStructType(
 export function isWarship(type: Type): boolean {
     return (
         type ===
-        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship"
+        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Warship"
     )
 }
 
@@ -73,7 +73,7 @@ export interface WarshipFields {
 
 export class Warship {
     static readonly $typeName =
-        "0xe6bea1f0654cadac146805a2dc18a474503a2ef3ae2ede89d51356f12af1342b::warship::Warship"
+        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::warship::Warship"
     static readonly $numTypeParams = 0
 
     readonly id: ObjectId

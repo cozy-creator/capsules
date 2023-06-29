@@ -1,5 +1,5 @@
 import { bcs, serializeByField } from "@capsulecraft/serializer"
-import { CREATOR, OTHER, Outlaw, USER } from "../outlaw-sky/outlaw-sky/structs"
+import { CREATOR, USER, Outlaw } from "../outlaw-sky/outlaw-sky/structs"
 import { adminSigner, agentSigner, delegateSigner, fakeAgentSigner } from "./config"
 import { RawSigner, TransactionBlock } from "@mysten/sui.js"
 import {
@@ -92,12 +92,10 @@ async function main() {
     const rawData = { name: "Kehinde", power_level: 100_000 }
 
     const USER_TY = USER.$typeName
+    const USER_ROLE = "user"
 
     const CREATOR_ROLE = "creator"
     const CREATOR_TY = CREATOR.$typeName
-
-    const OTHER_ROLE = "other"
-    const OTHER_TY = OTHER.$typeName
 
     const org = <string>process.env.ORGANIZATION_ID
     const fields = Object.keys(schema).map((val: string) => [val, schema[<keyof typeof schema>val]])
@@ -109,7 +107,7 @@ async function main() {
         console.log("Setup the roles and actions for the organizion")
         const data = [
             { action: CREATOR_TY, role: CREATOR_ROLE },
-            { action: OTHER_TY, role: OTHER_ROLE },
+            { action: USER_TY, role: USER_ROLE },
         ]
 
         await setupRoles(adminSigner, org, data)
@@ -117,13 +115,13 @@ async function main() {
     }
 
     {
-        console.log('Grant the "OTHER" action to agent as the organization')
-        await setOrgRoleForAgent_(adminSigner, { agent: agentAddr, org, role: OTHER_ROLE })
+        console.log('Grant the "USER" action to agent as the organization')
+        await setOrgRoleForAgent_(adminSigner, { agent: agentAddr, org, role: USER_ROLE })
         sleep()
     }
 
     {
-        console.log('Create an outlaw with the agent using the "OTHER" action')
+        console.log('Create an outlaw with the agent using the "USER" action')
         await createOutlaw_(agentSigner, { org, fields, data, owner: agentAddr })
         sleep()
     }

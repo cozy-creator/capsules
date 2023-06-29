@@ -10,7 +10,6 @@ export function registerClasses(loader: StructClassLoader) {
     loader.register(outlawSky.Witness)
     loader.register(outlawSky.Outlaw)
     loader.register(outlawSky.CREATOR)
-    loader.register(outlawSky.OTHER)
     loader.register(outlawSky.OUTLAW_SKY)
     loader.register(outlawSky.USER)
     loader.register(warship.Witness)
