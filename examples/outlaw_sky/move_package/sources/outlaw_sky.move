@@ -184,6 +184,7 @@ module outlaw_sky::outlaw_sky {
 
     // ======== Initialize ========
 
+    #[allow(unused_function)]
     fun init(genesis: OUTLAW_SKY, ctx: &mut TxContext) {
         let receipt = publish_receipt::claim(&genesis, ctx);
         transfer::public_transfer(receipt, tx_context::sender(ctx));

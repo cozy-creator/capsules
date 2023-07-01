@@ -4,57 +4,10 @@ import { FieldsWithTypes, Type } from "../../_framework/util"
 import { Encoding } from "@mysten/bcs"
 import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 
-/* ============================== Witness =============================== */
-
-bcs.registerStructType(
-    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Witness",
-    {
-        dummy_field: `bool`,
-    }
-)
-
-export function isWitness(type: Type): boolean {
-    return (
-        type ===
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Witness"
-    )
-}
-
-export interface WitnessFields {
-    dummyField: boolean
-}
-
-export class Witness {
-    static readonly $typeName =
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Witness"
-    static readonly $numTypeParams = 0
-
-    readonly dummyField: boolean
-
-    constructor(dummyField: boolean) {
-        this.dummyField = dummyField
-    }
-
-    static fromFields(fields: Record<string, any>): Witness {
-        return new Witness(fields.dummy_field)
-    }
-
-    static fromFieldsWithTypes(item: FieldsWithTypes): Witness {
-        if (!isWitness(item.type)) {
-            throw new Error("not a Witness type")
-        }
-        return new Witness(item.fields.dummy_field)
-    }
-
-    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Witness {
-        return Witness.fromFields(bcs.de([Witness.$typeName], data, encoding))
-    }
-}
-
 /* ============================== Outlaw =============================== */
 
 bcs.registerStructType(
-    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Outlaw",
+    "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Outlaw",
     {
         id: `0x2::object::UID`,
     }
@@ -63,7 +16,7 @@ bcs.registerStructType(
 export function isOutlaw(type: Type): boolean {
     return (
         type ===
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Outlaw"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Outlaw"
     )
 }
 
@@ -73,7 +26,7 @@ export interface OutlawFields {
 
 export class Outlaw {
     static readonly $typeName =
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::Outlaw"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Outlaw"
     static readonly $numTypeParams = 0
 
     readonly id: ObjectId
@@ -119,10 +72,57 @@ export class Outlaw {
     }
 }
 
+/* ============================== Witness =============================== */
+
+bcs.registerStructType(
+    "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Witness",
+    {
+        dummy_field: `bool`,
+    }
+)
+
+export function isWitness(type: Type): boolean {
+    return (
+        type ===
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Witness"
+    )
+}
+
+export interface WitnessFields {
+    dummyField: boolean
+}
+
+export class Witness {
+    static readonly $typeName =
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::Witness"
+    static readonly $numTypeParams = 0
+
+    readonly dummyField: boolean
+
+    constructor(dummyField: boolean) {
+        this.dummyField = dummyField
+    }
+
+    static fromFields(fields: Record<string, any>): Witness {
+        return new Witness(fields.dummy_field)
+    }
+
+    static fromFieldsWithTypes(item: FieldsWithTypes): Witness {
+        if (!isWitness(item.type)) {
+            throw new Error("not a Witness type")
+        }
+        return new Witness(item.fields.dummy_field)
+    }
+
+    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Witness {
+        return Witness.fromFields(bcs.de([Witness.$typeName], data, encoding))
+    }
+}
+
 /* ============================== CREATOR =============================== */
 
 bcs.registerStructType(
-    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::CREATOR",
+    "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::CREATOR",
     {
         dummy_field: `bool`,
     }
@@ -131,7 +131,7 @@ bcs.registerStructType(
 export function isCREATOR(type: Type): boolean {
     return (
         type ===
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::CREATOR"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::CREATOR"
     )
 }
 
@@ -141,7 +141,7 @@ export interface CREATORFields {
 
 export class CREATOR {
     static readonly $typeName =
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::CREATOR"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::CREATOR"
     static readonly $numTypeParams = 0
 
     readonly dummyField: boolean
@@ -169,7 +169,7 @@ export class CREATOR {
 /* ============================== OUTLAW_SKY =============================== */
 
 bcs.registerStructType(
-    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::OUTLAW_SKY",
+    "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::OUTLAW_SKY",
     {
         dummy_field: `bool`,
     }
@@ -178,7 +178,7 @@ bcs.registerStructType(
 export function isOUTLAW_SKY(type: Type): boolean {
     return (
         type ===
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::OUTLAW_SKY"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::OUTLAW_SKY"
     )
 }
 
@@ -188,7 +188,7 @@ export interface OUTLAW_SKYFields {
 
 export class OUTLAW_SKY {
     static readonly $typeName =
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::OUTLAW_SKY"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::OUTLAW_SKY"
     static readonly $numTypeParams = 0
 
     readonly dummyField: boolean
@@ -216,7 +216,7 @@ export class OUTLAW_SKY {
 /* ============================== USER =============================== */
 
 bcs.registerStructType(
-    "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::USER",
+    "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::USER",
     {
         dummy_field: `bool`,
     }
@@ -225,7 +225,7 @@ bcs.registerStructType(
 export function isUSER(type: Type): boolean {
     return (
         type ===
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::USER"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::USER"
     )
 }
 
@@ -235,7 +235,7 @@ export interface USERFields {
 
 export class USER {
     static readonly $typeName =
-        "0xe7196d8d1bde0c02d435b950e51341e59b1a8d56e9081db7b6f43c70b3650c11::outlaw_sky::USER"
+        "0x68d0d4a8bd43e4ac81eaa9049ed13fbd4ab8cad89f80e0688ec9316084236b64::outlaw_sky::USER"
     static readonly $numTypeParams = 0
 
     readonly dummyField: boolean

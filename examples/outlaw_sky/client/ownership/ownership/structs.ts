@@ -1,7 +1,7 @@
 import { Option } from "../../_dependencies/source/0x1/option/structs"
-import { StructTag } from "../../_dependencies/source/0xfbf59d4ea15bc2da870cd74991503ae3c504bb108061ba5d7270fd0bb0be00b2/struct-tag/structs"
 import { bcsSource as bcs } from "../../_framework/bcs"
 import { FieldsWithTypes, Type } from "../../_framework/util"
+import { StructTag } from "../../sui-utils/struct-tag/structs"
 import { Encoding } from "@mysten/bcs"
 
 /* ============================== Ownership =============================== */

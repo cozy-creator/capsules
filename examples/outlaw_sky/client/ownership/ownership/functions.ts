@@ -56,13 +56,6 @@ export function canActAsAddressOnObject(
     })
 }
 
-export function getType(txb: TransactionBlock, uid: ObjectArg) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::ownership::get_type`,
-        arguments: [obj(txb, uid)],
-    })
-}
-
 export interface AsOwnedObjectArgs {
     uid: ObjectArg
     typedId: ObjectArg
@@ -258,6 +251,13 @@ export function getPackageAuthority(txb: TransactionBlock, uid: ObjectArg) {
 export function getTransferAuthority(txb: TransactionBlock, uid: ObjectArg) {
     return txb.moveCall({
         target: `${PUBLISHED_AT}::ownership::get_transfer_authority`,
+        arguments: [obj(txb, uid)],
+    })
+}
+
+export function getType(txb: TransactionBlock, uid: ObjectArg) {
+    return txb.moveCall({
+        target: `${PUBLISHED_AT}::ownership::get_type`,
         arguments: [obj(txb, uid)],
     })
 }

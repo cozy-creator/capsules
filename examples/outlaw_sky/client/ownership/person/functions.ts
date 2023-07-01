@@ -32,6 +32,23 @@ export function uidMut(txb: TransactionBlock, person: ObjectArg) {
     })
 }
 
+export interface Create_Args {
+    principal: string | TransactionArgument
+    guardian: string | TransactionArgument
+    auth: ObjectArg
+}
+
+export function create_(txb: TransactionBlock, args: Create_Args) {
+    return txb.moveCall({
+        target: `${PUBLISHED_AT}::person::create_`,
+        arguments: [
+            pure(txb, args.principal, `address`),
+            pure(txb, args.guardian, `address`),
+            obj(txb, args.auth),
+        ],
+    })
+}
+
 export interface AddActionForObjectsArgs {
     person: ObjectArg
     agent: string | TransactionArgument
@@ -190,23 +207,6 @@ export function guardian(txb: TransactionBlock, person: ObjectArg) {
     return txb.moveCall({
         target: `${PUBLISHED_AT}::person::guardian`,
         arguments: [obj(txb, person)],
-    })
-}
-
-export interface Create_Args {
-    principal: string | TransactionArgument
-    guardian: string | TransactionArgument
-    auth: ObjectArg
-}
-
-export function create_(txb: TransactionBlock, args: Create_Args) {
-    return txb.moveCall({
-        target: `${PUBLISHED_AT}::person::create_`,
-        arguments: [
-            pure(txb, args.principal, `address`),
-            pure(txb, args.guardian, `address`),
-            obj(txb, args.auth),
-        ],
     })
 }
 

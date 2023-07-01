@@ -4,3 +4,4 @@ rpc = "http://127.0.0.1:9000"
 [packages]
 OutlawSky = { local = "../move_package" }
 Ownership = { local = "../../../packages/ownership" }
+SuiUtils = { local = "../../../packages/sui_utils" }

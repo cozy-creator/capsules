@@ -6,52 +6,6 @@ import { UID } from "../../0x2/object/structs"
 import { Encoding } from "@mysten/bcs"
 import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js"
 
-/* ============================== Key =============================== */
-
-bcs.registerStructType(
-    "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key",
-    {
-        dummy_field: `bool`,
-    }
-)
-
-export function isKey(type: Type): boolean {
-    return (
-        type === "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key"
-    )
-}
-
-export interface KeyFields {
-    dummyField: boolean
-}
-
-export class Key {
-    static readonly $typeName =
-        "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key"
-    static readonly $numTypeParams = 0
-
-    readonly dummyField: boolean
-
-    constructor(dummyField: boolean) {
-        this.dummyField = dummyField
-    }
-
-    static fromFields(fields: Record<string, any>): Key {
-        return new Key(fields.dummy_field)
-    }
-
-    static fromFieldsWithTypes(item: FieldsWithTypes): Key {
-        if (!isKey(item.type)) {
-            throw new Error("not a Key type")
-        }
-        return new Key(item.fields.dummy_field)
-    }
-
-    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
-        return Key.fromFields(bcs.de([Key.$typeName], data, encoding))
-    }
-}
-
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
@@ -96,6 +50,52 @@ export class Witness {
 
     static fromBcs(data: Uint8Array | string, encoding?: Encoding): Witness {
         return Witness.fromFields(bcs.de([Witness.$typeName], data, encoding))
+    }
+}
+
+/* ============================== Key =============================== */
+
+bcs.registerStructType(
+    "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key",
+    {
+        dummy_field: `bool`,
+    }
+)
+
+export function isKey(type: Type): boolean {
+    return (
+        type === "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key"
+    )
+}
+
+export interface KeyFields {
+    dummyField: boolean
+}
+
+export class Key {
+    static readonly $typeName =
+        "0xb8f4b2057dcf971ebd082343462e233c46562d7fbd808472ac978714f296f2e4::capsule::Key"
+    static readonly $numTypeParams = 0
+
+    readonly dummyField: boolean
+
+    constructor(dummyField: boolean) {
+        this.dummyField = dummyField
+    }
+
+    static fromFields(fields: Record<string, any>): Key {
+        return new Key(fields.dummy_field)
+    }
+
+    static fromFieldsWithTypes(item: FieldsWithTypes): Key {
+        if (!isKey(item.type)) {
+            throw new Error("not a Key type")
+        }
+        return new Key(item.fields.dummy_field)
+    }
+
+    static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
+        return Key.fromFields(bcs.de([Key.$typeName], data, encoding))
     }
 }
 
