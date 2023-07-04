@@ -67,7 +67,7 @@ module economy::account {
     // be called by (1) on-chain, by the package-itself, using a Witness struct, or (2) off-chain, by
     // whoever owns the Organization object that contains the package.
 
-    struct CoinData<phantom T> has key {
+    struct CoinConfig<phantom T> has key {
         id: UID
     }
 
