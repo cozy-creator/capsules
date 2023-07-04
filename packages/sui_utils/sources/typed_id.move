@@ -45,3 +45,36 @@ module sui_utils::typed_id {
         typed_id.id == object::id(obj)
     }
 }
+
+#[test_only]
+module sui_utils::typed_id_tests {
+    use sui::object::{Self, UID};
+    use sui::test_scenario;
+
+    use sui_utils::typed_id;
+
+    struct TestObject has key {
+        id: UID
+    }
+
+    fun drop_obj(obj: TestObject) {
+        let TestObject { id } = obj;
+        object::delete(id);
+    }
+
+    #[test]
+    fun test_equality() {
+        let scenario = test_scenario::begin(@0x54E);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let obj = TestObject { id: object::new(ctx) };
+        let tid = typed_id::new(&obj);
+
+        assert!(typed_id::equals_object(&tid, &obj), 0);
+        assert!(typed_id::as_id(&tid) == object::borrow_id(&obj), 0);
+        assert!(typed_id::to_id(tid) == object::id(&obj), 0);
+
+        drop_obj(obj);
+        test_scenario::end(scenario);
+    }
+}
