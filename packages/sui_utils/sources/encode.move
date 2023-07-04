@@ -28,6 +28,10 @@ module sui_utils::encode {
     const EINVALID_TYPE_NAME: u64 = 0;
     const ESUPPLIED_TYPE_CANNOT_BE_ABSTRACT: u64 = 1;
 
+    public fun is_same_type<A, B>(): bool {
+        type_name::get<A>() == type_name::get<B>()
+    }
+
     public fun type_name<T>(): String {
         utf8(ascii::into_bytes(type_name::into_string(type_name::get<T>())))
     }

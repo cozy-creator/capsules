@@ -15,8 +15,8 @@ module outlaw_sky::demo_factory {
     use sui_utils::string2;
     use sui_utils::rand;
 
-    // All of these are metadata properites and do not belong on this struct, but we include them here anyway because the sui-explorer
-    // is built to read them (lol)
+    // All of these are metadata properites and do not belong on this struct, but we include them here
+    // anyway because the sui-explorer is built to read them (lol)
     struct Outlaw has key {
         id: UID,
         name: String,

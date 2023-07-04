@@ -9,6 +9,7 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 SuiUtils = { local = "../../../packages/sui_utils" }
 Ownership = { local = "../../../packages/ownership" }
 Attach = { local = "../../../packages/attach" }
+TransferSystem = { local = "../../../packages/transfer_system" }
 
 [addresses]
 outlaw_sky = "0xb064e31000b08724ebd94a605cc47a9e722ba09d3b52f201e1af79de063add3a"

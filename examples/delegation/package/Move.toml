@@ -1,0 +1,12 @@
+[package]
+name = "package"
+version = "0.0.1"
+
+[dependencies]
+SuiUtils = { local = "../../../packages/sui_utils" }
+Ownership = { local = "../../../packages/ownership" }
+# TransferSystem = { local = "../../../packages/transfer_system" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+
+[addresses]
+package = "0x0"

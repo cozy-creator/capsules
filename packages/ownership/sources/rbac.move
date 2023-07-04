@@ -1,33 +1,34 @@
 // Sui's Role Based Access Control (RBAC) system
 
-// This allows a principal (address) to delegate a set of permissions to an agent (address).
-// Roles provide a layer of abstraction; instead of granting each agent a set of permissions individually,
-// you assign each agent a set of roles, and then define the permissions for each of those roles.
+// This allows a principal (address) to delegate a set of actions to an agent (address).
+// Roles provide a layer of abstraction; instead of granting each agent a set of actions individually,
+// you assign each agent a set of roles, and then define the actions for each of those roles.
 
 // A delegation is:
-// The specification of a permission (type), enabling access to a set of function calls
+// The specification of a action (type), enabling access to a set of function calls
 // By an agent
 // On behalf of the principle
 
 // An RBAC can be used to delegate control of an account
-// Example: a game-studio runs a number of servers, and gives their keypairs permissions to edit
+// Example: a game-studio runs a number of servers, and gives their keypairs actions to edit
 // its game objects.
 
-// For safety, we are limiting RBACs to only namespaces for now.
+// For safety, we are limiting RBACs to only organizations for now.
 // Previously considered functionality:
-// - Allow any user to create an RBAC / namespace so other people can use their account
-// - Allow RBAC to be stored inside of objects, and grant permissions to that object on behalf of
+// - Allow any user to create an RBAC / organizations so other people can use their account
+// - Allow RBAC to be stored inside of objects, and grant actions to that object on behalf of
 // owners.
 // We removed this functionality for now because it's too dangerous and complex.
 // For simplicity, we limit each agent to having only one role at a time.
 
-// Note that there will never be a permission-vector containing the ADMIN or MANAGER permissions; rather
+// Note that there will never be a action-vector containing the ADMIN or MANAGER actions; rather
 // you should instead use the grant_admin_role_for_agent() and grant_manager_role_for_agent() functions.
-// These give special reserved role-names, as defined in ownership::permissions.
+// These give special reserved role-names, as defined in ownership::actions.
 
-// For safety, this module is only callable by ownership::organization
+// For security, this module is only callable by ownership::organization
 
 module ownership::rbac {
+    use std::option;
     use std::string::String;
     use std::vector;
 
@@ -36,7 +37,7 @@ module ownership::rbac {
     use sui_utils::vector2;
     use sui_utils::vec_map2;
 
-    use ownership::permission::{Self, Permission};
+    use ownership::action::{Self, Action, ADMIN};
 
     friend ownership::organization;
 
@@ -50,9 +51,9 @@ module ownership::rbac {
     // After creation the principal cannot be changed
     // This can be modified with mere referential authority; store this somewhere private
     struct RBAC has store, drop {
-        principal: address, // permission granted on behalf of
+        principal: address, // action granted on behalf of
         agent_role: VecMap<address, String>, // agent -> role
-        role_permissions: VecMap<String, vector<Permission>> // role -> permissions
+        role_actions: VecMap<String, vector<Action>> // role -> actions
     }
 
     // ======= Principal API =======
@@ -62,7 +63,7 @@ module ownership::rbac {
         RBAC {
             principal,
             agent_role: vec_map::empty(),
-            role_permissions: vec_map::empty()
+            role_actions: vec_map::empty()
         }
     }
 
@@ -71,58 +72,46 @@ module ownership::rbac {
     // Creates or overwrites existing role for agent
     public(friend) fun set_role_for_agent(rbac: &mut RBAC, agent: address, role: String) {
         vec_map2::set(&mut rbac.agent_role, &agent, role);
-        // Ensure that role exists in rbac.role_permissions
-        vec_map2::borrow_mut_fill(&mut rbac.role_permissions, &role, vector::empty());
+        // Ensure that role exists in rbac.role_actions
+        vec_map2::borrow_mut_fill(&mut rbac.role_actions, &role, vector::empty());
     }
-
-    // The agent is now indistinguishable from the principal during transaction execution.
-    // This is a dangerous role to grant, as the agent can now grant and edit permissions as well
-    // Use this with caution.
-    // public(friend) fun grant_admin_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_role, &agent, utf8(ADMIN_ROLE));
-    // }
-
-    // // Grants all permissions, except for admin
-    // public(friend) fun grant_manager_role_for_agent(rbac: &mut RBAC, agent: address) {
-    //     vec_map2::set(&mut rbac.agent_role, &agent, utf8(MANAGER_ROLE));
-    // }
 
     public(friend) fun delete_agent(rbac: &mut RBAC, agent: address) {
         vec_map2::remove_maybe(&mut rbac.agent_role, &agent);
     }
 
-    // ======= Assign Permissions to Roles =======
+    // ======= Assign Actions to Roles =======
 
-    public(friend) fun grant_permission_to_role<Permission>(rbac: &mut RBAC, role: String) {
-        let permission = permission::new<Permission>();
-        if (permission::is_admin_permission_(&permission) || permission::is_manager_permission_(&permission)) {
-            // Admin and Manager permissions overwrite all other existing permissions
-            vec_map2::set(&mut rbac.role_permissions, &role, vector[permission]);
+    public(friend) fun grant_action_to_role<Action>(rbac: &mut RBAC, role: String) {
+        let action = action::new<Action>();
+        if (action::is_admin_action_(&action) || action::is_manager_action_(&action)) {
+            // Admin and Manager actions overwrite all other existing actions
+            vec_map2::set(&mut rbac.role_actions, &role, vector[action]);
         } else {
-            let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, &role, vector::empty());
-            vector2::merge(existing, vector[permission]);
+            let existing = vec_map2::borrow_mut_fill(&mut rbac.role_actions, &role, vector::empty());
+            vector2::merge(existing, vector[action]);
         };
     }
 
-    // Empty roles (with no permissions) are not automatically deleted
-    public(friend) fun revoke_permission_from_role<Permission>(rbac: &mut RBAC, role: String) {
-        let permission = permission::new<Permission>();
-        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_permissions, &role, vector::empty());
-        vector2::remove_maybe(existing, &permission);
+    // Empty roles (with no actions) are not automatically deleted
+    public(friend) fun revoke_action_from_role<Action>(rbac: &mut RBAC, role: String) {
+        let action = action::new<Action>();
+        let existing = vec_map2::borrow_mut_fill(&mut rbac.role_actions, &role, vector::empty());
+        vector2::remove_maybe(existing, &action);
     }
 
     // Any agent with this role will also be removed. The agents can always be re-added with new roles.
     public(friend) fun delete_role_and_agents(rbac: &mut RBAC, role: String) {
         vec_map2::remove_entries_with_value(&mut rbac.agent_role, &role);
-        vec_map2::remove_maybe(&mut rbac.role_permissions, &role);
+        vec_map2::remove_maybe(&mut rbac.role_actions, &role);
     }
 
     // ======= Getter Functions =======
 
     public(friend) fun to_fields(
         rbac: &RBAC
-    ): (address, &VecMap<address, String>, &VecMap<String, vector<Permission>>) {
-        (rbac.principal, &rbac.agent_role, &rbac.role_permissions)
+    ): (address, &VecMap<address, String>, &VecMap<String, vector<Action>>) {
+        (rbac.principal, &rbac.agent_role, &rbac.role_actions)
     }
 
     public fun principal(rbac: &RBAC): address {
@@ -133,19 +122,34 @@ module ownership::rbac {
         &rbac.agent_role
     }
 
-    public(friend) fun role_permissions(rbac: &RBAC): &VecMap<String, vector<Permission>> {
-        &rbac.role_permissions
+    public(friend) fun role_actions(rbac: &RBAC): &VecMap<String, vector<Action>> {
+        &rbac.role_actions
     }
 
-    public(friend) fun get_agent_permissions(rbac: &RBAC, agent: address): vector<Permission> {
-        let role = vec_map::get(&rbac.agent_role, &agent);
-        *vec_map::get(&rbac.role_permissions, role)
+    // The principal always has ADMIN action over themselves; there is no need to give the principal
+    // a role within the RBAC.
+    public(friend) fun get_agent_actions(rbac: &RBAC, agent: address): vector<Action> {
+        if (agent == rbac.principal) {
+            return vector[action::new<ADMIN>()]
+        };
+
+        let role_maybe = vec_map2::get_maybe(&rbac.agent_role, &agent);
+        if (option::is_some(&role_maybe)) {
+            let role = option::destroy_some(role_maybe);
+            *vec_map::get(&rbac.role_actions, &role)
+        } else {
+            vector[]
+        }
+    }
+
+    public(friend) fun get_admin(): vector<Action> {
+        vector[action::new<ADMIN>()]
     }
 }
 
     // struct Key has store, copy, drop { principal: address }
 
-    // Used by the principal to create roles and delegate permissions to agents
+    // Used by the principal to create roles and delegate actions to agents
 
     // public fun create(principal: address, auth: &TxAuthority): RBAC {
     //     assert!(tx_authority::is_signed_by(principal, auth), ENO_PRINCIPAL_AUTHORITY);
@@ -175,7 +179,7 @@ module ownership::rbac {
 
 
     // ======= Agent API =======
-    // Used by agents to retrieve their delegated permissions
+    // Used by agents to retrieve their delegated actions
 
     // Convenience function. Uses type T as the principal-address
     // public fun claim<T>(uid: &UID, ctx: &TxContext): TxAuthority {
@@ -192,8 +196,8 @@ module ownership::rbac {
     //     let roles = vec_map2::get_with_default(&rbac.agent_role, agent, vector::empty());
     //     let i = 0;
     //     while (i < vector::length(roles)) {
-    //         let permission = vec_map::get(&rbac.role_permissions, *vector::borrow(roles, i));
-    //         auth = tx_authority::add_permissions_internal(principal, permission, &auth);
+    //         let action = vec_map::get(&rbac.role_actions, *vector::borrow(roles, i));
+    //         auth = tx_authority::add_actions_internal(principal, action, &auth);
     //         i = i + 1;
     //     };
 

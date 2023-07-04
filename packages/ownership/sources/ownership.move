@@ -15,20 +15,23 @@ module ownership::ownership {
     use sui::dynamic_field;
 
     use sui_utils::encode;
+    use sui_utils::dynamic_field2;
     use sui_utils::typed_id::{Self, TypedID};
     use sui_utils::struct_tag::{Self, StructTag};
     
     use ownership::tx_authority::{Self, TxAuthority};
-    use ownership::permission::MANAGER;
+    use ownership::action::ADMIN;
 
     // error enums
-    const ENO_MODULE_AUTHORITY: u64 = 0;
+    const ENO_PACKAGE_AUTHORITY: u64 = 0;
     const ENO_OWNER_AUTHORITY: u64 = 1;
     const ENO_TRANSFER_AUTHORITY: u64 = 2;
     const EUID_DOES_NOT_BELONG_TO_OBJECT: u64 = 3;
     const EOBJECT_NOT_INITIALIZED: u64 = 4;
     const EOBJECT_ALREADY_INITIALIZED: u64 = 5;
     const EOWNER_ALREADY_INITIALIZED: u64 = 6;
+    const EOBJECT_MUST_NOT_HAVE_OWNER: u64 = 7;
+    const ETRANSFER_AUTH_MUST_BE_EJECTED_FIRST: u64 = 8;
 
     // Is it safe to have 'copy' and 'drop' here? Probably
     // Do we need to store 'type'? Probably
@@ -44,10 +47,15 @@ module ownership::ownership {
     // Dynamic field key for storing the Ownership struct
     struct Key has store, copy, drop { }
 
-    // Permission type allowing access to the UID
+    // Dynamic field key for indicating that an object is frozen
+    struct Frozen has store, copy, drop { }
+
+    // Action type allowing access to the UID
+    struct INITIALIZE {} // Used by packages to initialize object they create
     struct UID_MUT {} // Used to access UID_MUT
-    struct TRANSFER {} // Used to perform a transfer (change the owner)
+    struct TRANSFER {} // Used by an object's transfer-authority to transfer the object (change owner).
     struct MIGRATE {} // Used to change (migrate) the transfer-authority
+    struct FREEZE {} // Used to freeze the transfer-authority
 
     // ======= Initialize Ownership =======
     // The caller needs to supply a 'typed-id' here because `as_owned_object(&mut object.id, &object)`
@@ -105,22 +113,23 @@ module ownership::ownership {
     public fun assert_valid_initialization<T: key>(uid: &UID, typed_id: TypedID<T>, auth: &TxAuthority) {
         assert!(!is_initialized(uid), EOBJECT_ALREADY_INITIALIZED);
         assert!(object::uid_to_inner(uid) == typed_id::to_id(typed_id), EUID_DOES_NOT_BELONG_TO_OBJECT);
-        assert!(tx_authority::has_package_permission<T, MANAGER>(auth), ENO_MODULE_AUTHORITY);
+        assert!(tx_authority::can_act_as_package<T, INITIALIZE>(auth), ENO_PACKAGE_AUTHORITY);
     }
 
     public fun is_initialized(uid: &UID): bool {
         dynamic_field::exists_(uid, Key { })
     }
 
-    // Defaults to `true` if the owner does not exist
-    public fun has_owner_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
+    // Defaults to `true` if the owner does not exist, or if it is not initialized.
+    // That is, without an assigned owner, the reference itself _is_the owner. (Referential authority)
+    public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) true
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.owner)) true
             else {
                 let owner = *option::borrow(&ownership.owner);
-                tx_authority::has_object_permission<Permission>(
+                tx_authority::can_act_as_address_on_object<Action>(
                     owner, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
@@ -128,37 +137,62 @@ module ownership::ownership {
 
     // If this is initialized, package authority always exists and is always the native module (the module
     // declaring the object's type). I.e., the package-id corresponding to `0x599::my_module::Witness`.
-    public fun has_package_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_declaring_package<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let package_id = struct_tag::package_id(&ownership.type);
-            tx_authority::has_object_package_permission_<Permission>(
+            tx_authority::can_act_as_package_on_object_<Action>(
                 package_id, &ownership.type, object::uid_as_inner(uid), auth)
         }
     }
 
+    // Same as above, but uses the object itself, rather than the UID. Note that the UID need not
+    // be initialized.
+    public fun can_act_as_declaring_package_<T: key, Action>(obj: &T, auth: &TxAuthority): bool {
+        let type = struct_tag::get<T>();
+        let package_id = struct_tag::package_id(&type);
+        let id = object::id(obj);
+        tx_authority::can_act_as_package_on_object_<Action>(package_id, &type, &id, auth)
+    }
+
     /// Defaults to `false` if transfer authority is not set.
-    public fun has_transfer_permission<Permission>(uid: &UID, auth: &TxAuthority): bool {
+    public fun can_act_as_transfer_auth<Action>(uid: &UID, auth: &TxAuthority): bool {
         if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.transfer_auth)) false
             else {
                 let transfer_auth = *option::borrow(&ownership.transfer_auth);
-                tx_authority::has_object_permission<Permission>(
+                tx_authority::can_act_as_address_on_object<Action>(
                     transfer_auth, &ownership.type, object::uid_as_inner(uid), auth)
             }
         }
     }
 
-    // Checks all instances of why an agent needs mutable access to a UID
-    public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
-        if (has_owner_permission<UID_MUT>(uid, auth)) { return true }; // Owner type added
-        if (has_package_permission<UID_MUT>(uid, auth)) { return true }; // Witness type added
-        if (has_transfer_permission<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+    // For arbitrary addresses that are not one of the main three (owner, package, transfer_auth)
+    public fun can_act_as_address_on_object<Action>(principal: address, uid: &UID, auth: &TxAuthority): bool {
+        if (!is_initialized(uid)) false
+        else {
+            let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
+            let id = object::uid_as_inner(uid);
+            tx_authority::can_act_as_address_on_object<Action>(principal, &ownership.type, id, auth)
+        }
+    }
 
-        false
+    // Checks all instances of why an agent needs mutable access to a UID
+    // TO DO: make this useful
+    // public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+    //     if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
+    //     if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
+    //     if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+
+    //     false
+    // }
+
+    // TO DO: make this useful
+    public fun can_borrow_uid_mut(_uid: &UID, _auth: &TxAuthority): bool {
+        true
     }
 
     // ========== Getter Functions =========
@@ -206,28 +240,88 @@ module ownership::ownership {
     // owner being the sender of the transaction.
     // This is useful for marketplaces, reclaimers, and collateral-repossession.
     public fun transfer(uid: &mut UID, new_owner: Option<address>, auth: &TxAuthority) {
-        assert!(has_transfer_permission<TRANSFER>(uid, auth), ENO_TRANSFER_AUTHORITY);
+        assert!(can_act_as_transfer_auth<TRANSFER>(uid, auth), ENO_TRANSFER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
         ownership.owner = new_owner;
     }
 
-    // Requires module, owner, and transfer authorities all to sign off on this migration
-    // This is a difficult operation to do!
-    // TO DO: create an example implementation of this. We might choose to ignore module authority, or perhaps
-    // allow for unilateral changes by the module-authority.
-    public fun migrate_transfer_auth(uid: &mut UID, new_transfer_auth: Option<address>, auth: &TxAuthority) {
-        assert!(has_transfer_permission<MIGRATE>(uid, auth), ENO_TRANSFER_AUTHORITY);
-        assert!(has_package_permission<MIGRATE>(uid, auth), ENO_MODULE_AUTHORITY);
-        assert!(has_owner_permission<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+    // Only the transfer-auth can eject itself. Owner authority is not required.
+    public fun eject_transfer_auth(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_transfer_auth<MIGRATE>(uid, auth), ENO_TRANSFER_AUTHORITY);
 
         let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
-        ownership.transfer_auth = new_transfer_auth;
+        ownership.transfer_auth = option::none();
     }
 
-    // This ejects all transfer authority, and it can never be set again, meaning the owner can never be
-    // changed again.
+    // Requires the action of both the package and the current owner.
+    // This means packages _cannot_ change their transfer-functionality unilaterally.
+    // Transfer-auth must be undefined; i.e., never set before, or ejected.
+    // If the new transfer-auth requires initialization, that must be called separately after this.
+    public fun set_transfer_auth(uid: &mut UID, new_auth: address, auth: &TxAuthority) {
+        assert!(can_act_as_declaring_package<MIGRATE>(uid, auth), ENO_PACKAGE_AUTHORITY);
+        assert!(can_act_as_owner<MIGRATE>(uid, auth), ENO_OWNER_AUTHORITY);
+
+        let ownership = dynamic_field::borrow_mut<Key, Ownership>(uid, Key { });
+        assert!(option::is_none(&ownership.transfer_auth), ETRANSFER_AUTH_MUST_BE_EJECTED_FIRST);
+
+        ownership.transfer_auth = option::some(new_auth);
+    }
+
+    // Transfer-auth is set to a non-existent address, meaning the owner can never be changed
     public fun make_owner_immutable(uid: &mut UID, auth: &TxAuthority) {
-        migrate_transfer_auth(uid, option::none(), auth);
+        set_transfer_auth(uid, @0x0, auth);
+    }
+
+    // ======= Freezing =======
+    // Only transfer_auth has the right to freeze an object. It cannot be done by owner or packages.
+
+    public fun freeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_transfer_auth<FREEZE>(uid, auth), ENO_TRANSFER_AUTHORITY);
+
+        dynamic_field2::set(uid, Frozen { }, true);
+    }
+
+    public fun unfreeze_transfer(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_transfer_auth<FREEZE>(uid, auth), ENO_TRANSFER_AUTHORITY);
+
+        dynamic_field2::drop<Frozen, bool>(uid, Frozen { });
+    }
+
+    public fun is_frozen(uid: &UID): bool {
+        dynamic_field::exists_(uid, Frozen { })
+    }
+
+    // ======= TxAuthority Extended =======
+    // We can add to tx-authority for objects using Ownership-specific logic
+
+    // This only works for objects that have not been initialized yet, or have no owner.
+    // In this case, mere possession is sufficient to prove ownership, so no `TxAuthority` is needed
+    // here.
+    public fun begin_with_object_id(
+        uid: &UID
+    ): TxAuthority {
+        let owner_maybe = get_owner(uid);
+        assert!(option::is_none(&owner_maybe), EOBJECT_MUST_NOT_HAVE_OWNER);
+
+        tx_authority::begin_with_object_id(uid)
+    }
+
+    // If this object has an owner, then the owner must have given ADMIN authority to this transaction
+    // for you to claim ownership of the object. This means that action-chaining is not possible,
+    // in the sense that if the owner grants you an EDIT action, that does not give you EDIT rights
+    // over this object.
+    // TO DO: should we change this? Probably?
+    public fun add_object_id(
+        uid: &UID,
+        auth: &TxAuthority
+    ): TxAuthority {
+        let owner_maybe = get_owner(uid);
+        if (option::is_some(&owner_maybe)) {
+            let owner = option::destroy_some(owner_maybe);
+            assert!(tx_authority::can_act_as_address<ADMIN>(owner, auth), ENO_OWNER_AUTHORITY);
+        };
+
+        tx_authority::add_object_id(uid, auth)
     }
 }
