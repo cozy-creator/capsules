@@ -7,3 +7,5 @@ sui.log**
 **/dist
 .trace
 *.mvcov
+table_map
+rbac_table.move
