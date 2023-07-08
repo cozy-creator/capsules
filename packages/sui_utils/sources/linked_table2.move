@@ -2,6 +2,18 @@ module sui_utils::linked_table2 {
     use sui::balance::{Self, Balance};
     use sui::linked_table::{Self, LinkedTable};
 
+    public fun borrow_mut_fill<K: store + copy + drop, V: store + drop>(
+        self: &mut LinkedTable<K, V>,
+        key: K,
+        default_value: V
+    ): &mut V {
+        if (!linked_table::contains(self, key)) {
+            linked_table::push_back(self, key, default_value);
+        };
+
+        linked_table::borrow_mut(self, key)
+    }
+
     public fun merge_balance<K: copy + drop + store, T>(
         table: &mut LinkedTable<K, Balance<T>>,
         key: K,
