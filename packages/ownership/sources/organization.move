@@ -262,15 +262,15 @@ module ownership::organization {
     }
 
     public fun claim_actions_(organization: &Organization, auth: &TxAuthority): TxAuthority {
-        let (i, auth) = (0, tx_authority::copy_(auth));
-        let agents = tx_authority::agents(&auth);
+        let (i, new_auth) = (0, tx_authority::copy_(auth));
+        let agents = tx_authority::agents(&new_auth);
         while (i < vector::length(&agents)) {
             let agent = *vector::borrow(&agents, i);
-            auth = claim_actions_for_agent(organization, agent, &auth);
+            new_auth = claim_actions_for_agent(organization, agent, &new_auth);
             i = i + 1;
         };
         let packages = packages(organization);
-        tx_authority::add_organization_internal(packages, principal(organization), &auth)
+        tx_authority::add_organization_internal(packages, principal(organization), &new_auth)
     }
 
     // This function could safely be public, but we want users to use one of the above-two functions

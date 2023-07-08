@@ -58,11 +58,20 @@ module ownership::tx_authority {
     // A 'package witness' is any struct with the name 'Witness' and the `drop` ability.
     // The module_name is unimportant; only the package_id matters. Effectively this means
     // that any module within a package can produce the same package Witness.
+    // This iteration is scoped to a specific action
     public fun begin_with_package_witness<Witness: drop, Action>(_: Witness): TxAuthority {
-        let (package_id, _, struct_name, _)= encode::type_name_decomposed<Witness>();
+        let (package_id, _, struct_name, _) = encode::type_name_decomposed<Witness>();
         assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
 
         new_internal_<Action>(object::id_to_address(&package_id))
+    }
+
+    // This iteration is not scoped to a specific action; ADMIN action is granted
+    public fun begin_with_package_witness_<Witness: drop>(_: Witness): TxAuthority {
+        let (package_id, _, struct_name, _) = encode::type_name_decomposed<Witness>();
+        assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
+
+        new_internal(object::id_to_address(&package_id))
     }
 
     public fun empty(): TxAuthority {
@@ -117,6 +126,21 @@ module ownership::tx_authority {
             &mut new_auth.principal_actions, &package_addr, action_set::new(vector[]));
 
         action_set::add_general<Action>(package_actions);
+
+        new_auth
+    }
+
+    // No action scoping in this iteration
+    public fun add_package_witness_<Witness: drop>(_: Witness, auth: &TxAuthority): TxAuthority {
+        let (package_id, _, struct_name, _) = encode::type_name_decomposed<Witness>();
+        assert!(struct_name == string::utf8(WITNESS_STRUCT), ENOT_A_PACKAGE_WITNESS);
+
+        let new_auth = copy_(auth);
+        let package_addr = object::id_to_address(&package_id);
+        let package_actions = vec_map2::borrow_mut_fill(
+            &mut new_auth.principal_actions, &package_addr, action_set::new(vector[]));
+
+        action_set::add_general<>(package_actions);
 
         new_auth
     }
