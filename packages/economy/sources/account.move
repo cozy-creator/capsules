@@ -25,12 +25,6 @@
 // - Accounts are non-transferrable; you transfer balances within Accounts rather than ownership of
 // the entire account.
 
-// TO DO:
-// - currency creators
-// - getter functions
-// - convenience entry functions
-// - figure out display
-
 module economy::account {
     use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
