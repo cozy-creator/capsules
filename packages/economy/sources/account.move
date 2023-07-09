@@ -25,6 +25,11 @@
 // - Accounts are non-transferrable; you transfer balances within Accounts rather than ownership of
 // the entire account.
 
+// TO DO:
+// - currency creators
+// - getter functions
+// - convenience entry functions
+
 module economy::account {
     use std::option;
     use std::type_name;
@@ -34,8 +39,12 @@ module economy::account {
     use sui::clock::{Self, Clock};
     use sui::linked_table::{Self as map, LinkedTable as Map};
     use sui::object::UID;
+    use sui::package;
+    use sui::display;
     use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
 
+    use sui::dynamic_field2;
     use sui_utils::linked_table2 as map2;
 
     use ownership::action::ADMIN;
@@ -44,6 +53,7 @@ module economy::account {
 
     // Constants
     const ONE_DAY: u64 = 1000 * 60 * 60 * 24;
+    const ONE_YEAR: u64 = 1000 * 60 * 60 * 24 * 365;
 
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
@@ -53,14 +63,22 @@ module economy::account {
     const EINVALID_TRANSFER: u64 = 4;
     const EINVALID_EXPORT: u64 = 5;
     const ENO_MERCHANT_AUTHORITY: u64 = 6;
+    const ECURRENCY_CANNOT_BE_TRANSFERRED: u64 = 7;
+    const EINVALID_HOLD: u64 = 8;
+    const EHOLD_EXPIRED: u64 = 9;
+    const EINVALID_TRANSFER_FEE: u64 = 10;
+    const ECURRENCY_ALREADY_REGISTERED: u64 = 11;
+    const EFREEZE_DISABLED: u64 = 12;
+
+    struct ACCOUNT has drop { } // One-time-witness
+    struct Witness has drop { } // Package-authority
 
     // Root-level shared object
     struct Account<phantom T> has key {
         id: UID,
         available: Balance<T>,
-        held: Map<address, Balance<T>>,
-        hold_expiry: Map<u64, vector<address>>, // u64 is a timestamp in ms when the hold expires
         rebills: Map<address, vector<Rebill>>, // merchant-address -> rebills available
+        held_funds: Map<address, Hold<T>>,
         frozen: bool
     }
 
@@ -84,6 +102,11 @@ module economy::account {
         last_refresh: u64 // ms timestamp
     }
 
+    struct Hold<T> has store {
+        funds: Balance<T>,
+        expiry_ms: u64 // timestamp
+    }
+
     // Action types for end-users
     struct WITHDRAW {} // used by account-owner and merchant to withdraw
 
@@ -96,9 +119,8 @@ module economy::account {
         Account { 
             id: object::new(ctx),
             available: balance::zero(),
-            held: map::new(),
-            hold_expiry: map::new(),
             rebills: map::new(),
+            held_funds: map::new(),
             frozen: false
         }
     }
@@ -138,11 +160,10 @@ module economy::account {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ) {
-        let (allowed, fee, fee_addr) = is_valid_transfer(from, amount, registry, auth);
-        assert!(allowed, EINVALID_TRANSFER);
+        assert!(is_valid_transfer(from, registry, auth), EINVALID_TRANSFER);
         assert!(!from.frozen && !to.frozen, EACCOUNT_FROZEN);
 
-        pay_fee(account, fee, fee_addr, ctx);
+        let fee = pay_transfer_fee(account, amount, registry ctx);
         balance::join(&mut to.available, balance::split(&mut from.available, amount - fee));
     }
 
@@ -191,11 +212,10 @@ module economy::account {
         assert!(is_valid_export(account, registry, auth), EINVALID_EXPORT);
         assert!(!account.frozen, EACCOUNT_FROZEN);
 
-        let Account { id, available, held, hold_expiry, rebills, frozen: _ } = account;
+        let Account { id, available, rebills, held_funds, frozen: _ } = account;
         object::delete(id);
-        map::destroy_empty(held);
-        map::drop(hold_expiry);
         map::drop(rebills);
+        map::destroy_empty(held);
 
         available
     }
@@ -205,11 +225,17 @@ module economy::account {
     // Rebill: amount max, refresh cadence (user can always cancel)
     // Hold: amount max, expiry (end-user can always withdraw)
 
+    // Action type
+    // Allows withdrawing from rebill and holds. Can also release holds. This allows a merchant to
+    // outsource the collection of their funds.
+    struct MERCHANT { }
+
     // Refresh cadence must be 24 hours or longer, amount must be more than 0.
     // We do not impose a limit on the number of rebills that can be created.
+    // `merchant_addr` is the authority-address that is allowed to withdraw for the rebill.
     public fun add_rebill<T>(
-        account: &mut Account<T>,
-        merchant: address,
+        customer: &mut Account<T>,
+        merchant_addr: address,
         max_amount: u64,
         refresh_cadence: u64,
         clock: &Clock,
@@ -220,72 +246,143 @@ module economy::account {
         assert!(max_amount > 0, EINVALID_REBILL);
 
         // Checks if the `Account` owner or creator authorized this
-        let (allowed, _) = is_valid_transfer(account, max_amount, registry, auth);
-        assert!(allowed, EINVALID_TRANSFER);
-        assert!(!account.frozen, EACCOUNT_FROZEN);
+        assert!(ownership::can_act_as_owner<WITHDRAW>(&account.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(is_currency_transferable(registry), ECURRENCY_CANNOT_BE_TRANSFERRED);
+        assert!(!customer.frozen, EACCOUNT_FROZEN);
 
         let rebill = Rebill {
-            available: 0, // not available until next refresh
+            available: 0, // not available until first refresh
             refresh_amount: max_amount,
             refresh_cadence,
             last_refresh: clock::timestamp_ms(clock)
         };
 
-        let rebills = map2::borrow_mut_fill<address, vector<Rebill>>(&mut account.rebills, merchant, vector[]);
+        let rebills = map2::borrow_mut_fill<address, vector<Rebill>>(
+            &mut customer.rebills, merchant_addr, vector[]);
         vector::push_back(&mut rebills, rebill);
     }
-    
+
+    // Requires MERCHANT action from the owner of `merchant` account.
     public fun withdraw_with_rebill<T>(
         customer: &mut Account<T>,
         merchant: &mut Account<T>,
-        rebill_index: u64, // incase multiple rebills exist for this merchant
+        rebill_index: u64, // in case multiple rebills exist for this merchant
         amount: u64,
         clock: &Clock,
         registry: &CurrencyRegistry,
         auth: &TxAuthority,
         ctx: &mut TxContext
     ) {
-        let (fee, fee_addr) = calculate_fee(amount, registry);
-        assert!(allowed, EINVALID_TRANSFER);
+        let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
+        assert!(tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_MERCHANT_AUTHORITY);
+        assert!(is_currency_transferable(registry), ECURRENCY_CANNOT_BE_TRANSFERRED);
         assert!(!customer.frozen && !merchant.frozen, EACCOUNT_FROZEN);
 
-        let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
-        assert!(tx_authority::can_act_as_address<WITHDRAW>(merchant_addr, auth), ENO_MERCHANT_AUTHORITY);
-
-        let rebills = map::borrow_mut<address, vector<Rebill>>(&mut customer.rebills, merchant);
+        let rebills = map::borrow_mut<address, vector<Rebill>>(&mut customer.rebills, merchant_addr);
         let rebill = vector::borrow_mut(rebills, rebill_index);
 
         crank_rebill(rebill, clock);
-        pay_fee(customer, fee, fee_addr, ctx);
+        rebill.available = rebill.available - amount; // Aborts if `amount` > rebill.available
 
-        // Aborts if `amount` is greater than available rebill
-        rebill.available = rebill.available - amount;
-
+        let fee = pay_transfer_fee(customer, amount, registry, ctx);
         balance::join(&mut merchant.available, balance::split(&mut customer.available, amount - fee));
     }
 
     // Rebill can be cancelled either by the account owner or the merchant
-    public fun cancel_rebill(account: &mut Account<T>, rebill_id: address, auth: &TxAuthority) {
-        let rebill = map::remove(&mut account.rebill, rebill_id);
-        let Rebill { 
-            id, merchant, available: _, refresh_amount: _, refresh_cadence: _, last_refresh: _ } = rebill;
-
-        assert!(ownership::can_act_as_owner<WITHDRAW>(&account.id, auth) 
-            || tx_authority::can_act_as_address<WITHDRAW>(merchant, auth), ENO_OWNER_AUTHORITY);
-
-        object::delete(id);
+    public fun cancel_rebill(
+        customer: &mut Account<T>,
+        merchant_addr: address,
+        rebill_index: u64,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::can_act_as_owner<WITHDRAW>(&account.id, auth)
+            || tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_OWNER_AUTHORITY);
+        
+        let rebills = map::borrow_mut(&mut customer.rebills, merchant_addr);
+        vector::swap_remove(rebills, rebill_index);
+        if (vector::length(rebills) == 0) {
+            map::remove(&mut customer.rebills, merchant_addr);
+        };
     }
 
-    public fun create_funded_hold() {
-
+    public fun cancel_all_rebills_for_merchant(
+        customer: &mut Account<T>,
+        merchant_addr: address,
+        auth: &TxAuthority
+    ) {
+        assert!(ownership::can_act_as_owner<WITHDRAW>(&account.id, auth)
+            || tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_OWNER_AUTHORITY);
+        
+        map::remove(&mut customer.rebills, merchant_addr);
     }
 
-    public fun withdraw_from_hold() {
+    public fun add_hold<T>(
+        customer: &mut Account<T>,
+        merchant_addr: address,
+        amount: u64,
+        duration_ms: u64,
+        clock: &Clock,
+        registry: &CurrencyRegistry,
+        auth: &TxAuthority
+    ) {
+        assert!(duration_ms <= ONE_YEAR, EINVALID_HOLD);
+        assert!(amount > 0, EINVALID_HOLD);
 
+        // Checks if the `Account` owner or creator authorized this
+        assert!(ownership::can_act_as_owner<WITHDRAW>(&customer.id, auth), ENO_OWNER_AUTHORITY);
+        assert!(is_currency_transferable(registry), ECURRENCY_CANNOT_BE_TRANSFERRED);
+        assert!(!customer.frozen, EACCOUNT_FROZEN);
+
+        let expiry_ms = clock::timestamp_ms(clock) + duration_ms;
+
+        if (map::contains_(&customer.held_funds, merchant_addr)) {
+            let hold = map::borrow_mut(&mut customer.held_funds, merchant_addr);
+            // Users cannot decrease the duration of an existing hold by creating a new hold
+            hold.expiry_ms = math::max(hold.expiry_ms, expiry_ms);
+            balance::join(&mut hold.funds, balance::split(&mut customer.available, amount));
+        } else {
+            let hold = Hold {
+                funds: balance::split(&mut customer.available, amount),
+                expiry_ms
+            };
+            map::push_back(&mut customer.held_funds, merchant_addr, hold);
+        };
     }
 
-    public fun cancel_hold() {
+    public fun withdraw_from_held_funds(
+        customer: &mut Account<T>,
+        merchant: &mut Account<T>,
+        amount: u64,
+        clock: &Clock,
+        registry: &CurrencyRegistry,
+        auth: &TxAuthority,
+        ctx: &mut TxContext
+    ) {
+        let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
+        assert!(tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_MERCHANT_AUTHORITY);
+        assert!(is_currency_transferable(registry), ECURRENCY_CANNOT_BE_TRANSFERRED);
+        assert!(!customer.frozen && !merchant.frozen, EACCOUNT_FROZEN);
 
+        let hold = map::borrow_mut(&mut customer.held_funds, merchant_addr);
+        assert!(hold.expiry_ms >= clock::timestamp_ms(clock), EHOLD_EXPIRED);
+
+        let fee = pay_transfer_fee(customer, amount, registry, ctx);
+
+        balance::join(&mut merchant.available, balance::split(&mut hold.funds, amount - fee));
+        if (balance::value(&hold.funds) == 0) {
+            release_hold_internal(customer, merchant_addr);
+        };
+    }
+
+    // This will work even if the currency is non-transferable now or the account is frozen
+    public fun release_held_funds(
+        customer: &mut Account<T>,
+        merchant_addr: address,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_MERCHANT_AUTHORITY);
+
+        release_hold_internal(customer, merchant_addr);
     }
 
     // =========== Package Authority Actions ===========
@@ -339,7 +436,7 @@ module economy::account {
         creator_can_freeze: bool,
         user_transfer_enum: u8,
         transfer_fee: Option<TransferFee>
-        export_auths: Map<address, bool> // this is a set, rather than a Map. `bool` has no meaning
+        export_auths: vector<address>
     }
 
     struct TransferFee has store, copy, drop {
@@ -347,20 +444,99 @@ module economy::account {
         pay_to: address // will be exported as 'Coin' to this address, for simplicity
     }
 
-    struct Treasury<phantom T> has store {
-        can_mint: bool,
-        can_burn: bool,
-        supply: Supply<T>
-    }
-
     // Action types for packages
     struct FREEZE {} // for Account<T>, this is used by T's declaring-package to freeze accounts
 
-    public fun create_currency() {}
+    // A currency can only be registered once. Currencies can only become more permissive, not less
+    public fun register_currency<T: drop>(
+        registry: &mut CurrencyRegistry,
+        creator_can_withdraw: bool,
+        creator_can_freeze: bool,
+        user_transfer_enum: u8,
+        transfer_fee_bps: Option<u64>,
+        transfer_fee_addr: Option<address>,
+        export_auths: vector<address>,
+        auth: &TxAuthority
+    ) {
+        let key = type_name::get<T>();
+        assert!(tx_authority::can_act_as_package<T, ADMIN>(auth), ENO_PACKAGE_AUTHORITY);
+        assert!(!dynamic_field::exists_(&registry.id, key), ECURRENCY_ALREADY_REGISTERED);
 
-    public fun create_currency_from_treasury_cap() {}
+        let transfer_fee = transfer_fee_struct(transfer_fee_bps, transfer_fee_addr);
 
-    public fun freeze_<T>(account: &mut Account<T>, auth: &TxAuthority) {
+        let controls = CurrencyControls {
+            creator_can_withdraw,
+            creator_can_freeze,
+            user_transfer_enum,
+            transfer_fee,
+            export_auths
+        };
+
+        dynamic_field::add(&mut registry.id, key, controls);
+    }
+
+    fun transfer_fee_struct(bps: Option<u64>, addr: Option<address>): Option<TransferFee> {
+        let transfer_fee = if (option::is_some(&bps) && option::is_some(&addr)) {
+            assert!(*option::borrow(transfer_fee_bps) > 0, EINVALID_TRANSFER_FEE);
+
+            TransferFee { 
+                bps: option::destroy_some(bps), 
+                pay_to: option::destroy_some(addr)
+            }
+        } else {
+            option::none()
+        }
+    }
+
+    // This is permanent
+    public fun disable_creator_withdraw<T>(registry: &mut CurrencyRegistry, auth: &TxAuthority) {
+        assert!(tx_authority::can_act_as_package<T, ADMIN>(auth), ENO_PACKAGE_AUTHORITY);
+
+        let controls = dynamic_field::borrow_mut<TypeName, CurrencyControls<T>>(
+            &mut registry.id, type_name::get<T>());
+        controls.creator_can_withdraw = false;
+    }
+
+    // This is permanent
+    public fun disable_freeze_ability<T>(registry: &mut CurrencyRegistry, auth: &TxAuthority) {
+        assert!(tx_authority::can_act_as_package<T, ADMIN>(auth), ENO_PACKAGE_AUTHORITY);
+
+        let controls = dynamic_field::borrow_mut<TypeName, CurrencyControls<T>>(
+            &mut registry.id, type_name::get<T>());
+        controls.creator_can_freeze = false;
+    }
+
+    public fun set_transfer_policy(
+        registry: &mut CurrencyRegistry,
+        user_transfer_enum: u8,
+        export_auths: vector<address>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::can_act_as_package<T, ADMIN>(auth), ENO_PACKAGE_AUTHORITY);
+
+        let controls = dynamic_field::borrow_mut<TypeName, CurrencyControls<T>>(
+            &mut registry.id, type_name::get<T>());
+        
+        controls.user_transfer_enum = user_transfer_enum;
+        controls.export_auths = export_auths;
+    }
+
+    public fun set_transfer_fee(
+        registry: &mut CurrencyRegistry,
+        transfer_fee_bps: Option<u64>,
+        transfer_fee_addr: Option<address>,
+        auth: &TxAuthority
+    ) {
+        assert!(tx_authority::can_act_as_package<T, ADMIN>(auth), ENO_PACKAGE_AUTHORITY);
+
+        let controls = dynamic_field::borrow_mut<TypeName, CurrencyControls<T>>(
+            &mut registry.id, type_name::get<T>());
+        controls.transfer_fee = transfer_fee_struct(transfer_fee_bps, transfer_fee_addr);
+    }
+
+    public fun freeze_<T>(account: &mut Account<T>, registry: &CurrencyRegistry, auth: &TxAuthority) {
+        let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registr.id, type_name::get<T>());
+        assert!(controls.creator_can_freeze, EFREEZE_DISABLED);
         assert!(tx_authority::can_act_as_package<T, FREEZE>(auth), ENO_PACKAGE_AUTHORITY);
 
         account.frozen = true;
@@ -374,12 +550,54 @@ module economy::account {
 
     // =========== Utility Functions ===========
 
-    // Must remain private or else it allows unauthorized exports
-    fun pay_fee<T>(account: &mut Account<T>, fee: u64, fee_addr: Option<address>, ctx: &mut TxContext) {
+    // Must remain private, or we need an auth-check added here so arbitrary people cannot withdraw
+    // from `Account`
+    fun pay_transfer_fee<T>(
+        account: &mut Account<T>,
+        amount: u64,
+        registry: &CoinRegistry,
+        ctx: &mut TxContext
+    ): u64 {
+        let (fee, fee_addr) = calculate_transfer_fee(amount, registry);
+
         if (fee > 0 && option::is_some(&fee_addr)) {
             let balance = balance::split(&mut account.available, fee);
             let coin = coin::from_balance(balance, ctx);
             transfer::transfer(coin, option::destroy_some(fee_addr));
+        };
+
+        fee
+    }
+
+    // =========== Crank System ===========
+    // These can be called permisionlessly; they update rebills and holds based on time
+
+    public fun crank<T>(account: &mut Account<T>, clock: &Clock) {
+        // Crank Rebills
+        let key_maybe = map::front(&account.rebills);
+        while (option::is_some(&key_maybe)) {
+            let merchant_addr = *option::borrow(key_maybe);
+            let rebills = map::borrow_mut(&mut account.rebills, merchant_addr);
+            let i = 0;
+            while (i < vector::length(&rebills)) {
+                let rebill = vector::borrow_mut(rebills, i);
+                crank_rebill(rebill, clock);
+                i = i + 1;
+            };
+
+            key_maybe = map::next(&account.rebills, merchant_addr);
+        };
+
+        // Crank Holds
+        let key_maybe = map::front(&account.held_funds);
+        while (option::is_some(&key_maybe)) {
+            let merchant_addr = *option::borrow(key_maybe);
+            key_maybe = map::next(&account.held_funds, merchant_addr);
+            let hold = map::borrow(&account.held_funds, merchant_addr);
+
+            if (hold.expiry_ms < clock::timestamp_ms(clock)) {
+                release_hold_internal(account, merchant_addr);
+            };
         };
     }
 
@@ -392,6 +610,12 @@ module economy::account {
                 rebill.last_refresh + (((rebill.refresh_cadence as u128) * cycles) as u64);
             rebill.available = rebill.refresh_amount;
         };
+    }
+
+    fun release_hold_internal<T>(account: &mut Account<T>, merchant_addr: address) {
+        let hold = map::remove(&mut account.held_funds, merchant_addr);
+        let Hold { funds, expiry_ms: _ } = hold;
+        balance::join(&mut account.available, funds);
     }
 
     // =========== Getter Functions ===========
@@ -409,42 +633,64 @@ module economy::account {
     }
 
     // This is orthogonal to whether or not the transfer is allowed
-    public fun calc_transfer_fee<T>(amount: u64, registry: &CurrencyRegistry): (u64, Option<address>) {
-
-    }
-
-    // Returns `true` if the transfer is allowed, `false` otherwise. Also returns a u64 which is the amount
-    // of the transfer fee.
-    public fun is_valid_transfer<T>(
-        account: &Account<T>,
-        amount: u64,
-        registry: &CurrencyRegistry,
-        auth: &TxAuthority,
-    ): bool {
+    public fun calculate_transfer_fee<T>(amount: u64, registry: &CurrencyRegistry): (u64, Option<address>) {
         let key = type_name::get<T>();
+
         if (dynamic_field::exists_(&registry.id, key)) {
             let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
             
-            // check if the user or creator are allowed to withdraw, and have sufficient permission
-            let allowed = (controls.user_transfer_enum > NO_TRANSFER && 
-                ownership::can_act_as_owner<WITHDRAW>(&account.id, auth))
-                || (controls.creator_can_withdraw && tx_authority::can_act_as_package<T, WITHDRAW>(auth));
-            
             // Calculate transfer fee if it exists
-            let (fee, fee_addr) = if (option::is_some(&controls.transfer_fee)) {
+            if (option::is_some(&controls.transfer_fee)) {
                 let transfer_fee = option::borrow(&controls.transfer_fee);
-                (((transfer_fee.bps as u128) * (amount as u128) / 10_000u128) as u64, 
-                    option::some(transfer_fee.pay_to) )
+                let fee = ((transfer_fee.bps as u128) * (amount as u128) / 10_000u128) as u64;
+
+                (fee, option::some(transfer_fee.pay_to))
             } else { 
                 (0, option::none()) 
-            };
-
-            (allowed, fee, fee_addr)
+            }
         } else {
-            let allowed = ownership::can_act_as_owner<WITHDRAW>(&from.id, auth), ENO_OWNER_AUTHORITY);
-
-            (allowed, 0, option::none())
+            (0, option::none())
         }
+    }
+
+    public fun is_currency_transferable<T>(registry: &CurrencyRegistry): bool {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            (controls.user_transfer_enum > NO_TRANSFER)
+        } else {
+            true
+        }
+    }
+
+    // Returns `true` if the transfer is allowed, `false` otherwise.
+    public fun is_valid_transfer<T>(account: &Account<T>, registry: &CurrencyRegistry, auth: &TxAuthority): bool {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            
+            // Check if the user or creator are allowed to withdraw, and have sufficient permission
+            (controls.user_transfer_enum > NO_TRANSFER &&
+                ownership::can_act_as_owner<WITHDRAW>(&account.id, auth))
+                || (controls.creator_can_withdraw && tx_authority::can_act_as_package<T, WITHDRAW>(auth))
+        } else {
+            ownership::can_act_as_owner<WITHDRAW>(&from.id, auth)
+        }
+    }
+
+    // =========== Init Function ===========
+
+    // Creates the CurrencyRegistry and claims display
+    fun init(otw: ACCOUNT, ctx: &mut TxContext) {
+        transfer::share_object(CurrencyRegistry {
+            id: object::new(ctx)
+        });
+
+        let publisher = package::claim(otw, ctx);
+        transfer::transfer_public(display::new(&publisher, ctx), tx_context::sender(ctx));
+        package::burn_publisher(publisher);
     }
 
     // =========== Convenience Entry Functions ===========
@@ -456,18 +702,19 @@ module economy::account {
     }
 
     public entry fun charge_and_rebill<T>(
-        merchant: &mut Account<T>,
         customer: &mut Account<T>,
+        merchant: &mut Account<T>,
         amount: u64,
         rebill_cadence: u64,
         clock: &Clock,
+        registry: &CurrencyRegistry,
         ctx: &mut TxContext
     ) {
         let auth = tx_authority::begin(ctx);
         let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
 
-        transfer_to_account(customer, merchant, amount, auth);
-        create_rebill(customer, merchant_addr, amount, refresh_cadence, clock, auth, ctx);
+        transfer(customer, merchant, amount, registry, auth, ctx);
+        add_rebill(customer, merchant_addr, amount, rebill_cadence, clock, registry, auth);
     }
 
     public entry fun grant_currency() { }
