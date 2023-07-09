@@ -137,10 +137,9 @@ module ownership::tx_authority {
 
         let new_auth = copy_(auth);
         let package_addr = object::id_to_address(&package_id);
-        let package_actions = vec_map2::borrow_mut_fill(
-            &mut new_auth.principal_actions, &package_addr, action_set::new(vector[]));
+        let actions = action_set::new(vector[action::admin()]);
 
-        action_set::add_general<>(package_actions);
+        vec_map2::set(&mut new_auth.principal_actions, &package_addr, actions);
 
         new_auth
     }
