@@ -23,7 +23,6 @@ We also adds new abilities for merchants:
 - getter functions to introspect account state
 - convenience entry functions
 - figure out abstract display
-- export balance as white-listed export_auth (for DeFi)
 - offers for NFT marketplaces
 - broadcast memo-events on transfer
 - Separate out into individual modules (potentially) instead of just 'Account'

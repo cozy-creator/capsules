@@ -622,8 +622,28 @@ module economy::account {
         if (dynamic_field::exists_(&registry.id, key)) {
             let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
 
-            (controls.user_transfer_enum > NO_EXPORT && ownership::can_act_as_owner<WITHDRAW>(&account.id, auth))
-                || (controls.creator_can_withdraw && tx_authority::can_act_as_package<T, WITHDRAW>(auth))
+            // Export allowed by owner
+            if (controls.user_transfer_enum > NO_EXPORT && ownership::can_act_as_owner<WITHDRAW>(&account.id, auth)) {
+                return true
+            };
+
+            // Withdraw allowed by creator
+            if (controls.creator_can_withdraw && tx_authority::can_act_as_package<T, WITHDRAW>(auth)) {
+                return true
+            };
+
+            // Export allowed by white-listed authority
+            let agents = tx_authority::agents(auth);
+            let white_listed = false;
+            while (vector::length(&agents) > 0) {
+                let agent = vector::pop_back(&mut agents);
+                if (vector::contains(&controls.export_auths, &agent) && tx_authority::can_act_as_address<WITHDRAW>(agent, auth)) {
+                    white_listed = true;
+                    break
+                };
+            };
+
+            (white_listed && ownership::can_act_as_owner<WITHDRAW>(&account.id, auth))
         } else {
             ownership::can_act_as_owner<WITHDRAW>(&account.id, auth)
         }
