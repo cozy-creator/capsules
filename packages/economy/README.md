@@ -20,7 +20,6 @@ We also adds new abilities for merchants:
 *** TO DO: ***
 
 - creation and destruction of balances with `Supply<T>`
-- getter functions to introspect account state
 - convenience entry functions
 - figure out abstract display
 - offers for NFT marketplaces
