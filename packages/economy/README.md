@@ -27,6 +27,7 @@ We also adds new abilities for merchants:
 - broadcast memo-events on transfer
 - Separate out into individual modules (potentially) instead of just 'Account'
 - Consider changing the name to Coin23
+- Consider being able to send to phone numbers, email addresses, and having single-use claim codes for funds
 
 
 *** Notes ***

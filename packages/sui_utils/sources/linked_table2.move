@@ -1,6 +1,22 @@
 module sui_utils::linked_table2 {
+    use std::option;
+    use std::vector;
+
     use sui::balance::{Self, Balance};
     use sui::linked_table::{Self, LinkedTable};
+
+    // Will retrieve keys while preserving their order
+    public fun keys<K: store + copy + drop, V: store>(self: &LinkedTable<K, V>): vector<K> {
+        let key_list = vector[];
+        let key_maybe = linked_table::front(self);
+        while (option::is_some(key_maybe)) {
+            let key = *option::borrow(key_maybe);
+            vector::push_back(&mut key_list, key);
+            key_maybe = linked_table::next(self, key);
+        };
+        
+        key_list
+    }
 
     public fun borrow_mut_fill<K: store + copy + drop, V: store + drop>(
         self: &mut LinkedTable<K, V>,

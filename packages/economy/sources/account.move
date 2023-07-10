@@ -334,9 +334,15 @@ module economy::account {
 
         if (map::contains(&customer.held_funds, merchant_addr)) {
             let hold = map::borrow_mut(&mut customer.held_funds, merchant_addr);
+
             // Users cannot decrease the duration of an existing hold by creating a new hold
             hold.expiry_ms = math::max(hold.expiry_ms, expiry_ms);
-            balance::join(&mut hold.funds, balance::split(&mut customer.available, amount));
+
+            // Users cannot decrease the size of the hold by creating a new hold
+            let current_balance = balance::value(&hold.funds);
+            if (current_balance < amount) {
+                balance::join(&mut hold.funds, balance::split(&mut customer.available, amount - current_balance));
+            };
         } else {
             let hold = Hold {
                 funds: balance::split(&mut customer.available, amount),
@@ -617,6 +623,17 @@ module economy::account {
 
     // =========== Getter Functions ===========
 
+    public fun is_currency_exportable<T>(registry: &CurrencyRegistry): bool {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            (controls.user_transfer_enum > NO_EXPORT)
+        } else {
+            true
+        }
+    }
+
     public fun is_valid_export<T>(account: &Account<T>, registry: &CurrencyRegistry, auth: &TxAuthority): bool {
         let key = type_name::get<T>();
         if (dynamic_field::exists_(&registry.id, key)) {
@@ -649,27 +666,6 @@ module economy::account {
         }
     }
 
-    // This is orthogonal to whether or not the transfer is allowed
-    public fun calculate_transfer_fee<T>(amount: u64, registry: &CurrencyRegistry): (u64, Option<address>) {
-        let key = type_name::get<T>();
-
-        if (dynamic_field::exists_(&registry.id, key)) {
-            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
-            
-            // Calculate transfer fee if it exists
-            if (option::is_some(&controls.transfer_fee)) {
-                let transfer_fee = option::borrow(&controls.transfer_fee);
-                let fee = (((transfer_fee.bps as u128) * (amount as u128) / 10_000u128) as u64);
-
-                (fee, option::some(transfer_fee.pay_to))
-            } else { 
-                (0, option::none()) 
-            }
-        } else {
-            (0, option::none())
-        }
-    }
-
     public fun is_currency_transferable<T>(registry: &CurrencyRegistry): bool {
         let key = type_name::get<T>();
 
@@ -694,6 +690,83 @@ module economy::account {
                 || (controls.creator_can_withdraw && tx_authority::can_act_as_package<T, WITHDRAW>(auth))
         } else {
             ownership::can_act_as_owner<WITHDRAW>(&account.id, auth)
+        }
+    }
+
+    // This is orthogonal to whether or not the transfer is allowed
+    // The address is where to pay the fee to
+    public fun calculate_transfer_fee<T>(amount: u64, registry: &CurrencyRegistry): (u64, Option<address>) {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            
+            // Calculate transfer fee if it exists
+            if (option::is_some(&controls.transfer_fee)) {
+                let transfer_fee = option::borrow(&controls.transfer_fee);
+                let fee = (((transfer_fee.bps as u128) * (amount as u128) / 10_000u128) as u64);
+
+                (fee, option::some(transfer_fee.pay_to))
+            } else { 
+                (0, option::none()) 
+            }
+        } else {
+            (0, option::none())
+        }
+    }
+
+    public fun balance_available<T>(account: &Account<T>): u64 {
+        balance::value(&account.available)
+    }
+
+    public fun merchants_with_rebills<T>(account: &Account<T>): vector<address> {
+        map2::keys(&account.rebills)
+    }
+
+    public fun rebills_for_merchant<T>(account: &Account<T>, merchant_addr: address): &vector<Rebill> {
+        map::borrow(&account.rebills, merchant_addr)
+    }
+
+    public fun inspect_rebill(rebill: &Rebill): (u64, u64, u64, u64) {
+        (rebill.available, rebill.refresh_amount, rebill.refresh_cadence, rebill.last_refresh)
+    }
+
+    public fun merchants_with_held_funds<T>(account: &Account<T>): vector<address> {
+        map2::keys(&account.held_funds)
+    }
+
+    // returns hold-value remaining, and timestamp when it expires. (0, 0) if a hold does not exist
+    public fun inspect_hold<T>(account: &Account<T>, merchant_addr: address): (u64, u64) {
+        if (!map::contains(&account.held_funds, merchant_addr)) { return (0, 0) };
+        let hold = map::borrow(&account.held_funds, merchant_addr);
+
+        (balance::value(&hold.funds), hold.expiry_ms)
+    }
+
+    public fun is_frozen<T>(account: &Account<T>): bool {
+        account.frozen
+    }
+
+    // Creator can withdraw, and creator can freeze
+    public fun inspect_creator_currency_controls<T>(registry: &CurrencyRegistry): (bool, bool) {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            (controls.creator_can_withdraw, controls.creator_can_freeze)
+        } else {
+            (false, false)
+        }
+    }
+
+    public fun export_auths<T>(registry: &CurrencyRegistry): vector<address> {
+        let key = type_name::get<T>();
+
+        if (dynamic_field::exists_(&registry.id, key)) {
+            let controls = dynamic_field::borrow<TypeName, CurrencyControls<T>>(&registry.id, key);
+            controls.export_auths
+        } else {
+            vector[]
         }
     }
 
