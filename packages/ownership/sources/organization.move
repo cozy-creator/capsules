@@ -368,8 +368,11 @@ module ownership::organization {
     //
     // We use dynamic fields, rather than vectors, because it scales O(1) instead of O(n) for n endorsements.
 
+    // Dynamic field key
     struct Endorsement has store, copy, drop { from: address }
-    struct ENDORSE {} // action type
+
+    // Action type
+    struct ENDORSE {}
     
     public fun add_endorsement(org: &mut Organization, from: address, auth: &TxAuthority) {
         assert!(tx_authority::can_act_as_address<ENDORSE>(from, auth), ENO_PERMISSION);
@@ -453,7 +456,7 @@ module ownership::organization {
         abort EPACKAGE_NOT_FOUND
     }
 
-    // ======== Convenience Entry Functions ========
+    // ======== Convenience Entry Functions For Creation / Deletion ========
     // These improve usability by making organization functions callable directly by the Sui CLI; no need
     // for client-side composition to construct a TxAuthority object.
 
@@ -510,7 +513,7 @@ module ownership::organization {
         destroy(organization, &auth);
     }
 
-    // ========== Agent & Roles conenience ntry functions ==========
+    // ========== Convenience Entry Functions For Managing Agents ==========
 
     public entry fun delete_agent_(
         organization: &mut Organization,
@@ -558,7 +561,7 @@ module ownership::organization {
         delete_role_and_agents(organization, role, &auth)
     }
 
-    // ========== Endorsements convenience entry functions ==========
+    // ========== Convenience Entry Functions For Managing Endorsements ==========
 
     public entry fun add_endorsement_(
         organization: &mut Organization,

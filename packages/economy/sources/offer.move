@@ -2,10 +2,21 @@
 // `<phantom T>` so that people can make offers on abstract types like 'give me any Wood<T>'
 
 module economy::offer {
-    use sui::clock::{Self, Clock};
-    use sui::object::ID;
+    use std::option::{Self, Option};
 
-    use economy::account::{Self, Coin23, Hold};
+    use sui::clock::{Self, Clock};
+    use sui::object::{Self, UID, ID};
+    use sui::transfer;
+    use sui::tx_context::TxContext;
+
+    use sui_utils::struct_tag::{Self, StructTag};
+    use sui_utils::typed_id;
+
+    use ownership::ownership;
+    use ownership::tx_authority::{Self, TxAuthority};
+
+    use economy::coin23::{Coin23, CurrencyRegistry};
+    use economy::claim::{Self, Claim};
 
     // Error constants
     const EINVALID_OFFER: u64 = 0;
@@ -43,7 +54,7 @@ module economy::offer {
         registry: &CurrencyRegistry,
         auth: &TxAuthority,
         ctx: &mut TxContext
-    ): Offer {
+    ): Offer<T> {
         if (option::is_some(&for_id)) {
             // object-offer
             let claim = claim::create(account, amount_each, duration_ms, clock, registry, auth, ctx);
@@ -53,7 +64,7 @@ module economy::offer {
                 id: object::new(ctx),
                 send_to,
                 claim: option::some(claim),
-                for_id: option::destroy_some(for_id),
+                for_id: for_id,
                 for_type: option::none(),
                 amount_each,
                 quantity: 1,
@@ -61,6 +72,8 @@ module economy::offer {
             }
         } else {
             // type-offer
+            assert!(option::is_some(&for_type), EINVALID_OFFER);
+
             let claim = claim::create(
                 account, amount_each * (quantity as u64), duration_ms, clock, registry, auth, ctx);
             let (_, _, expiry_ms) = claim::info(&claim);
@@ -70,7 +83,7 @@ module economy::offer {
                 send_to,
                 claim: option::some(claim),
                 for_id: option::none(),
-                for_type: option::destroy_some(for_type),
+                for_type: for_type,
                 amount_each,
                 quantity,
                 expiry_ms
@@ -110,14 +123,14 @@ module economy::offer {
         ctx: &mut TxContext
     ) {
         assert!(offer.quantity == 1, EOFFER_EXPIRED);
-        assert!(is_valid(offer, clock), EOFFER_EXPIRED);
+        assert!(is_valid(&offer, clock), EOFFER_EXPIRED);
 
-        let Offer { id, send_to, claim, for_id, for_type, amount_each, quantity, expiry_ms: _ } = offer;
+        let Offer { id, send_to, claim, for_id, for_type, amount_each, quantity: _, expiry_ms: _ } = offer;
         object::delete(id);
 
         // object-offer
         if (option::is_some(&for_id)) {
-            assert!(*option::borrow(&for_id) == object::uid_to_address(item), EINCORRECT_OBJECT);
+            assert!(option::borrow(&for_id) == object::uid_as_inner(item), EINCORRECT_OBJECT);
         } else { // type-offer
             let item_type = option::destroy_some(ownership::get_type(item));
             assert!(struct_tag::match(option::borrow(&for_type), &item_type), EINCORRECT_OBJECT);
@@ -146,7 +159,7 @@ module economy::offer {
 
         // object-offer
         if (option::is_some(&offer.for_id)) {
-            assert!(*option::borrow(&offer.for_id) == object::uid_to_address(item), EINCORRECT_OBJECT);
+            assert!(option::borrow(&offer.for_id) == object::uid_as_inner(item), EINCORRECT_OBJECT);
         } else { // type-offer
             let item_type = option::destroy_some(ownership::get_type(item));
             assert!(struct_tag::match(option::borrow(&offer.for_type), &item_type), EINCORRECT_OBJECT);
@@ -162,7 +175,7 @@ module economy::offer {
         if (offer.quantity == 0) {
             let claim = option::extract(&mut offer.claim);
             claim::destroy(claim, offer_account);
-            destroy::destroy(&mut offer.id);
+            ownership::destroy(&mut offer.id, &tx_authority::empty());
         };
     }
 
@@ -170,14 +183,24 @@ module economy::offer {
 
     public fun is_valid<T>(offer: &Offer<T>, clock: &Clock): bool { 
         if (option::is_none(&offer.claim)) { return false };
-        if (destroyed::is_destroyed(&offer.id)) { return false };
+        if (ownership::is_destroyed(&offer.id)) { return false };
         if (clock::timestamp_ms(clock) > offer.expiry_ms) { return false };
 
         true
     }
 
-    public fun info(offer: &Offer<T>): (address, Option<ID>, Option<StructTag>, u64, u8, u64) { 
-        (offer.send_to, offer.for_id, offer.for_type, offer.amount_each, offer.quantity, offer.expiry_ms)
+    // If it's not a type offer, then it's an object offer
+    public fun is_type_offer<T>(offer: &Offer<T>): bool {
+        if (option::is_some(&offer.for_type)) true
+        else false
+    }
+
+    public fun object_offer_info<T>(offer: &Offer<T>): (address, ID, u64, u64) { 
+        (offer.send_to, *option::borrow(&offer.for_id), offer.amount_each, offer.expiry_ms)
+    }
+
+    public fun type_offer_info<T>(offer: &Offer<T>): (address, StructTag, u64, u8, u64) {
+        (offer.send_to, *option::borrow(&offer.for_type), offer.amount_each, offer.quantity, offer.expiry_ms)
     }
 
     // ======== Convenience Entry functions ========

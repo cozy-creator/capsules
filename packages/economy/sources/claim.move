@@ -37,9 +37,9 @@ module economy::claim {
         auth: &TxAuthority,
         ctx: &mut TxContext
     ): Claim<T> {
-        let uid = object::new(ctx)
-        let expiry_ms = account::add_hold(
-            account, object::id_to_address(&uid), amount, duration_ms, clock, registry, &auth);
+        let uid = object::new(ctx);
+        let expiry_ms = coin23::add_hold(
+            account, object::uid_to_address(&uid), amount, duration_ms, clock, registry, auth);
 
         Claim {
             id: uid,
@@ -57,9 +57,10 @@ module economy::claim {
         clock: &Clock,
         registry: &CurrencyRegistry,
         ctx: &mut TxContext
-    ) { 
+    ) {
+        let merchant_addr = object::uid_to_address(&claim.id);
         let auth = ownership::begin_with_object_id(&claim.id);
-        account::withdraw_from_held_funds(from, to, amount, clock, registry, &auth, ctx);
+        coin23::withdraw_from_held_funds_(from, to, merchant_addr, amount, clock, registry, &auth, ctx);
         claim.amount = claim.amount - amount; // internal account
     }
 
@@ -71,20 +72,21 @@ module economy::claim {
         registry: &CurrencyRegistry,
         ctx: &mut TxContext
     ) { 
-        let Claim = { id: uid, for_account: _, amount, expiry_ms: _ } = claim;
+        let Claim { id: uid, for_account: _, amount, expiry_ms: _ } = claim;
+        let merchant_addr = object::uid_to_address(&uid);
         let auth = ownership::begin_with_object_id(&uid);
-        account::withdraw_from_held_funds(from, to, amount, clock, registry, &auth, ctx);
+        coin23::withdraw_from_held_funds_(from, to, merchant_addr, amount, clock, registry, &auth, ctx);
         object::delete(uid);
     }
 
     // We not strictly required to release the held funds from the Coin23, it's polite to do so,
     // so we do that here
-    public entry fun destroy(claim: Claim<T>, account: &mut Coin23<T>) {
-        assert(claim.for_account == object::id(account), EWRONG_ACCOUNT);
+    public entry fun destroy<T>(claim: Claim<T>, account: &mut Coin23<T>) {
+        assert!(claim.for_account == object::id(account), EWRONG_ACCOUNT);
 
         let Claim { id: uid, for_account: _, amount: _, expiry_ms: _ } = claim;
         let auth = ownership::begin_with_object_id(&uid);
-        account::release_held_funds(account, object::id_to_address(&claim.id), &auth);
+        coin23::release_held_funds(account, object::uid_to_address(&uid), &auth);
         object::delete(uid);
     }
 

@@ -54,7 +54,7 @@ module economy::fund {
     use ownership::tx_authority::{Self, TxAuthority};
     use ownership::org_transfer::OrgTransfer;
 
-    use economy::account::WITHDRAW;
+    use economy::coin23::WITHDRAW;
     use economy::queue::{Self, Queue};
 
     // Error constants

@@ -47,6 +47,7 @@ module economy::coin23 {
 
     use ownership::action::ADMIN;
     use ownership::ownership;
+    use ownership::organization::{Self, Organization};
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Constants
@@ -325,7 +326,7 @@ module economy::coin23 {
         registry: &CurrencyRegistry,
         auth: &TxAuthority
     ): u64 {
-        assert!(duration_ms >= ONE_MINUTE, EINVALID_OFFER);
+        assert!(duration_ms >= ONE_MINUTE, EINVALID_HOLD);
         assert!(duration_ms <= ONE_YEAR, EINVALID_HOLD);
         assert!(amount > 0, EINVALID_HOLD);
 
@@ -359,24 +360,24 @@ module economy::coin23 {
     }
 
     // Convenience helper function
-    public entry fun withdraw_from_held_funds<T>(
+    public fun withdraw_from_held_funds<T>(
         customer: &mut Coin23<T>,
         merchant: &mut Coin23<T>,
         amount: u64,
         clock: &Clock,
         registry: &CurrencyRegistry,
+        auth: &TxAuthority,
         ctx: &mut TxContext
     ) {
         let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
-        let auth = tx_authority::begin(ctx);
-        withdraw_from_held_funds(
-            customer, merchant, merchant_addr, amount, clock, registry, &auth, ctx);
+        withdraw_from_held_funds_(
+            customer, merchant, merchant_addr, amount, clock, registry, auth, ctx);
     }
 
     // This will work even if the currency is non-transferable now or the customer account is frozen
     // This is because whoever the funds are being on behalf of have pre-existing rights which
     // superseed the currency creator's rights
-    public entry fun withdraw_from_held_funds_<T>(
+    public fun withdraw_from_held_funds_<T>(
         customer: &mut Coin23<T>,
         merchant: &mut Coin23<T>,
         merchant_addr: address,
@@ -795,6 +796,17 @@ module economy::coin23 {
         }
     }
 
+    // =========== Extend Pattern ===========
+
+    public fun uid<T>(account: &Coin23<T>): &UID {
+        &account.id
+    }
+
+    public fun uid_mut<T>(account: &mut Coin23<T>): &mut UID {
+        &mut account.id
+    }
+
+
     // =========== Init Function ===========
 
     #[allow(unused_function)]
@@ -838,7 +850,7 @@ module economy::coin23 {
     // Called by the account-owner
     public entry fun add_hold_<T>(
         customer: &mut Coin23<T>,
-        mechant_addr: address,
+        merchant_addr: address,
         amount: u64,
         duration_ms: u64,
         clock: &Clock,
@@ -849,13 +861,21 @@ module economy::coin23 {
         add_hold(customer, merchant_addr, amount, duration_ms, clock, registry, &auth);
     }
 
-    // Called by an agent of the merchant
+    // Called by an agent of the merchant. This assumes that the merchant set their organization-id
+    // as the merchant-address allowed to do the withdrawal
     public entry fun charge_and_release_hold<T>(
         customer: &mut Coin23<T>,
         merchant: &mut Coin23<T>,
+        amount: u64,
+        organization: &Organization,
+        clock: &Clock,
+        registry: &CurrencyRegistry,
         ctx: &mut TxContext
     ) {
-        let merchant_addr = @0x0; // TO DO
+        let auth = organization::assert_login<MERCHANT>(organization, ctx);
+        let merchant_addr = organization::principal(organization);
+
+        withdraw_from_held_funds_(customer, merchant, merchant_addr, amount, clock, registry, &auth, ctx);
         release_held_funds(customer, merchant_addr, &auth);
     }
 
