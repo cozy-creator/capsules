@@ -123,7 +123,8 @@ module ownership::ownership {
     // Defaults to `true` if the owner does not exist, or if it is not initialized.
     // That is, without an assigned owner, the reference itself _is_the owner. (Referential authority)
     public fun can_act_as_owner<Action>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) true
+        if (is_destroyed(uid)) false
+        else if (!is_initialized(uid)) true
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.owner)) true
@@ -138,7 +139,8 @@ module ownership::ownership {
     // If this is initialized, package authority always exists and is always the native module (the module
     // declaring the object's type). I.e., the package-id corresponding to `0x599::my_module::Witness`.
     public fun can_act_as_declaring_package<Action>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
+        if (is_destroyed(uid)) false
+        else if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let package_id = struct_tag::package_id(&ownership.type);
@@ -149,6 +151,7 @@ module ownership::ownership {
 
     // Same as above, but uses the object itself, rather than the UID. Note that the UID need not
     // be initialized.
+    // Note that this will pass even if the object is 'destroyed', because we do not have access to UID
     public fun can_act_as_declaring_package_<T: key, Action>(obj: &T, auth: &TxAuthority): bool {
         let type = struct_tag::get<T>();
         let package_id = struct_tag::package_id(&type);
@@ -158,7 +161,8 @@ module ownership::ownership {
 
     /// Defaults to `false` if transfer authority is not set.
     public fun can_act_as_transfer_auth<Action>(uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
+        if (is_destroyed(uid)) false
+        else if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             if (option::is_none(&ownership.transfer_auth)) false
@@ -172,27 +176,13 @@ module ownership::ownership {
 
     // For arbitrary addresses that are not one of the main three (owner, package, transfer_auth)
     public fun can_act_as_address_on_object<Action>(principal: address, uid: &UID, auth: &TxAuthority): bool {
-        if (!is_initialized(uid)) false
+        if (is_destroyed(uid)) false
+        else if (!is_initialized(uid)) false
         else {
             let ownership = dynamic_field::borrow<Key, Ownership>(uid, Key { });
             let id = object::uid_as_inner(uid);
             tx_authority::can_act_as_address_on_object<Action>(principal, &ownership.type, id, auth)
         }
-    }
-
-    // Checks all instances of why an agent needs mutable access to a UID
-    // TO DO: make this useful
-    // public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
-    //     if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
-    //     if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
-    //     if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
-
-    //     false
-    // }
-
-    // TO DO: make this useful
-    public fun can_borrow_uid_mut(_uid: &UID, _auth: &TxAuthority): bool {
-        true
     }
 
     // ========== Getter Functions =========
@@ -323,5 +313,42 @@ module ownership::ownership {
         };
 
         tx_authority::add_object_id(uid, auth)
+    }
+
+    // ======= Destroying Shared Objects =======
+    // This compensates for the inability to destroy Shared Objects in Sui currently
+
+    // This key's existence signifies the object is destroyed
+    struct IsDestroyed has store, copy, drop { }
+
+    // Cannot be reversed. Only the owner or creator can destroy an object
+    public fun destroy(uid: &mut UID, auth: &TxAuthority) {
+        assert!(can_act_as_owner<ADMIN>(uid, auth) ||
+            can_act_as_declaring_package<ADMIN>(uid, auth), ENO_OWNER_AUTHORITY);
+
+        dynamic_field::add(uid, IsDestroyed { }, true);
+    }
+
+    public fun is_destroyed(uid: &UID): bool {
+        dynamic_field::exists_(uid, IsDestroyed { })
+    }
+
+    // ======= Extend Pattern Protector =======
+    // The problem with the extend pattern is that if anyone can get &mut UID access, they can add
+    // lots of junk / spam dynamic fields to your object. Unfortunately, I think this is an acceptable
+    // tradeoff versus having to manually gate access to UID. Managing UID access gets quite complex,
+    // so it's easiest just to make it public
+
+    // Checks all instances of why an agent needs mutable access to a UID
+    // public fun validate_uid_mut(uid: &UID, auth: &TxAuthority): bool {
+    //     if (can_act_as_owner<UID_MUT>(uid, auth)) { return true }; // Owner type added
+    //     if (can_act_as_package<UID_MUT>(uid, auth)) { return true }; // Witness type added
+    //     if (can_act_as_transfer_auth<UID_MUT>(uid, auth)) { return true }; // Transfer type added
+    //
+    //     false
+    // }
+
+    public fun can_borrow_uid_mut(_uid: &UID, _auth: &TxAuthority): bool {
+        true
     }
 }
