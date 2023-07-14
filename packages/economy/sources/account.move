@@ -50,8 +50,9 @@ module economy::account {
     use ownership::tx_authority::{Self, TxAuthority};
 
     // Constants
-    const ONE_DAY: u64 = 1000 * 60 * 60 * 24;
-    const ONE_YEAR: u64 = 1000 * 60 * 60 * 24 * 365;
+    const ONE_MINUTE: u64 = 1_000 * 60;
+    const ONE_DAY: u64 = 1_000 * 60 * 60 * 24;
+    const ONE_YEAR: u64 = 1_000 * 60 * 60 * 24 * 365;
 
     // Error constants
     const ENO_OWNER_AUTHORITY: u64 = 0;
@@ -97,7 +98,7 @@ module economy::account {
         available: u64, // available to be withdrawn in the current period
         refresh_amount: u64, // max balance that can be withdrawn per refresh
         refresh_cadence: u64, // ms interval
-        last_refresh: u64 // ms timestamp
+        latest_refresh: u64 // ms timestamp
     }
 
     struct Hold<phantom T> has store {
@@ -251,7 +252,7 @@ module economy::account {
             available: 0, // not available until first refresh
             refresh_amount: max_amount,
             refresh_cadence,
-            last_refresh: clock::timestamp_ms(clock)
+            latest_refresh: clock::timestamp_ms(clock)
         };
 
         let rebills = map2::borrow_mut_fill<address, vector<Rebill>>(
@@ -313,6 +314,7 @@ module economy::account {
         map::remove(&mut customer.rebills, merchant_addr);
     }
 
+    // Returns the expiration-timestamp of the hold
     public fun add_hold<T>(
         customer: &mut Account<T>,
         merchant_addr: address,
@@ -321,7 +323,8 @@ module economy::account {
         clock: &Clock,
         registry: &CurrencyRegistry,
         auth: &TxAuthority
-    ) {
+    ): u64 {
+        assert!(duration_ms >= ONE_MINUTE, EINVALID_OFFER);
         assert!(duration_ms <= ONE_YEAR, EINVALID_HOLD);
         assert!(amount > 0, EINVALID_HOLD);
 
@@ -350,21 +353,40 @@ module economy::account {
             };
             map::push_back(&mut customer.held_funds, merchant_addr, hold);
         };
+
+        expiry_ms
     }
 
-    public fun withdraw_from_held_funds<T>(
+    // Convenience helper function
+    public entry fun withdraw_from_held_funds<T>(
         customer: &mut Account<T>,
         merchant: &mut Account<T>,
+        amount: u64,
+        clock: &Clock,
+        registry: &CurrencyRegistry,
+        ctx: &mut TxContext
+    ) {
+        let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
+        let auth = tx_authority::begin(ctx);
+        withdraw_from_held_funds(
+            customer, merchant, merchant_addr, amount, clock, registry, &auth, ctx);
+    }
+
+    // This will work even if the currency is non-transferable now or the customer account is frozen
+    // This is because whoever the funds are being on behalf of have pre-existing rights which
+    // superseed the currency creator's rights
+    public entry fun withdraw_from_held_funds_<T>(
+        customer: &mut Account<T>,
+        merchant: &mut Account<T>,
+        merchant_addr: address,
         amount: u64,
         clock: &Clock,
         registry: &CurrencyRegistry,
         auth: &TxAuthority,
         ctx: &mut TxContext
     ) {
-        let merchant_addr = option::destroy_some(ownership::get_owner(&merchant.id));
         assert!(tx_authority::can_act_as_address<MERCHANT>(merchant_addr, auth), ENO_MERCHANT_AUTHORITY);
-        assert!(is_currency_transferable<T>(registry), ECURRENCY_CANNOT_BE_TRANSFERRED);
-        assert!(!customer.frozen && !merchant.frozen, EACCOUNT_FROZEN);
+        assert!(!merchant.frozen, EACCOUNT_FROZEN);
 
         let fee = pay_transfer_fee(customer, amount, registry, ctx);
 
@@ -607,18 +629,20 @@ module economy::account {
     public fun crank_rebill(rebill: &mut Rebill, clock: &Clock) {
         let current_time = clock::timestamp_ms(clock);
 
-        if (current_time >= rebill.last_refresh + rebill.refresh_cadence) {
-            let cycles = (((current_time - rebill.last_refresh) / rebill.refresh_cadence) as u128);
-            rebill.last_refresh = 
-                rebill.last_refresh + (((rebill.refresh_cadence as u128) * cycles) as u64);
+        if (current_time >= rebill.latest_refresh + rebill.refresh_cadence) {
+            let cycles = (((current_time - rebill.latest_refresh) / rebill.refresh_cadence) as u128);
+            rebill.latest_refresh = 
+                rebill.latest_refresh + (((rebill.refresh_cadence as u128) * cycles) as u64);
             rebill.available = rebill.refresh_amount;
         };
     }
 
     fun release_hold_internal<T>(account: &mut Account<T>, merchant_addr: address) {
-        let hold = map::remove(&mut account.held_funds, merchant_addr);
-        let Hold { funds, expiry_ms: _ } = hold;
-        balance::join(&mut account.available, funds);
+        if (map::contains(&account.held_funds, merchant_addr)) {
+            let hold = map::remove(&mut account.held_funds, merchant_addr);
+            let Hold { funds, expiry_ms: _ } = hold;
+            balance::join(&mut account.available, funds);
+        };
     }
 
     // =========== Getter Functions ===========
@@ -728,7 +752,7 @@ module economy::account {
     }
 
     public fun inspect_rebill(rebill: &Rebill): (u64, u64, u64, u64) {
-        (rebill.available, rebill.refresh_amount, rebill.refresh_cadence, rebill.last_refresh)
+        (rebill.available, rebill.refresh_amount, rebill.refresh_cadence, rebill.latest_refresh)
     }
 
     public fun merchants_with_held_funds<T>(account: &Account<T>): vector<address> {
@@ -787,11 +811,13 @@ module economy::account {
     // =========== Convenience Entry Functions ===========
     // Makes life easier for client-apps
 
+    // Called by the account-owner
     public entry fun create_account_<T>(owner: address, ctx: &mut TxContext) {
         let account = create_account<T>(ctx);
         return_and_share(account, owner);
     }
 
+    // Called by the account-owner
     public entry fun charge_and_rebill<T>(
         customer: &mut Account<T>,
         merchant: &mut Account<T>,
@@ -808,7 +834,33 @@ module economy::account {
         add_rebill(customer, merchant_addr, amount, rebill_cadence, clock, registry, &auth);
     }
 
+    // Called by the account-owner
+    public entry fun add_hold_<T>(
+        customer: &mut Account<T>,
+        mechant_addr: address,
+        amount: u64,
+        duration_ms: u64,
+        clock: &Clock,
+        registry: &CurrencyRegistry,
+        ctx: &mut TxContext
+    ) {
+        let auth = tx_authority::begin(ctx);
+        add_hold(customer, merchant_addr, amount, duration_ms, clock, registry, &auth);
+    }
+
+    // Called by an agent of the merchant
+    public entry fun charge_and_release_hold<T>(
+        customer: &mut Account<T>,
+        merchant: &mut Account<T>,
+        ctx: &mut TxContext
+    ) {
+        let merchant_addr = @0x0; // TO DO
+        release_held_funds(customer, merchant_addr, &auth);
+    }
+
+    // Called by an agent of the currency creator
     public entry fun grant_currency() { }
     
+    // Called by an agent of the currency creator
     public entry fun destroy_currency() { }
 }
