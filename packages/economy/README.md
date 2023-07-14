@@ -19,13 +19,11 @@ We also adds new abilities for merchants:
 
 *** TO DO: ***
 
-- creation and destruction of balances with `Supply<T>`
+- creation and destruction of balances with `Supply<T>` (grant and burn functions)
+- broadcast memo-events on transfer
 - convenience entry functions
 - figure out abstract display
-- offers for NFT marketplaces
-- broadcast memo-events on transfer
-- Separate out into individual modules (potentially) instead of just 'Account'
-- Consider changing the name to Coin23
+- Integrate claim and offer for NFT marketplaces
 - Consider being able to send to phone numbers, email addresses, and having single-use claim codes for funds
 
 

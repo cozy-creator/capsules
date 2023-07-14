@@ -5,7 +5,7 @@ module economy::offer {
     use sui::clock::{Self, Clock};
     use sui::object::ID;
 
-    use economy::account::{Self, Account, Hold};
+    use economy::account::{Self, Coin23, Hold};
 
     // Error constants
     const EINVALID_OFFER: u64 = 0;
@@ -32,7 +32,7 @@ module economy::offer {
 
     // Define `for_id` for an object offer, and define `for_type` for a Type-offer
     public fun make_offer<T>(
-        account: &mut Account<T>,
+        account: &mut Coin23<T>,
         send_to: address,
         for_id: Option<ID>,
         for_type: Option<StructTag>,
@@ -101,8 +101,8 @@ module economy::offer {
     // For this to work, must have offer.quantity == 1. If quantity > 1, called `take_offer_` instead
     public fun take_offer<T>(
         offer: Offer<T>,
-        offer_account: &mut Account<T>,
-        taker_account: &mut Account<T>,
+        offer_account: &mut Coin23<T>,
+        taker_account: &mut Coin23<T>,
         item: &mut UID,
         clock: &Clock,
         registry: &CurrencyRegistry,
@@ -134,8 +134,8 @@ module economy::offer {
     // so that ownership::transfer succeeds.
     public fun take_offer_<T>(
         offer: &mut Offer<T>,
-        offer_account: &mut Account<T>,
-        taker_account: &mut Account<T>,
+        offer_account: &mut Coin23<T>,
+        taker_account: &mut Coin23<T>,
         item: &mut UID,
         clock: &Clock,
         registry: &CurrencyRegistry,
