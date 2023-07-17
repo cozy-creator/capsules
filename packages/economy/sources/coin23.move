@@ -1,29 +1,9 @@
-// Balance can be frozen by the coin-creator
-// Rebilling
-// Funded holds
-// Fees on send
-// Market-confounding (fixed price)
-// Non-transferable
-// 
-// Out of scope:
-// Privacy at some point later (confidential + anonymous transfers)
-// Consumer protection
-// Dev protection (infinite money glitch)
-// Crank (hydra), split-balance, joint-accounts
-
-// Plan:
-// - Inside of an account, place a 'this person can remove XX amount' record. Must include
-// an expiration time, refresh time, refresh rate, locked balance
-// - Cranks exist with inbound and outbound funds
-// - Transfer authority exists for balances; plugin
-// - Cancellable by guardian
-
 // Thoughts:
 // - We opted for a simple uniform transfer system here. Transfers check for frozen-balances,
 // non-transferability, and fees. This fits most use-cases. A more advanced system would have
-// its own transfer-module, just like Capsules does.
-// - Coin23s are non-transferrable; you transfer balances within Coin23s rather than ownership of
-// the entire account.
+// its own bespoke transfer-module, just like Capsules does.
+// - Coin23s are non-transferrable; you transfer balances within Coin23 objects rather than
+// ownership of the entire account.
 
 module economy::coin23 {
     use std::option::{Self, Option};

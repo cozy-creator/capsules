@@ -1,7 +1,7 @@
-// We use a StructTag to specify the type requested in `OfferForType` rather than a static type like
+// We use a StructTag to specify the type requested in `ItemOffer` rather than a static type like
 // `<phantom T>` so that people can make offers on abstract types like 'give me any Wood<T>'
 
-module economy::offer {
+module economy::item_offer {
     use std::option::{Self, Option};
 
     use sui::clock::{Self, Clock};
@@ -24,7 +24,7 @@ module economy::offer {
     const EOFFER_EXPIRED: u64 = 2;
 
     // Root-level shared object
-    struct Offer<phantom T> has key {
+    struct ItemOffer<phantom T> has key {
         id: UID,
         send_to: address,
         claim: Option<Claim<T>>, // because shared objects cannot be destroyed
@@ -54,13 +54,13 @@ module economy::offer {
         registry: &CurrencyRegistry,
         auth: &TxAuthority,
         ctx: &mut TxContext
-    ): Offer<T> {
+    ): ItemOffer<T> {
         if (option::is_some(&for_id)) {
             // object-offer
             let claim = claim::create(account, amount_each, duration_ms, clock, registry, auth, ctx);
             let (_, _, expiry_ms) = claim::info(&claim);
 
-            Offer {
+            ItemOffer {
                 id: object::new(ctx),
                 send_to,
                 claim: option::some(claim),
@@ -78,7 +78,7 @@ module economy::offer {
                 account, amount_each * (quantity as u64), duration_ms, clock, registry, auth, ctx);
             let (_, _, expiry_ms) = claim::info(&claim);
 
-            Offer {
+            ItemOffer {
                 id: object::new(ctx),
                 send_to,
                 claim: option::some(claim),
@@ -91,11 +91,11 @@ module economy::offer {
         }
     }
 
-    public fun return_and_share<T>(offer: Offer<T>, owner: address) {
+    public fun return_and_share<T>(offer: ItemOffer<T>, owner: address) {
         let auth = tx_authority::begin_with_package_witness_(Witness { });
         let typed_id = typed_id::new(&offer);
 
-        // Offers are non-transferable, hence transfer-auth is set to @0x0
+        // ItemOffers are non-transferable, hence transfer-auth is set to @0x0
         ownership::as_shared_object_(&mut offer.id, typed_id, owner, @0x0, &auth);
         transfer::share_object(offer);
     }
@@ -113,7 +113,7 @@ module economy::offer {
     // This won't work yet, because shared objects cannot be deleted
     // For this to work, must have offer.quantity == 1. If quantity > 1, called `take_offer_` instead
     public fun take_offer<T>(
-        offer: Offer<T>,
+        offer: ItemOffer<T>,
         offer_account: &mut Coin23<T>,
         taker_account: &mut Coin23<T>,
         item: &mut UID,
@@ -125,7 +125,7 @@ module economy::offer {
         assert!(offer.quantity == 1, EOFFER_EXPIRED);
         assert!(is_valid(&offer, clock), EOFFER_EXPIRED);
 
-        let Offer { id, send_to, claim, for_id, for_type, amount_each, quantity: _, expiry_ms: _ } = offer;
+        let ItemOffer { id, send_to, claim, for_id, for_type, amount_each, quantity: _, expiry_ms: _ } = offer;
         object::delete(id);
 
         // object-offer
@@ -146,7 +146,7 @@ module economy::offer {
     // Must have transfer-authority added to `auth`, meaning this must be called by the transfer-auth
     // so that ownership::transfer succeeds.
     public fun take_offer_<T>(
-        offer: &mut Offer<T>,
+        offer: &mut ItemOffer<T>,
         offer_account: &mut Coin23<T>,
         taker_account: &mut Coin23<T>,
         item: &mut UID,
@@ -181,7 +181,7 @@ module economy::offer {
 
     // ======== Getters ========
 
-    public fun is_valid<T>(offer: &Offer<T>, clock: &Clock): bool { 
+    public fun is_valid<T>(offer: &ItemOffer<T>, clock: &Clock): bool { 
         if (option::is_none(&offer.claim)) { return false };
         if (ownership::is_destroyed(&offer.id)) { return false };
         if (clock::timestamp_ms(clock) > offer.expiry_ms) { return false };
@@ -190,16 +190,16 @@ module economy::offer {
     }
 
     // If it's not a type offer, then it's an object offer
-    public fun is_type_offer<T>(offer: &Offer<T>): bool {
+    public fun is_type_offer<T>(offer: &ItemOffer<T>): bool {
         if (option::is_some(&offer.for_type)) true
         else false
     }
 
-    public fun object_offer_info<T>(offer: &Offer<T>): (address, ID, u64, u64) { 
+    public fun object_offer_info<T>(offer: &ItemOffer<T>): (address, ID, u64, u64) { 
         (offer.send_to, *option::borrow(&offer.for_id), offer.amount_each, offer.expiry_ms)
     }
 
-    public fun type_offer_info<T>(offer: &Offer<T>): (address, StructTag, u64, u8, u64) {
+    public fun type_offer_info<T>(offer: &ItemOffer<T>): (address, StructTag, u64, u8, u64) {
         (offer.send_to, *option::borrow(&offer.for_type), offer.amount_each, offer.quantity, offer.expiry_ms)
     }
 
