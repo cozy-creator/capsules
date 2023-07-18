@@ -1,0 +1,7 @@
+[config]
+rpc = "http://127.0.0.1:9000"
+
+[packages]
+Economy = { local = "../" }
+Ownership = { local = "../../ownership/" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }

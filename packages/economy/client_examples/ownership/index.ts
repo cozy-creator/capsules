@@ -1,0 +1,4 @@
+export const PACKAGE_ID =
+  "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a";
+export const PUBLISHED_AT =
+  "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a";
