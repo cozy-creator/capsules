@@ -93,6 +93,24 @@ async function main() {
   }
 
   {
+    console.log("Withdraw from customer's coin23 held balance invalid merchant auth");
+
+    const txb = new TransactionBlock();
+    const [auth] = beginTxAuth(txb);
+
+    withdrawFromHeldFunds(txb, coinTypeArg, {
+      auth,
+      amount: 80000n,
+      customer: coins23[0],
+      merchant: coins23[1],
+      registry: coinRegistryId,
+      clock: SUI_CLOCK_OBJECT_ID,
+    });
+
+    txb.setGasBudget(baseGasBudget);
+    await runTxb(txb, ownerSigner);
+  }
+  {
     await sleep();
     console.log("Withdraw from customer's coin23 held balance after hold expires");
 
