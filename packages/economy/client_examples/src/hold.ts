@@ -74,6 +74,27 @@ async function main() {
   }
 
   {
+    console.log("Hold customer's coin23 balance with invalid auth");
+
+    const txb = new TransactionBlock();
+    const [auth] = beginTxAuth(txb);
+
+    addHold(txb, coinTypeArg, {
+      auth,
+      amount: holdAmount,
+      customer: coins23[0],
+      registry: coinRegistryId,
+      durationMs: holdDuration,
+      clock: SUI_CLOCK_OBJECT_ID,
+      merchantAddr: merchantAddress,
+    });
+
+    txb.setGasBudget(baseGasBudget);
+    await runTxb(txb, merchantSigner);
+    await sleep();
+  }
+
+  {
     console.log("Withdraw from customer's coin23 held balance");
 
     const txb = new TransactionBlock();
