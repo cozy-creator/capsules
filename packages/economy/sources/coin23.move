@@ -801,6 +801,41 @@ module economy::coin23 {
         package::burn_publisher(publisher);
     }
 
+    // =========== Test-Only Functions ===========
+
+    #[test_only]
+    public fun freeze_for_testing<T>(coin23: &mut Coin23<T>) {
+        coin23.frozen = true;
+    }
+
+    #[test_only]
+    public fun unfreeze_for_testing<T>(coin23: &mut Coin23<T>) {
+        coin23.frozen = false;
+    }
+
+    #[test_only]
+    public fun destroy_for_testing<T>(coin23: Coin23<T>): Balance<T> {
+        let Coin23 { id, available, rebills, held_funds, frozen: _ } = coin23;
+        object::delete(id);
+        map::drop(rebills);
+        map::destroy_empty(held_funds);
+
+        available
+    }
+
+    #[test_only]
+    public fun create_currency_registry_for_testing(ctx: &mut TxContext): CurrencyRegistry {
+        CurrencyRegistry {
+            id: object::new(ctx)
+        }
+    }
+
+    #[test_only]
+    public fun destroy_currency_registry_for_testing(registry: CurrencyRegistry) {
+        let CurrencyRegistry { id } = registry;
+        object::delete(id);
+    }
+
     // =========== Convenience Entry Functions ===========
     // Makes life easier for client-apps
 
