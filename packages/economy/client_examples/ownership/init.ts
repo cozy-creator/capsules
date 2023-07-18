@@ -25,12 +25,12 @@ export function registerClasses(loader: StructClassLoader) {
   loader.register(ownership.MIGRATE);
   loader.register(ownership.TRANSFER);
   loader.register(ownership.UID_MUT);
-  loader.register(orgTransfer.OrgTransfer);
   loader.register(rbac.RBAC);
   loader.register(publishReceipt.PublishReceipt);
-  loader.register(organization.Key);
+  loader.register(orgTransfer.OrgTransfer);
   loader.register(organization.Witness);
   loader.register(organization.Package);
+  loader.register(organization.Key);
   loader.register(organization.ADD_PACKAGE);
   loader.register(organization.ENDORSE);
   loader.register(organization.Endorsement);

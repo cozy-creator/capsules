@@ -2,7 +2,7 @@
 name = "Economy"
 version = "0.2.0"
 authors = ["Paul Fidika (paul@fidika.com)"]
-published-at = "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc"
+published-at = "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
@@ -10,4 +10,4 @@ SuiUtils = { local = "../sui_utils" }
 Ownership = { local = "../ownership" }
 
 [addresses]
-economy = "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc"
+economy = "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd"

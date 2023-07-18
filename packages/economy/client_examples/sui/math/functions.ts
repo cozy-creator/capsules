@@ -14,18 +14,6 @@ export function max(txb: TransactionBlock, args: MaxArgs) {
   });
 }
 
-export interface MinArgs {
-  x: bigint | TransactionArgument;
-  y: bigint | TransactionArgument;
-}
-
-export function min(txb: TransactionBlock, args: MinArgs) {
-  return txb.moveCall({
-    target: `${PUBLISHED_AT}::math::min`,
-    arguments: [pure(txb, args.x, `u64`), pure(txb, args.y, `u64`)],
-  });
-}
-
 export interface DiffArgs {
   x: bigint | TransactionArgument;
   y: bigint | TransactionArgument;
@@ -49,6 +37,18 @@ export function divideAndRoundUp(
 ) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::math::divide_and_round_up`,
+    arguments: [pure(txb, args.x, `u64`), pure(txb, args.y, `u64`)],
+  });
+}
+
+export interface MinArgs {
+  x: bigint | TransactionArgument;
+  y: bigint | TransactionArgument;
+}
+
+export function min(txb: TransactionBlock, args: MinArgs) {
+  return txb.moveCall({
+    target: `${PUBLISHED_AT}::math::min`,
     arguments: [pure(txb, args.x, `u64`), pure(txb, args.y, `u64`)],
   });
 }

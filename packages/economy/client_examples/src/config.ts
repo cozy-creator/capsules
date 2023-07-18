@@ -23,4 +23,4 @@ export const merchantSigner = new RawSigner(merchantKeypair, provider);
 
 export const baseGasBudget = 100_000_000;
 export const coinRegistryId =
-  "0xf389822218867c10cb0237c05574d22041d00e69dec8d1c76194093a14e1cb3b";
+  "0x3d7349eb218ccf0549251000680c90844236b3b44cbbac2e492fcd94ff1436fd";

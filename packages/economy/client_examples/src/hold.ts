@@ -1,25 +1,21 @@
-import {
-  MIST_PER_SUI,
-  SUI_CLOCK_OBJECT_ID,
-  SUI_TYPE_ARG,
-  TransactionBlock,
-} from "@mysten/sui.js";
+import { MIST_PER_SUI, SUI_CLOCK_OBJECT_ID, SUI_TYPE_ARG, TransactionBlock } from "@mysten/sui.js";
 import {
   addRebill,
   cancelRebill,
   create_ as createCoin23_,
+  create as createCoin23,
   importFromCoin,
   withdrawWithRebill,
+  addHold,
+  releaseHeldFunds,
+  withdrawFromHeldFunds,
+  importFromBalance,
 } from "../economy/coin23/functions";
 import { Coin23 } from "../economy/coin23/structs";
-import {
-  baseGasBudget,
-  merchantSigner,
-  ownerSigner,
-  coinRegistryId,
-} from "./config";
+import { baseGasBudget, merchantSigner, ownerSigner, coinRegistryId } from "./config";
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions";
 import { runTxb, createdObjects, sleep } from "./utils";
+import { intoBalance } from "../sui/coin/functions";
 
 async function main() {
   const coins23: string[] = [];
@@ -27,7 +23,8 @@ async function main() {
   const ownerAddress = await ownerSigner.getAddress();
   const merchantAddress = await merchantSigner.getAddress();
   const coinImportAmount = BigInt(0.1 * Number(MIST_PER_SUI));
-  const rebillAmount = BigInt(0.01 * Number(MIST_PER_SUI));
+  const holdAmount = BigInt(0.01 * Number(MIST_PER_SUI));
+  const holdDuration = 5000n;
 
   {
     console.log("Create needed coin23's");
@@ -44,77 +41,47 @@ async function main() {
   }
 
   {
-    console.log("Import from coin into customer coin23");
+    console.log("Import from balance into first coin23");
 
     const txb = new TransactionBlock();
-    const [coin] = txb.splitCoins(txb.gas, [txb.pure(coinImportAmount)]);
-    importFromCoin(txb, coinTypeArg, { account: coins23[0], coin });
+    const coin = txb.splitCoins(txb.gas, [txb.pure(coinImportAmount)]);
+    const [balance] = intoBalance(txb, coinTypeArg, coin);
+    importFromBalance(txb, coinTypeArg, { account: coins23[0], balance });
 
     txb.setGasBudget(baseGasBudget);
     await runTxb(txb, ownerSigner);
   }
 
   {
-    console.log("Add rebill to customer accounts");
+    console.log("Hold customer's coin23 balance");
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    addRebill(txb, coinTypeArg, {
+    addHold(txb, coinTypeArg, {
       auth,
+      amount: holdAmount,
       customer: coins23[0],
-      refreshCadence: 3000n,
-      maxAmount: rebillAmount,
       registry: coinRegistryId,
+      durationMs: holdDuration,
       clock: SUI_CLOCK_OBJECT_ID,
       merchantAddr: merchantAddress,
     });
 
     txb.setGasBudget(baseGasBudget);
     await runTxb(txb, ownerSigner);
-
-    {
-      let count = 0;
-      const interval = setInterval(async () => {
-        if (count == 3) {
-          clearInterval(interval);
-          return;
-        }
-
-        console.log("Withdraw with rebill");
-
-        const txb = new TransactionBlock();
-        const [auth] = beginTxAuth(txb);
-        withdrawWithRebill(txb, coinTypeArg, {
-          auth,
-          rebillIndex: 0n,
-          amount: rebillAmount,
-          customer: coins23[0],
-          merchant: coins23[1],
-          registry: coinRegistryId,
-          clock: SUI_CLOCK_OBJECT_ID,
-        });
-
-        txb.setGasBudget(baseGasBudget);
-        await runTxb(txb, merchantSigner);
-
-        count++;
-      }, 4000);
-    }
-
-    await sleep(15000);
+    await sleep();
   }
 
   {
-    console.log("Withdraw with rebill before cancellation");
+    console.log("Withdraw from customer's coin23 held balance");
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    withdrawWithRebill(txb, coinTypeArg, {
+    withdrawFromHeldFunds(txb, coinTypeArg, {
       auth,
-      rebillIndex: 0n,
-      amount: rebillAmount,
+      amount: 80000n,
       customer: coins23[0],
       merchant: coins23[1],
       registry: coinRegistryId,
@@ -126,15 +93,19 @@ async function main() {
   }
 
   {
-    console.log("Cancel rebill by customer");
+    await sleep();
+    console.log("Withdraw from customer's coin23 held balance after hold expires");
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
-    cancelRebill(txb, coinTypeArg, {
+
+    withdrawFromHeldFunds(txb, coinTypeArg, {
       auth,
-      rebillIndex: 0n,
+      amount: 80000n,
       customer: coins23[0],
-      merchantAddr: merchantAddress,
+      merchant: coins23[1],
+      registry: coinRegistryId,
+      clock: SUI_CLOCK_OBJECT_ID,
     });
 
     txb.setGasBudget(baseGasBudget);
@@ -142,19 +113,15 @@ async function main() {
   }
 
   {
-    console.log("Withdraw with rebill after cancellation");
+    console.log("Release customer's coin23 held balance");
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
 
-    withdrawWithRebill(txb, coinTypeArg, {
+    releaseHeldFunds(txb, coinTypeArg, {
       auth,
-      rebillIndex: 0n,
-      amount: rebillAmount,
       customer: coins23[0],
-      merchant: coins23[1],
-      registry: coinRegistryId,
-      clock: SUI_CLOCK_OBJECT_ID,
+      merchantAddr: merchantAddress,
     });
 
     txb.setGasBudget(baseGasBudget);

@@ -1,4 +1,9 @@
-import { MIST_PER_SUI, RawSigner, SuiTransactionBlockResponse, TransactionBlock } from "@mysten/sui.js";
+import {
+  MIST_PER_SUI,
+  RawSigner,
+  SuiTransactionBlockResponse,
+  TransactionBlock,
+} from "@mysten/sui.js";
 import { provider } from "./config";
 
 export async function createdObjects(txb: SuiTransactionBlockResponse) {
@@ -17,7 +22,10 @@ export async function createdObjects(txb: SuiTransactionBlockResponse) {
     if (!object.data?.type) throw new Error("Object type not found");
 
     if (objects[object.data.type]) {
-      objects[object.data.type] = [...objects[object.data.type], object.data.objectId];
+      objects[object.data.type] = [
+        ...objects[object.data.type],
+        object.data.objectId,
+      ];
     } else {
       objects[object.data.type] = [object.data.objectId];
     }
@@ -35,7 +43,10 @@ export async function runTxb(txb: TransactionBlock, signer: RawSigner) {
 
   const {
     digest,
-    effects: { status, gasUsed: { storageCost = 0, computationCost = 0, storageRebate = 0 } = {} } = {},
+    effects: {
+      status,
+      gasUsed: { storageCost = 0, computationCost = 0, storageRebate = 0 } = {},
+    } = {},
   } = response;
 
   console.log(
@@ -44,10 +55,12 @@ export async function runTxb(txb: TransactionBlock, signer: RawSigner) {
       error: status?.error,
       status: status?.status,
       totalGasUsed: `${
-        Number(Number(computationCost) + Number(storageCost) - Number(storageRebate)) / Number(MIST_PER_SUI)
+        Number(
+          Number(computationCost) + Number(storageCost) - Number(storageRebate),
+        ) / Number(MIST_PER_SUI)
       }`,
     },
-    "\n"
+    "\n",
   );
 
   return response;

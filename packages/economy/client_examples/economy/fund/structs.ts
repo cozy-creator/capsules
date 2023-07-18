@@ -9,7 +9,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Config =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Config",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Config",
   {
     public_purchase: `bool`,
     public_redeems: `bool`,
@@ -21,7 +21,7 @@ bcs.registerStructType(
 export function isConfig(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Config"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Config"
   );
 }
 
@@ -34,7 +34,7 @@ export interface ConfigFields {
 
 export class Config {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Config";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Config";
   static readonly $numTypeParams = 0;
 
   readonly publicPurchase: boolean;
@@ -78,7 +78,7 @@ export class Config {
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Witness",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Witness",
   {
     dummy_field: `bool`,
   },
@@ -87,7 +87,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Witness"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Witness"
   );
 }
 
@@ -97,7 +97,7 @@ export interface WitnessFields {
 
 export class Witness {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Witness";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Witness";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -125,20 +125,20 @@ export class Witness {
 /* ============================== Fund =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Fund<S, A>",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Fund<S, A>",
   {
     id: `0x2::object::UID`,
     total_shares: `0x2::balance::Supply<S>`,
     net_assets: `u64`,
-    share_queue: `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::queue::Queue<S>`,
-    asset_queue: `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::queue::Queue<A>`,
-    config: `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Config`,
+    share_queue: `0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::queue::Queue<S>`,
+    asset_queue: `0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::queue::Queue<A>`,
+    config: `0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Config`,
   },
 );
 
 export function isFund(type: Type): boolean {
   return type.startsWith(
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Fund<",
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Fund<",
   );
 }
 
@@ -153,7 +153,7 @@ export interface FundFields {
 
 export class Fund {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::Fund";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::Fund";
   static readonly $numTypeParams = 2;
 
   readonly $typeArgs: [Type, Type];
@@ -247,7 +247,7 @@ export class Fund {
 /* ============================== MANAGE_FUND =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::MANAGE_FUND",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::MANAGE_FUND",
   {
     dummy_field: `bool`,
   },
@@ -256,7 +256,7 @@ bcs.registerStructType(
 export function isMANAGE_FUND(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::MANAGE_FUND"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::MANAGE_FUND"
   );
 }
 
@@ -266,7 +266,7 @@ export interface MANAGE_FUNDFields {
 
 export class MANAGE_FUND {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::MANAGE_FUND";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::MANAGE_FUND";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -296,7 +296,7 @@ export class MANAGE_FUND {
 /* ============================== PURCHASE =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::PURCHASE",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::PURCHASE",
   {
     dummy_field: `bool`,
   },
@@ -305,7 +305,7 @@ bcs.registerStructType(
 export function isPURCHASE(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::PURCHASE"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::PURCHASE"
   );
 }
 
@@ -315,7 +315,7 @@ export interface PURCHASEFields {
 
 export class PURCHASE {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::PURCHASE";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::PURCHASE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -343,7 +343,7 @@ export class PURCHASE {
 /* ============================== REDEEM =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::REDEEM",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::REDEEM",
   {
     dummy_field: `bool`,
   },
@@ -352,7 +352,7 @@ bcs.registerStructType(
 export function isREDEEM(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::REDEEM"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::REDEEM"
   );
 }
 
@@ -362,7 +362,7 @@ export interface REDEEMFields {
 
 export class REDEEM {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::fund::REDEEM";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::fund::REDEEM";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

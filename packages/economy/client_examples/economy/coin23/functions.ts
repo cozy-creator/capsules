@@ -95,28 +95,6 @@ export function uidMut(
   });
 }
 
-export interface Freeze_Args {
-  account: ObjectArg;
-  registry: ObjectArg;
-  auth: ObjectArg;
-}
-
-export function freeze_(
-  txb: TransactionBlock,
-  typeArg: Type,
-  args: Freeze_Args,
-) {
-  return txb.moveCall({
-    target: `${PUBLISHED_AT}::coin23::freeze_`,
-    typeArguments: [typeArg],
-    arguments: [
-      obj(txb, args.account),
-      obj(txb, args.registry),
-      obj(txb, args.auth),
-    ],
-  });
-}
-
 export function isFrozen(
   txb: TransactionBlock,
   typeArg: Type,
@@ -143,18 +121,6 @@ export function returnAndShare(
     target: `${PUBLISHED_AT}::coin23::return_and_share`,
     typeArguments: [typeArg],
     arguments: [obj(txb, args.account), pure(txb, args.owner, `address`)],
-  });
-}
-
-export function create_(
-  txb: TransactionBlock,
-  typeArg: Type,
-  owner: string | TransactionArgument,
-) {
-  return txb.moveCall({
-    target: `${PUBLISHED_AT}::coin23::create_`,
-    typeArguments: [typeArg],
-    arguments: [pure(txb, owner, `address`)],
   });
 }
 
@@ -402,6 +368,18 @@ export function crankRebill(txb: TransactionBlock, args: CrankRebillArgs) {
   });
 }
 
+export function create_(
+  txb: TransactionBlock,
+  typeArg: Type,
+  owner: string | TransactionArgument,
+) {
+  return txb.moveCall({
+    target: `${PUBLISHED_AT}::coin23::create_`,
+    typeArguments: [typeArg],
+    arguments: [pure(txb, owner, `address`)],
+  });
+}
+
 export function destroyCurrency(txb: TransactionBlock) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::coin23::destroy_currency`,
@@ -498,6 +476,28 @@ export function exportToCoin(
       obj(txb, args.account),
       obj(txb, args.registry),
       pure(txb, args.amount, `u64`),
+      obj(txb, args.auth),
+    ],
+  });
+}
+
+export interface Freeze_Args {
+  account: ObjectArg;
+  registry: ObjectArg;
+  auth: ObjectArg;
+}
+
+export function freeze_(
+  txb: TransactionBlock,
+  typeArg: Type,
+  args: Freeze_Args,
+) {
+  return txb.moveCall({
+    target: `${PUBLISHED_AT}::coin23::freeze_`,
+    typeArguments: [typeArg],
+    arguments: [
+      obj(txb, args.account),
+      obj(txb, args.registry),
       obj(txb, args.auth),
     ],
   });

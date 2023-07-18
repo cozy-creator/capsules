@@ -5,53 +5,6 @@ import { RBAC } from "../rbac/structs";
 import { Encoding } from "@mysten/bcs";
 import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 
-/* ============================== Key =============================== */
-
-bcs.registerStructType(
-  "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key",
-  {
-    dummy_field: `bool`,
-  },
-);
-
-export function isKey(type: Type): boolean {
-  return (
-    type ===
-    "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key"
-  );
-}
-
-export interface KeyFields {
-  dummyField: boolean;
-}
-
-export class Key {
-  static readonly $typeName =
-    "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key";
-  static readonly $numTypeParams = 0;
-
-  readonly dummyField: boolean;
-
-  constructor(dummyField: boolean) {
-    this.dummyField = dummyField;
-  }
-
-  static fromFields(fields: Record<string, any>): Key {
-    return new Key(fields.dummy_field);
-  }
-
-  static fromFieldsWithTypes(item: FieldsWithTypes): Key {
-    if (!isKey(item.type)) {
-      throw new Error("not a Key type");
-    }
-    return new Key(item.fields.dummy_field);
-  }
-
-  static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
-    return Key.fromFields(bcs.de([Key.$typeName], data, encoding));
-  }
-}
-
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
@@ -185,6 +138,53 @@ export class Package {
       throw new Error(`object at id ${id} is not a Package object`);
     }
     return Package.fromFieldsWithTypes(res.data.content);
+  }
+}
+
+/* ============================== Key =============================== */
+
+bcs.registerStructType(
+  "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key",
+  {
+    dummy_field: `bool`,
+  },
+);
+
+export function isKey(type: Type): boolean {
+  return (
+    type ===
+    "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key"
+  );
+}
+
+export interface KeyFields {
+  dummyField: boolean;
+}
+
+export class Key {
+  static readonly $typeName =
+    "0x9b66045cbf367d4ce152b30df727556aa0d7c192b4ade762571fac260ac8274a::organization::Key";
+  static readonly $numTypeParams = 0;
+
+  readonly dummyField: boolean;
+
+  constructor(dummyField: boolean) {
+    this.dummyField = dummyField;
+  }
+
+  static fromFields(fields: Record<string, any>): Key {
+    return new Key(fields.dummy_field);
+  }
+
+  static fromFieldsWithTypes(item: FieldsWithTypes): Key {
+    if (!isKey(item.type)) {
+      throw new Error("not a Key type");
+    }
+    return new Key(item.fields.dummy_field);
+  }
+
+  static fromBcs(data: Uint8Array | string, encoding?: Encoding): Key {
+    return Key.fromFields(bcs.de([Key.$typeName], data, encoding));
   }
 }
 

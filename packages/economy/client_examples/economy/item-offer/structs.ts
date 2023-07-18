@@ -10,7 +10,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::Witness",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::Witness",
   {
     dummy_field: `bool`,
   },
@@ -19,7 +19,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
   return (
     type ===
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::Witness"
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::Witness"
   );
 }
 
@@ -29,7 +29,7 @@ export interface WitnessFields {
 
 export class Witness {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::Witness";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::Witness";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -57,11 +57,11 @@ export class Witness {
 /* ============================== ItemOffer =============================== */
 
 bcs.registerStructType(
-  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::ItemOffer<T>",
+  "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::ItemOffer<T>",
   {
     id: `0x2::object::UID`,
     send_to: `address`,
-    claim: `0x1::option::Option<0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim<T>>`,
+    claim: `0x1::option::Option<0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::claim::Claim<T>>`,
     for_id: `0x1::option::Option<0x2::object::ID>`,
     for_type: `0x1::option::Option<0x6adaf7f9c1f7ae68b96dc85f5b069f4a6aabc748d8d741184ca5479fb4466bae::struct_tag::StructTag>`,
     amount_each: `u64`,
@@ -72,7 +72,7 @@ bcs.registerStructType(
 
 export function isItemOffer(type: Type): boolean {
   return type.startsWith(
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::ItemOffer<",
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::ItemOffer<",
   );
 }
 
@@ -89,7 +89,7 @@ export interface ItemOfferFields {
 
 export class ItemOffer {
   static readonly $typeName =
-    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::item_offer::ItemOffer";
+    "0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::item_offer::ItemOffer";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;
@@ -122,7 +122,7 @@ export class ItemOffer {
       sendTo: `0x${fields.send_to}`,
       claim:
         Option.fromFields<Claim>(
-          `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim<${typeArg}>`,
+          `0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::claim::Claim<${typeArg}>`,
           fields.claim,
         ).vec[0] || null,
       forId:
@@ -153,7 +153,7 @@ export class ItemOffer {
           ? Option.fromFieldsWithTypes<Claim>({
               type:
                 "0x1::option::Option<" +
-                `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim<${typeArgs[0]}>` +
+                `0x5004aaaf81e51ffc51c4e417e0009017eacbc8d4026417a4195a96852fb9e1cd::claim::Claim<${typeArgs[0]}>` +
                 ">",
               fields: { vec: [item.fields.claim] },
             }).vec[0]
