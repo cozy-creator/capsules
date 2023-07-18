@@ -14,23 +14,22 @@ import {
 import { Coin23 } from "../economy/coin23/structs";
 import { fromBalance, intoBalance } from "../sui/coin/functions";
 import { begin as beginTxAuth } from "../ownership/tx-authority/functions";
-import { secondSigner, baseGasBudget, coinRegistryId, firstSigner } from "./config";
+import { baseGasBudget, coinRegistryId, ownerSigner } from "./config";
 import { createdObjects, runTxb } from "./utils";
 
 async function main() {
   const coins23: string[] = [];
   const coinTypeArg = SUI_TYPE_ARG;
-  const firstAddress = await firstSigner.getAddress();
-  const secondAddress = await secondSigner.getAddress();
+  const ownerAddress = await ownerSigner.getAddress();
 
   {
     console.log("Create first coin23");
 
     const txb = new TransactionBlock();
-    createCoin23_(txb, coinTypeArg, firstAddress);
+    createCoin23_(txb, coinTypeArg, ownerAddress);
 
     txb.setGasBudget(baseGasBudget);
-    const response = await runTxb(txb, firstSigner);
+    const response = await runTxb(txb, ownerSigner);
     const objects = await createdObjects(response);
 
     coins23.push(...objects[`${Coin23.$typeName}<${SUI_TYPE_ARG}>`]);
@@ -41,10 +40,10 @@ async function main() {
 
     const txb = new TransactionBlock();
     const [coin23] = createCoin23(txb, SUI_TYPE_ARG);
-    returnAndShare(txb, coinTypeArg, { account: coin23, owner: secondAddress });
+    returnAndShare(txb, coinTypeArg, { account: coin23, owner: ownerAddress });
 
     txb.setGasBudget(baseGasBudget);
-    const response = await runTxb(txb, firstSigner);
+    const response = await runTxb(txb, ownerSigner);
     const objects = await createdObjects(response);
 
     coins23.push(...objects[`${Coin23.$typeName}<${SUI_TYPE_ARG}>`]);
@@ -58,7 +57,7 @@ async function main() {
     importFromCoin(txb, coinTypeArg, { account: coins23[0], coin });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -70,7 +69,7 @@ async function main() {
     importFromBalance(txb, coinTypeArg, { account: coins23[0], balance });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -87,7 +86,7 @@ async function main() {
     });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -104,7 +103,7 @@ async function main() {
     });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -118,10 +117,10 @@ async function main() {
       account: coins23[0],
       registry: coinRegistryId,
     });
-    txb.transferObjects([coin], txb.pure(firstAddress));
+    txb.transferObjects([coin], txb.pure(ownerAddress));
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -137,10 +136,10 @@ async function main() {
       registry: coinRegistryId,
     });
 
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(firstAddress));
+    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -154,10 +153,10 @@ async function main() {
       account: coins23[0],
       registry: coinRegistryId,
     });
-    txb.transferObjects([coin], txb.pure(firstAddress));
+    txb.transferObjects([coin], txb.pure(ownerAddress));
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -172,10 +171,10 @@ async function main() {
       registry: coinRegistryId,
     });
 
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(firstAddress));
+    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -193,7 +192,7 @@ async function main() {
     destroyEmptyCoin23(txb, coinTypeArg, { auth, account: coin23 });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -207,7 +206,7 @@ async function main() {
     destroyEmptyCoin23(txb, coinTypeArg, { auth, account: coin23 });
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 
   {
@@ -223,10 +222,10 @@ async function main() {
 
     // destroy coin23
     const [balance] = destroyCoin23(txb, coinTypeArg, { auth, account: coin23, registry: coinRegistryId });
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(firstAddress));
+    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
 
     txb.setGasBudget(baseGasBudget);
-    await runTxb(txb, firstSigner);
+    await runTxb(txb, ownerSigner);
   }
 }
 
