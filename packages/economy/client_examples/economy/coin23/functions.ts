@@ -146,6 +146,18 @@ export function returnAndShare(
   });
 }
 
+export function create_(
+  txb: TransactionBlock,
+  typeArg: Type,
+  owner: string | TransactionArgument,
+) {
+  return txb.moveCall({
+    target: `${PUBLISHED_AT}::coin23::create_`,
+    typeArguments: [typeArg],
+    arguments: [pure(txb, owner, `address`)],
+  });
+}
+
 export interface AddHoldArgs {
   customer: ObjectArg;
   merchantAddr: string | TransactionArgument;
@@ -387,18 +399,6 @@ export function crankRebill(txb: TransactionBlock, args: CrankRebillArgs) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::coin23::crank_rebill`,
     arguments: [obj(txb, args.rebill), obj(txb, args.clock)],
-  });
-}
-
-export function create_(
-  txb: TransactionBlock,
-  typeArg: Type,
-  owner: string | TransactionArgument,
-) {
-  return txb.moveCall({
-    target: `${PUBLISHED_AT}::coin23::create_`,
-    typeArguments: [typeArg],
-    arguments: [pure(txb, owner, `address`)],
   });
 }
 

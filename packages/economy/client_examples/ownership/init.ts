@@ -25,9 +25,9 @@ export function registerClasses(loader: StructClassLoader) {
   loader.register(ownership.MIGRATE);
   loader.register(ownership.TRANSFER);
   loader.register(ownership.UID_MUT);
+  loader.register(orgTransfer.OrgTransfer);
   loader.register(rbac.RBAC);
   loader.register(publishReceipt.PublishReceipt);
-  loader.register(orgTransfer.OrgTransfer);
   loader.register(organization.Key);
   loader.register(organization.Witness);
   loader.register(organization.Package);

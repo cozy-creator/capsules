@@ -1,7 +1,7 @@
 import * as claim from "./claim/structs";
 import * as coin23 from "./coin23/structs";
 import * as fund from "./fund/structs";
-import * as offer from "./offer/structs";
+import * as itemOffer from "./item-offer/structs";
 import * as payMemo from "./pay-memo/structs";
 import * as queue from "./queue/structs";
 import { StructClassLoader } from "../_framework/loader";
@@ -26,7 +26,7 @@ export function registerClasses(loader: StructClassLoader) {
   loader.register(fund.MANAGE_FUND);
   loader.register(fund.PURCHASE);
   loader.register(fund.REDEEM);
-  loader.register(offer.Witness);
-  loader.register(offer.Offer);
+  loader.register(itemOffer.Witness);
+  loader.register(itemOffer.ItemOffer);
   loader.register(payMemo.PayMemo);
 }

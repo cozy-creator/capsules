@@ -7,7 +7,7 @@ import { Encoding } from "@mysten/bcs";
 /* ============================== Queue =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::queue::Queue<T>",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::queue::Queue<T>",
   {
     incoming: `0x2::linked_table::LinkedTable<address, 0x2::balance::Balance<T>>`,
     reserve: `0x2::balance::Balance<T>`,
@@ -17,7 +17,7 @@ bcs.registerStructType(
 
 export function isQueue(type: Type): boolean {
   return type.startsWith(
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::queue::Queue<",
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::queue::Queue<",
   );
 }
 
@@ -29,7 +29,7 @@ export interface QueueFields {
 
 export class Queue {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::queue::Queue";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::queue::Queue";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;

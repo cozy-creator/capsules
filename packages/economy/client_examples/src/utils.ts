@@ -7,7 +7,10 @@ export async function createdObjects(txb: SuiTransactionBlockResponse) {
   const objects: { [key: string]: string[] } = {};
 
   const ids = txb.effects.created.map((obj) => obj.reference.objectId);
-  const multiObjects = await provider.multiGetObjects({ ids, options: { showType: true } });
+  const multiObjects = await provider.multiGetObjects({
+    ids,
+    options: { showType: true },
+  });
 
   for (let i = 0; i < multiObjects.length; i++) {
     const object = multiObjects[i];
@@ -48,4 +51,8 @@ export async function runTxb(txb: TransactionBlock, signer: RawSigner) {
   );
 
   return response;
+}
+
+export function sleep(ms = 3000) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

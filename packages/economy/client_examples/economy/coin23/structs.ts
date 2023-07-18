@@ -10,7 +10,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Witness =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Witness",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Witness",
   {
     dummy_field: `bool`,
   },
@@ -19,7 +19,7 @@ bcs.registerStructType(
 export function isWitness(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Witness"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Witness"
   );
 }
 
@@ -29,7 +29,7 @@ export interface WitnessFields {
 
 export class Witness {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Witness";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Witness";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -57,7 +57,7 @@ export class Witness {
 /* ============================== FREEZE =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::FREEZE",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::FREEZE",
   {
     dummy_field: `bool`,
   },
@@ -66,7 +66,7 @@ bcs.registerStructType(
 export function isFREEZE(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::FREEZE"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::FREEZE"
   );
 }
 
@@ -76,7 +76,7 @@ export interface FREEZEFields {
 
 export class FREEZE {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::FREEZE";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::FREEZE";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -104,7 +104,7 @@ export class FREEZE {
 /* ============================== COIN23 =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::COIN23",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::COIN23",
   {
     dummy_field: `bool`,
   },
@@ -113,7 +113,7 @@ bcs.registerStructType(
 export function isCOIN23(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::COIN23"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::COIN23"
   );
 }
 
@@ -123,7 +123,7 @@ export interface COIN23Fields {
 
 export class COIN23 {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::COIN23";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::COIN23";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -151,19 +151,19 @@ export class COIN23 {
 /* ============================== Coin23 =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Coin23<T>",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Coin23<T>",
   {
     id: `0x2::object::UID`,
     available: `0x2::balance::Balance<T>`,
-    rebills: `0x2::linked_table::LinkedTable<address, vector<0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Rebill>>`,
-    held_funds: `0x2::linked_table::LinkedTable<address, 0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Hold<T>>`,
+    rebills: `0x2::linked_table::LinkedTable<address, vector<0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Rebill>>`,
+    held_funds: `0x2::linked_table::LinkedTable<address, 0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Hold<T>>`,
     frozen: `bool`,
   },
 );
 
 export function isCoin23(type: Type): boolean {
   return type.startsWith(
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Coin23<",
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Coin23<",
   );
 }
 
@@ -177,7 +177,7 @@ export interface Coin23Fields {
 
 export class Coin23 {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Coin23";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Coin23";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;
@@ -205,14 +205,14 @@ export class Coin23 {
       rebills: LinkedTable.fromFields<string>(
         [
           `address`,
-          `vector<0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Rebill>`,
+          `vector<0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Rebill>`,
         ],
         fields.rebills,
       ),
       heldFunds: LinkedTable.fromFields<string>(
         [
           `address`,
-          `0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Hold<${typeArg}>`,
+          `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Hold<${typeArg}>`,
         ],
         fields.held_funds,
       ),
@@ -281,19 +281,19 @@ export class Coin23 {
 /* ============================== CurrencyControls =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyControls<T>",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyControls<T>",
   {
     creator_can_withdraw: `bool`,
     creator_can_freeze: `bool`,
     user_transfer_enum: `u8`,
-    transfer_fee: `0x1::option::Option<0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee>`,
+    transfer_fee: `0x1::option::Option<0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee>`,
     export_auths: `vector<address>`,
   },
 );
 
 export function isCurrencyControls(type: Type): boolean {
   return type.startsWith(
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyControls<",
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyControls<",
   );
 }
 
@@ -307,7 +307,7 @@ export interface CurrencyControlsFields {
 
 export class CurrencyControls {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyControls";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyControls";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;
@@ -338,7 +338,7 @@ export class CurrencyControls {
       userTransferEnum: fields.user_transfer_enum,
       transferFee:
         Option.fromFields<TransferFee>(
-          `0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee`,
+          `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee`,
           fields.transfer_fee,
         ).vec[0] || null,
       exportAuths: fields.export_auths.map((item: any) => `0x${item}`),
@@ -360,7 +360,7 @@ export class CurrencyControls {
           ? Option.fromFieldsWithTypes<TransferFee>({
               type:
                 "0x1::option::Option<" +
-                `0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee` +
+                `0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee` +
                 ">",
               fields: { vec: [item.fields.transfer_fee] },
             }).vec[0]
@@ -384,7 +384,7 @@ export class CurrencyControls {
 /* ============================== CurrencyRegistry =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyRegistry",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyRegistry",
   {
     id: `0x2::object::UID`,
   },
@@ -393,7 +393,7 @@ bcs.registerStructType(
 export function isCurrencyRegistry(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyRegistry"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyRegistry"
   );
 }
 
@@ -403,7 +403,7 @@ export interface CurrencyRegistryFields {
 
 export class CurrencyRegistry {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::CurrencyRegistry";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::CurrencyRegistry";
   static readonly $numTypeParams = 0;
 
   readonly id: ObjectId;
@@ -470,7 +470,7 @@ export class CurrencyRegistry {
 /* ============================== Hold =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Hold<T>",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Hold<T>",
   {
     funds: `0x2::balance::Balance<T>`,
     expiry_ms: `u64`,
@@ -479,7 +479,7 @@ bcs.registerStructType(
 
 export function isHold(type: Type): boolean {
   return type.startsWith(
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Hold<",
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Hold<",
   );
 }
 
@@ -490,7 +490,7 @@ export interface HoldFields {
 
 export class Hold {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Hold";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Hold";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;
@@ -539,7 +539,7 @@ export class Hold {
 /* ============================== MERCHANT =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::MERCHANT",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::MERCHANT",
   {
     dummy_field: `bool`,
   },
@@ -548,7 +548,7 @@ bcs.registerStructType(
 export function isMERCHANT(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::MERCHANT"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::MERCHANT"
   );
 }
 
@@ -558,7 +558,7 @@ export interface MERCHANTFields {
 
 export class MERCHANT {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::MERCHANT";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::MERCHANT";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;
@@ -586,7 +586,7 @@ export class MERCHANT {
 /* ============================== Rebill =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Rebill",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Rebill",
   {
     available: `u64`,
     refresh_amount: `u64`,
@@ -598,7 +598,7 @@ bcs.registerStructType(
 export function isRebill(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Rebill"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Rebill"
   );
 }
 
@@ -611,7 +611,7 @@ export interface RebillFields {
 
 export class Rebill {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::Rebill";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::Rebill";
   static readonly $numTypeParams = 0;
 
   readonly available: bigint;
@@ -655,7 +655,7 @@ export class Rebill {
 /* ============================== TransferFee =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee",
   {
     bps: `u64`,
     pay_to: `address`,
@@ -665,7 +665,7 @@ bcs.registerStructType(
 export function isTransferFee(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee"
   );
 }
 
@@ -676,7 +676,7 @@ export interface TransferFeeFields {
 
 export class TransferFee {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::TransferFee";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::TransferFee";
   static readonly $numTypeParams = 0;
 
   readonly bps: bigint;
@@ -714,7 +714,7 @@ export class TransferFee {
 /* ============================== WITHDRAW =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::WITHDRAW",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::WITHDRAW",
   {
     dummy_field: `bool`,
   },
@@ -723,7 +723,7 @@ bcs.registerStructType(
 export function isWITHDRAW(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::WITHDRAW"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::WITHDRAW"
   );
 }
 
@@ -733,7 +733,7 @@ export interface WITHDRAWFields {
 
 export class WITHDRAW {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::coin23::WITHDRAW";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::coin23::WITHDRAW";
   static readonly $numTypeParams = 0;
 
   readonly dummyField: boolean;

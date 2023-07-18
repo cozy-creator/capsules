@@ -492,10 +492,10 @@ export function isEndorsedByNum(
   });
 }
 
-export function packageUid(txb: TransactionBlock, package_: ObjectArg) {
+export function packageUid(txb: TransactionBlock, package: ObjectArg) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::organization::package_uid`,
-    arguments: [obj(txb, package_)],
+    arguments: [obj(txb, package)],
   });
 }
 
@@ -514,10 +514,10 @@ export function packageUid_(txb: TransactionBlock, args: PackageUid_Args) {
   });
 }
 
-export function packageUidMut(txb: TransactionBlock, package_: ObjectArg) {
+export function packageUidMut(txb: TransactionBlock, package: ObjectArg) {
   return txb.moveCall({
     target: `${PUBLISHED_AT}::organization::package_uid_mut`,
-    arguments: [obj(txb, package_)],
+    arguments: [obj(txb, package)],
   });
 }
 

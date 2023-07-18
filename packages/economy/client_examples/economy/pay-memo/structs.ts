@@ -8,7 +8,7 @@ import { ObjectId } from "@mysten/sui.js";
 /* ============================== PayMemo =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::pay_memo::PayMemo",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::pay_memo::PayMemo",
   {
     reference_id: `0x2::object::ID`,
     merchant: `0x1::string::String`,
@@ -19,7 +19,7 @@ bcs.registerStructType(
 export function isPayMemo(type: Type): boolean {
   return (
     type ===
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::pay_memo::PayMemo"
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::pay_memo::PayMemo"
   );
 }
 
@@ -31,7 +31,7 @@ export interface PayMemoFields {
 
 export class PayMemo {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::pay_memo::PayMemo";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::pay_memo::PayMemo";
   static readonly $numTypeParams = 0;
 
   readonly referenceId: ObjectId;

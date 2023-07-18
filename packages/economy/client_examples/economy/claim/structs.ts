@@ -7,7 +7,7 @@ import { JsonRpcProvider, ObjectId, SuiParsedData } from "@mysten/sui.js";
 /* ============================== Claim =============================== */
 
 bcs.registerStructType(
-  "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::claim::Claim<T>",
+  "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim<T>",
   {
     id: `0x2::object::UID`,
     for_account: `0x2::object::ID`,
@@ -18,7 +18,7 @@ bcs.registerStructType(
 
 export function isClaim(type: Type): boolean {
   return type.startsWith(
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::claim::Claim<",
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim<",
   );
 }
 
@@ -31,7 +31,7 @@ export interface ClaimFields {
 
 export class Claim {
   static readonly $typeName =
-    "0x77e53a48851512fe5707346cf90f85ae0c46b6b527b0fa04935940b0e2f38b42::claim::Claim";
+    "0xf0ac6529d000107a6e44a7e5922d3f54142ecbc1e7b44c515c2c844b325d08bc::claim::Claim";
   static readonly $numTypeParams = 1;
 
   readonly $typeArg: Type;

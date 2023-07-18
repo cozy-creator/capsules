@@ -73,7 +73,9 @@ async function main() {
   }
 
   {
-    console.log("Transfer amount from second coin23 (with insufficient balance) to the first one");
+    console.log(
+      "Transfer amount from second coin23 (with insufficient balance) to the first one",
+    );
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
@@ -136,7 +138,10 @@ async function main() {
       registry: coinRegistryId,
     });
 
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
+    txb.transferObjects(
+      [fromBalance(txb, coinTypeArg, balance)],
+      txb.pure(ownerAddress),
+    );
 
     txb.setGasBudget(baseGasBudget);
     await runTxb(txb, ownerSigner);
@@ -160,7 +165,9 @@ async function main() {
   }
 
   {
-    console.log("Export more than available amount from first coin23 to balance");
+    console.log(
+      "Export more than available amount from first coin23 to balance",
+    );
 
     const txb = new TransactionBlock();
     const [auth] = beginTxAuth(txb);
@@ -171,7 +178,10 @@ async function main() {
       registry: coinRegistryId,
     });
 
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
+    txb.transferObjects(
+      [fromBalance(txb, coinTypeArg, balance)],
+      txb.pure(ownerAddress),
+    );
 
     txb.setGasBudget(baseGasBudget);
     await runTxb(txb, ownerSigner);
@@ -221,8 +231,15 @@ async function main() {
     importFromCoin(txb, coinTypeArg, { account: coin23, coin });
 
     // destroy coin23
-    const [balance] = destroyCoin23(txb, coinTypeArg, { auth, account: coin23, registry: coinRegistryId });
-    txb.transferObjects([fromBalance(txb, coinTypeArg, balance)], txb.pure(ownerAddress));
+    const [balance] = destroyCoin23(txb, coinTypeArg, {
+      auth,
+      account: coin23,
+      registry: coinRegistryId,
+    });
+    txb.transferObjects(
+      [fromBalance(txb, coinTypeArg, balance)],
+      txb.pure(ownerAddress),
+    );
 
     txb.setGasBudget(baseGasBudget);
     await runTxb(txb, ownerSigner);
