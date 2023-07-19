@@ -287,13 +287,100 @@ module economy::coin23_tests {
     let coin23 = coin23::create<SUI>(ctx);
     let auth = tx_authority::begin(ctx);
 
-    coin::burn_for_testing(coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000)));
+    coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
     
     coin23::freeze_for_testing(&mut coin23);
-    balance::destroy_for_testing(coin23::export_to_balance(&mut coin23, &registry, 500, &auth));
+    coin::burn_for_testing(coin23::export_to_coin(&mut coin23, &registry, 500, &auth, ctx));
 
     coin23::destroy_currency_registry_for_testing(registry);
     coin23::return_and_share(coin23, @0x0);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_destroy_empty_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    let coin23 = coin23::create<SUI>(ctx);
+    let auth = tx_authority::begin(ctx);
+
+    coin23::destroy_empty(coin23, &auth);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  #[expected_failure(abort_code=coin23::ENO_OWNER_AUTHORITY)]
+  fun test_destroy_empty_coin23_with_invalid_auth() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    coin23::create_<SUI>(@0x0, ctx);
+
+    test_scenario::next_tx(&mut scenario, @0x1);
+    {
+      let coin23 = test_scenario::take_shared<Coin23<SUI>>(&scenario);
+      let ctx = test_scenario::ctx(&mut scenario);
+      let auth = tx_authority::begin(ctx);
+
+      coin23::destroy_empty(coin23, &auth);
+    };
+
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_destroy_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let coin23 = coin23::create<SUI>(ctx);
+    coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
+
+    let auth = tx_authority::begin(ctx);
+    balance::destroy_for_testing(coin23::destroy(coin23, &registry, &auth));
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  #[expected_failure(abort_code=coin23::EACCOUNT_FROZEN)]
+  fun test_destroy_frozen_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let coin23 = coin23::create<SUI>(ctx);
+    coin23::freeze_for_testing(&mut coin23);
+
+    let auth = tx_authority::begin(ctx);
+    balance::destroy_for_testing(coin23::destroy(coin23, &registry, &auth));
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  #[expected_failure(abort_code=coin23::EINVALID_EXPORT)]
+  fun test_destroy_coin23_with_invalid_export_auth() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    coin23::create_<SUI>(@0x0, ctx);
+
+    test_scenario::next_tx(&mut scenario, @0x1);
+    {
+      let coin23 = test_scenario::take_shared<Coin23<SUI>>(&scenario);
+      let ctx = test_scenario::ctx(&mut scenario);
+      let auth = tx_authority::begin(ctx);
+
+      balance::destroy_for_testing(coin23::destroy(coin23, &registry, &auth));
+    };
+
+    coin23::destroy_currency_registry_for_testing(registry);
     test_scenario::end(scenario);
   }
 }
