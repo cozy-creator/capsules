@@ -849,6 +849,15 @@ module economy::coin23_tests {
 
       coin23::import_from_balance(&mut coin23, balance::create_for_testing(10000));
       coin23::add_hold(&mut coin23, @0x1, 1000, 5000, &clock, &registry, &auth);
+      
+      let merchants = coin23::merchants_with_held_funds(&coin23);
+      let (hold_value, expiry_ms) = coin23::inspect_hold(&coin23, @0x1);
+
+      assert!(coin23::balance_available(&coin23) == 9000, 0);
+      assert!(vector::contains(&merchants, &@0x1), 0);
+      assert!(hold_value == 1000, 0);
+      assert!(expiry_ms == 5000, 0);
+
       test_scenario::return_shared(coin23);
     };
 
