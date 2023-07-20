@@ -1700,4 +1700,102 @@ module economy::coin23_tests {
     test_scenario::end(scenario);
   }
 
+  #[test]
+  #[expected_failure(abort_code=coin23::EINVALID_EXPORT)]
+  fun test_balance_export_not_exportable_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let auth = tx_authority::begin_with_package_witness_(Witness {});
+    coin23::register_currency<TESTC>(&mut registry, true, true, 1, option::none(), option::none(), vector::empty(), &auth);
+
+    {
+      let coin23 = coin23::create<TESTC>(ctx);
+      let auth = tx_authority::begin(ctx);
+
+      coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
+      
+      let exported = coin23::export_to_balance(&mut coin23, &registry, 500, &auth);
+      balance::destroy_for_testing(exported);
+      coin23::return_and_share(coin23, @0x0);
+    };
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_balance_export_user_exportable_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let auth = tx_authority::begin_with_package_witness_(Witness {});
+    coin23::register_currency<TESTC>(&mut registry, true, true, 2, option::none(), option::none(), vector::empty(), &auth);
+
+    {
+      let coin23 = coin23::create<TESTC>(ctx);
+      let auth = tx_authority::begin(ctx);
+
+      coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
+      
+      let exported = coin23::export_to_balance(&mut coin23, &registry, 500, &auth);
+      balance::destroy_for_testing(exported);
+      coin23::return_and_share(coin23, @0x0);
+    };
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_balance_export_creator_withdraw_exportable_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let auth = tx_authority::begin_with_package_witness_(Witness {});
+    coin23::register_currency<TESTC>(&mut registry, true, true, 1, option::none(), option::none(), vector::empty(), &auth);
+
+    {
+      let coin23 = coin23::create<TESTC>(ctx);
+      let auth = tx_authority::begin_with_package_witness_(Witness {});
+
+      coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
+      
+      let exported = coin23::export_to_balance(&mut coin23, &registry, 500, &auth);
+      balance::destroy_for_testing(exported);
+      coin23::return_and_share(coin23, @0x0);
+    };
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
+
+  #[test]
+  fun test_balance_export_agent_export_coin23() {
+    let scenario = test_scenario::begin(@0x0);
+    let ctx = test_scenario::ctx(&mut scenario);
+    let registry = coin23::create_currency_registry_for_testing(ctx);
+
+    let auth = tx_authority::begin_with_package_witness_(Witness {});
+    coin23::register_currency<TESTC>(&mut registry, true, true, 1, option::none(), option::none(), vector::singleton(@0x7), &auth);
+
+    test_scenario::next_tx(&mut scenario, @0x7);
+    {
+      let ctx = test_scenario::ctx(&mut scenario);
+      let coin23 = coin23::create<TESTC>(ctx);
+      let auth = tx_authority::begin(ctx);
+
+      coin23::import_from_balance(&mut coin23, balance::create_for_testing(1000));
+      
+      let exported = coin23::export_to_balance(&mut coin23, &registry, 500, &auth);
+      balance::destroy_for_testing(exported);
+      coin23::return_and_share(coin23, @0x0);
+    };
+
+    coin23::destroy_currency_registry_for_testing(registry);
+    test_scenario::end(scenario);
+  }
 }
