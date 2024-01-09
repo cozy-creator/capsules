@@ -35,6 +35,7 @@ We also adds new abilities for merchants:
 - allow turning on and off creator control flags (currency can be more restrictive)
 - implement example of a game spending a player's non-transferable currency
 - payment memo needs to be implemented better
+- create organization spending balance delegation example
 
 
 *** Notes ***
